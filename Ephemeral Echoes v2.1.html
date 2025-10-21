@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ephemeral Echoes</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✧</text></svg>">
+    <style>
+        :root {
+            --bg-color: #0d0c1d;
+            --panel-color: #161a30;
+            --text-color: #b6c2d9;
+            --header-color: #f0f8ff;
+            --accent-color: #7b2cbf;
+            --accent-light: #a45ee5;
+            --accent-glow: #c792ea;
+            --disabled-color: #4a4e69;
+            --font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            user-select: none;
+        }
+
+        .game-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .left-panel {
+            flex: 2;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 2rem;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: crosshair;
+        }
+
+        .main-stats {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            text-shadow: 0 0 10px var(--bg-color), 0 0 20px var(--bg-color);
+        }
+
+        #remembrance-display {
+            font-size: 3rem;
+            font-weight: 300;
+            color: var(--header-color);
+        }
+
+        #remembrance-unit {
+            font-size: 2rem;
+            margin-left: 0.5rem;
+            opacity: 0.8;
+        }
+
+        #rps-display {
+            font-size: 1.2rem;
+            opacity: 0.7;
+            margin-top: 0.5rem;
+        }
+
+        .right-panel {
+            flex: 1;
+            min-width: 400px;
+            max-width: 450px;
+            background-color: var(--panel-color);
+            border-left: 1px solid var(--accent-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--accent-color);
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .tab-button:hover { background-color: rgba(255,255,255,0.05); }
+        .tab-button.active {
+            background-color: var(--accent-color);
+            color: var(--header-color);
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .tab-content.active { display: block; }
+        
+        .section-header {
+            font-size: 1.5rem;
+            color: var(--header-color);
+            border-bottom: 1px solid var(--accent-light);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .store-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            border-left: 3px solid transparent;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .store-item button {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: none;
+            border: none;
+            color: inherit;
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        
+        .store-item:not(.disabled) { border-left-color: var(--accent-color); }
+        .store-item:not(.disabled):hover { background-color: rgba(123, 44, 191, 0.2); }
+        .store-item.disabled { opacity: 0.5; }
+        .store-item.disabled button { cursor: not-allowed; }
+
+        .item-info { flex-grow: 1; }
+        .item-name { font-size: 1.1rem; color: var(--header-color); }
+        .item-desc, .item-stats { font-size: 0.85rem; opacity: 0.7; }
+        .item-cost { font-size: 1rem; font-weight: bold; color: var(--accent-light); }
+        .item-owned {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--header-color);
+            margin-left: 1.5rem;
+            min-width: 50px;
+            text-align: right;
+        }
+        
+        .prestige-container { text-align: center; }
+        .prestige-button {
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--header-color);
+            background-color: var(--accent-color);
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            margin-top: 1rem;
+            width: 100%;
+        }
+        .prestige-button:hover:not(:disabled) {
+            background-color: var(--accent-light);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+        .prestige-button:disabled {
+            background-color: var(--disabled-color);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .prestige-info { margin-top: 1rem; opacity: 0.8; }
+        #insight-display, #kernel-display { font-weight: bold; color: var(--accent-light); }
+
+        .schematic-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 1rem;
+        }
+        .schematic-slot {
+            aspect-ratio: 1;
+            border: 2px dashed var(--disabled-color);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            text-align: center;
+        }
+        .schematic-slot.equipped {
+            border-style: solid;
+            border-color: var(--accent-glow);
+            background-color: rgba(123, 44, 191, 0.2);
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+        .schematic-slot:hover:not(.empty) { background-color: rgba(123, 44, 191, 0.3); }
+        .schematic-slot.empty { opacity: 0.5; }
+        .schematic-bonus { font-size: 1.2rem; font-weight: bold; color: var(--header-color); }
+        .schematic-label { font-size: 0.8rem; opacity: 0.7; }
+        
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); z-index: 1000;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--panel-color); padding: 2rem;
+            border-radius: 10px; border: 1px solid var(--accent-color);
+            max-width: 500px; text-align: center;
+            box-shadow: 0 0 20px var(--accent-color);
+        }
+        .modal-title { font-size: 1.8rem; color: var(--header-color); margin-bottom: 1rem; }
+        .modal-body { margin-bottom: 1.5rem; line-height: 1.6; }
+        .modal-buttons { display: flex; gap: 1rem; justify-content: center; }
+        .modal-button { padding: 0.75rem 1.5rem; font-size: 1rem; border-radius: 5px; cursor: pointer; border: none; }
+        .confirm-btn { background-color: var(--accent-color); color: var(--header-color); }
+        .cancel-btn { background-color: var(--disabled-color); color: var(--text-color); }
+
+        .notification-area {
+            position: fixed; bottom: 20px; right: 20px; z-index: 2000;
+            display: flex; flex-direction: column; align-items: flex-end;
+        }
+        .notification {
+            background-color: var(--accent-color); color: white;
+            padding: 1rem; border-radius: 5px; margin-top: 10px;
+            opacity: 0; animation: fade-in-out 5s ease-in-out;
+        }
+        @keyframes fade-in-out {
+            0%, 100% { opacity: 0; transform: translateX(20px); }
+            10%, 90% { opacity: 1; transform: translateX(0); }
+        }
+        
+        .archetype-selection { display: flex; flex-direction: column; gap: 1rem; }
+        .archetype-card {
+            border: 2px solid var(--disabled-color); padding: 1rem;
+            border-radius: 5px; cursor: pointer; transition: border-color 0.2s, background-color 0.2s;
+        }
+        .archetype-card:hover { border-color: var(--accent-light); background-color: rgba(255,255,255,0.05); }
+        .archetype-name { font-size: 1.2rem; color: var(--header-color); }
+        .archetype-desc { font-size: 0.9rem; opacity: 0.8; }
+        #current-archetype {
+            margin-top: 1rem; padding: 1rem; background-color: rgba(0,0,0,0.3);
+            border-left: 3px solid var(--accent-glow); border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="left-panel">
+            <canvas id="game-canvas"></canvas>
+            <div class="main-stats">
+                <h1 id="remembrance-display">0</h1>
+                <p id="rps-display">per second: 0</p>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="tabs">
+                <button class="tab-button active" data-tab="structures">Structures</button>
+                <button class="tab-button" data-tab="schematics">Schematics</button>
+                <button class="tab-button" data-tab="sublimation">Sublimation</button>
+            </div>
+            <div id="structures-tab" class="tab-content active">
+                <div class="section-header">Mental Structures</div>
+                <div id="buildings-container"></div>
+            </div>
+            <div id="schematics-tab" class="tab-content">
+                <div class="section-header">Imprinted Schematics</div>
+                <p class="item-desc" style="margin-bottom: 1rem;">Equip Echoes from powerful Resonance Chains to boost your idle Remembrance generation.</p>
+                <div id="equipped-schematics-container" class="schematic-grid"></div>
+                <div class="section-header" style="margin-top: 2rem;">Echo Inventory</div>
+                <div id="inventory-schematics-container" class="schematic-grid"></div>
+            </div>
+            <div id="sublimation-tab" class="tab-content">
+                <div class="prestige-container">
+                    <div class="section-header">Sublimation (Prestige)</div>
+                    <p class="item-desc">Reset your progress to gain Insight, unlocking powerful permanent upgrades.</p>
+                    <p class="prestige-info">Current Insight: <span id="insight-display">0</span></p>
+                    <button id="sublimate-button" class="prestige-button" disabled>Sublimate for <span id="sublimate-gain">0</span> Insight</button>
+                </div>
+                <div id="insight-upgrades-container" style="margin-top: 2rem;"></div>
+                <hr style="border-color: var(--accent-color); margin: 2rem 0;">
+                <div class="prestige-container">
+                    <div class="section-header">Transcendence</div>
+                    <p class="item-desc">Sacrifice everything, including Insight, to be reborn with a new Archetype, fundamentally altering your journey.</p>
+                    <p class="prestige-info">Metempsychosis Kernels: <span id="kernel-display">0</span></p>
+                    <button id="transcend-button" class="prestige-button" disabled>Transcend</button>
+                    <div id="current-archetype"><strong>Current Archetype:</strong> <span id="active-archetype-name">None</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification-area"></div>
+
+    <div id="prestige-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2 id="modal-title" class="modal-title">Confirmation</h2>
+            <p id="modal-body" class="modal-body">Are you sure?</p>
+            <div class="modal-buttons">
+                <button id="modal-cancel-btn" class="modal-button cancel-btn">Cancel</button>
+                <button id="modal-confirm-btn" class="modal-button confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="archetype-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2 class="modal-title">Choose Your Archetype</h2>
+            <p class="modal-body">Select an Archetype for your next existence. This choice is permanent until your next Transcendence.</p>
+            <div id="archetype-selection-container" class="archetype-selection"></div>
+        </div>
+    </div>
+
+    <script>
+    class EphemeralEchoesGame {
+        constructor() {
+            this.game = null;
+            this.dom = {};
+            this.intervals = {};
+            this.canvas = null;
+            this.ctx = null;
+            
+            // NEW: State for advanced visual features
+            this.particles = [];
+            this.twinkleParticles = [];
+            this.floatingTexts = [];
+            this.activeGhosts = [];
+            this.activeConstellation = null;
+
+            this.chain = [];
+            this.lastClickTime = 0;
+            this.audioContext = null;
+            this.lastSaveTime = Date.now();
+            this.init();
+        }
+
+        // --- INITIALIZATION ---
+        init() {
+            this.cacheDOMElements();
+            this.setupCanvas();
+            this.game = this.getInitialGameState();
+            this.staticData = this.getStaticData();
+            this.loadGame();
+            this.bindEvents();
+            this.renderAllUI();
+            this.startGameLoops();
+            this.showNotification("Welcome, Archivist of the Mind.", 5000);
+        }
+
+        getInitialGameState() {
+            return {
+                // MODIFIED: Using BigInt for large number support
+                remembrance: 10n,
+                rps: 0n,
+                insight: 0,
+                kernels: 0,
+                stats: {
+                    totalRemembrance: 10n,
+                    playTime: 0,
+                    sublimations: 0,
+                    transcendences: 0,
+                    peakRemembrance: 10n,
+                },
+                buildings: {
+                    willows: { count: 0 }, pools: { count: 0 }, libraries: { count: 0 }, looms: { count: 0 }, core: { count: 0 },
+                },
+                schematics: {
+                    inventory: [], equipped: [], slots: 2,
+                },
+                upgrades: {},
+                activeArchetype: null,
+                // NEW: State for new features
+                chainDifficultyModifier: 1.0, // Pity timer, > 1.0 is easier
+                chainHistory: [], // Stores best chains for ghost replays
+            };
+        }
+
+        getStaticData() {
+            return {
+                // MODIFIED: Using BigInt for costs and RPS
+                buildings: {
+                    willows:   { name: "Whispering Willows",   baseCost: 10n,       baseRps: 1n },
+                    pools:     { name: "Reflecting Pools",     baseCost: 150n,      baseRps: 15n },
+                    libraries: { name: "Crystal Libraries",    baseCost: 2500n,     baseRps: 250n },
+                    looms:     { name: "Synaptic Looms",       baseCost: 40000n,    baseRps: 4000n },
+                    core:      { name: "The Core Self",        baseCost: 750000n,   baseRps: 75000n },
+                },
+                upgrades: {
+                    u01: { name: "Persistent Thoughts", desc: "All Structures produce +10% more Remembrance.", cost: 1, effect: { type: 'global_rps_mod', value: 0.1 } },
+                    u02: { name: "Chain Extension", desc: "Resonance Chains can be 2 nodes longer.", cost: 2, effect: { type: 'chain_length', value: 2 } },
+                    u03: { name: "Echo Potency", desc: "Imprinted Schematics are 5% more effective.", cost: 3, effect: { type: 'schematic_mod', value: 0.05 } },
+                    u04: { name: "Willow Weaving", desc: "Willows gain +1% RPS per Pool owned.", cost: 5, effect: { type: 'synergy', source: 'pools', target: 'willows', value: 0.01 } },
+                    u05: { name: "New Schematic Slot", desc: "Unlocks a new Schematic Slot.", cost: 10, effect: { type: 'schematic_slot', value: 1 } },
+                    u06: { name: "Core Resonance", desc: "The Core Self boosts global RPS by an additional 10%.", cost: 25, effect: { type: 'global_rps_mod', value: 0.1 } },
+                },
+                archetypes: {
+                    scholar: { name: "The Scholar", desc: "Imprinted Schematics are 50% more effective, but Resonance Chain bursts are halved." },
+                    artist:  { name: "The Artist", desc: "Resonance Chains no longer break on a short pause, allowing for massive patterns." },
+                    anchorite: { name: "The Anchorite", desc: "Attunement is disabled, but gain a massive +500% to base idle RPS." },
+                },
+                // NEW: Pre-defined patterns for the Constellation feature
+                constellations: {
+                    square: { name: "Foundation", points: [{x:0.3,y:0.3},{x:0.7,y:0.3},{x:0.7,y:0.7},{x:0.3,y:0.7},{x:0.3,y:0.3}], color: '#87CEEB' },
+                    heart: { name: "Passion", points: [{x:0.5,y:0.4},{x:0.65,y:0.25},{x:0.8,y:0.4},{x:0.5,y:0.8},{x:0.2,y:0.4},{x:0.35,y:0.25},{x:0.5,y:0.4}], color: '#FF69B4' },
+                },
+                constants: {
+                    BUILDING_COST_MULT: 1.15,
+                    CHAIN_MAX_DIST: 100, // pixels
+                    CHAIN_MAX_TIME: 750, // ms
+                    CHAIN_MIN_DIST: 15, // NEW: Minimum pixels between nodes
+                    CHAIN_TIME_DECAY: 0.92, // NEW: Each node makes time window 8% shorter
+                    MAX_CHAIN_HISTORY: 20, // NEW: Max number of ghosts to save
+                    SUBLIMATE_REQ: 10000,
+                    TRANSCEND_REQ: 50, // Insight
+                }
+            };
+        }
+
+        cacheDOMElements() {
+            this.dom = {
+                remembranceDisplay: document.getElementById('remembrance-display'),
+                rpsDisplay: document.getElementById('rps-display'),
+                buildingsContainer: document.getElementById('buildings-container'),
+                insightDisplay: document.getElementById('insight-display'),
+                kernelDisplay: document.getElementById('kernel-display'),
+                sublimateButton: document.getElementById('sublimate-button'),
+                sublimateGain: document.getElementById('sublimate-gain'),
+                transcendButton: document.getElementById('transcend-button'),
+                insightUpgradesContainer: document.getElementById('insight-upgrades-container'),
+                equippedSchematics: document.getElementById('equipped-schematics-container'),
+                inventorySchematics: document.getElementById('inventory-schematics-container'),
+                activeArchetypeName: document.getElementById('active-archetype-name'),
+                prestigeModal: document.getElementById('prestige-modal'),
+                archetypeModal: document.getElementById('archetype-modal'),
+                modalTitle: document.getElementById('modal-title'),
+                modalBody: document.getElementById('modal-body'),
+                modalConfirmBtn: document.getElementById('modal-confirm-btn'),
+                modalCancelBtn: document.getElementById('modal-cancel-btn'),
+                notificationArea: document.getElementById('notification-area'),
+                tabs: document.querySelectorAll('.tab-button'),
+                tabContents: document.querySelectorAll('.tab-content'),
+            };
+        }
+
+        setupCanvas() {
+            this.canvas = document.getElementById('game-canvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.canvas.width = this.canvas.offsetWidth;
+            this.canvas.height = this.canvas.offsetHeight;
+        }
+
+        bindEvents() {
+            this.canvas.addEventListener('mousedown', this.handleCanvasClick.bind(this));
+            this.dom.tabs.forEach(tab => tab.addEventListener('click', () => this.switchTab(tab.dataset.tab)));
+            this.dom.buildingsContainer.addEventListener('click', e => {
+                const button = e.target.closest('button');
+                if (button) this.buyBuilding(button.dataset.id);
+            });
+             this.dom.insightUpgradesContainer.addEventListener('click', e => {
+                const button = e.target.closest('button');
+                if (button) this.buyUpgrade(button.dataset.id);
+            });
+            this.dom.equippedSchematics.addEventListener('click', e => {
+                const slot = e.target.closest('.schematic-slot');
+                if (slot && slot.dataset.id) this.unequipSchematic(slot.dataset.id);
+            });
+            this.dom.inventorySchematics.addEventListener('click', e => {
+                const slot = e.target.closest('.schematic-slot');
+                if (slot && slot.dataset.id) this.equipSchematic(slot.dataset.id);
+            });
+            this.dom.sublimateButton.addEventListener('click', () => this.promptSublimate());
+            this.dom.transcendButton.addEventListener('click', () => this.promptTranscend());
+            this.dom.modalCancelBtn.addEventListener('click', () => this.dom.prestigeModal.style.display = 'none');
+            window.addEventListener('resize', () => {
+                this.setupCanvas();
+                this.activeConstellation = null; // Invalidate constellation on resize
+            });
+        }
+
+        startGameLoops() {
+            this.intervals.gameLoop = setInterval(() => this.gameLoop(), 1000 / 60); // 60 FPS
+            this.intervals.slowLoop = setInterval(() => this.slowLoop(), 1000); // 1 FPS
+        }
+
+        // --- GAME LOOPS & CORE LOGIC ---
+        gameLoop() {
+            const now = Date.now();
+            const delta = (now - (this.lastFrameTime || now)) / 1000;
+            this.lastFrameTime = now;
+            
+            this.game.stats.playTime += delta;
+            
+            // MODIFIED: BigInt-safe gain calculation
+            // We scale delta by 1000 to do integer math with the BigInt RPS value
+            const remembranceGain = (this.game.rps * BigInt(Math.floor(delta * 1000))) / 1000n;
+            if (remembranceGain > 0n) {
+                this.game.remembrance += remembranceGain;
+                this.game.stats.totalRemembrance += remembranceGain;
+                if (this.game.remembrance > this.game.stats.peakRemembrance) {
+                    this.game.stats.peakRemembrance = this.game.remembrance;
+                }
+            }
+            
+            this.updateCanvas(delta);
+        }
+
+        slowLoop() {
+            this.updateUI();
+            
+            // NEW: Ghost and Constellation spawning logic
+            if (Math.random() < 0.1 && this.game.chainHistory.length > 0) this.spawnGhost();
+            if (this.activeConstellation === null && Math.random() < 0.05) this.spawnConstellation();
+
+            if (Date.now() - this.lastSaveTime > 30000) { // Autosave every 30s
+                this.saveGame();
+                this.showNotification("Game Saved", 2000);
+                this.lastSaveTime = Date.now();
+            }
+        }
+        
+        handleCanvasClick(e) {
+            if (this.game.activeArchetype === 'anchorite') return;
+            
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const now = Date.now();
+            
+            const lastNode = this.chain.length > 0 ? this.chain[this.chain.length - 1] : null;
+
+            // NEW: Prevent spam-clicking in one spot
+            const isTooClose = lastNode ? (Math.hypot(x - lastNode.x, y - lastNode.y) < this.staticData.constants.CHAIN_MIN_DIST) : false;
+            if (isTooClose) {
+                this.finalizeChain();
+                return;
+            }
+
+            // NEW: Dynamic time window that shrinks with chain length and is affected by pity timer
+            const schematicTimeBonus = this.getSchematicBonus('CHAIN_TIME');
+            const baseMaxTime = this.staticData.constants.CHAIN_MAX_TIME * schematicTimeBonus;
+            const dynamicMaxTime = (baseMaxTime * Math.pow(this.staticData.constants.CHAIN_TIME_DECAY, this.chain.length)) * this.game.chainDifficultyModifier;
+            const maxTime = this.game.activeArchetype === 'artist' ? Infinity : dynamicMaxTime;
+
+            if (lastNode && (now - lastNode.time < maxTime) && (Math.hypot(x - lastNode.x, y - lastNode.y) < this.staticData.constants.CHAIN_MAX_DIST)) {
+                let maxChainLength = 15 + this.getSchematicBonus('CHAIN_LENGTH');
+                if(this.game.upgrades.u02) maxChainLength += this.staticData.upgrades.u02.effect.value;
+                if (this.chain.length < maxChainLength) {
+                    this.chain.push({ x, y, time: now });
+                }
+            } else {
+                if (this.chain.length > 0) this.finalizeChain();
+                this.chain = [{ x, y, time: now }];
+            }
+
+            this.lastClickTime = now;
+            this.playSound(200 + this.chain.length * 20, 0.1, 'sine');
+        }
+
+        finalizeChain() {
+            if (this.chain.length < 2) {
+                this.chain = [];
+                return;
+            }
+
+            const length = this.chain.length;
+            const duration = this.chain[length - 1].time - this.chain[0].time;
+            const speed = duration > 0 ? length / (duration / 1000) : length * 10;
+
+            // MODIFIED: Base gain is nerfed, real reward comes from patterns
+            let baseMultiplier = Math.pow(length, 1.2) * (speed / 10);
+            let remembranceGain = (1n + this.game.rps / 10n) * BigInt(Math.floor(baseMultiplier)) / 3n; // Nerfed by 1/3
+            
+            let finalMultiplier = 1.0;
+            let notificationText = [];
+            let chainScore = this.calculateChainScore(length, speed, []);
+
+            // NEW: Pattern Detection
+            const patterns = this.detectPatterns(this.chain);
+            if (patterns.length > 0) {
+                patterns.forEach(p => {
+                    finalMultiplier *= p.reward.multiplier;
+                    notificationText.push(`${p.name}! (x${p.reward.multiplier.toFixed(1)})`);
+                });
+            }
+            
+            // NEW: Constellation Matching
+            if (this.activeConstellation) {
+                const match = this.calculateConstellationMatch(this.chain, this.activeConstellation);
+                if (match.accuracy > 0.6) { // 60% accuracy needed
+                    const constellationMultiplier = 1 + 9 * Math.pow(match.accuracy, 3); // Up to 10x bonus
+                    finalMultiplier *= constellationMultiplier;
+                    notificationText.push(`${this.activeConstellation.name}! (${(match.accuracy * 100).toFixed(0)}%)`);
+                }
+                this.activeConstellation = null; // Constellation is consumed
+            }
+
+            chainScore *= finalMultiplier;
+            remembranceGain *= BigInt(Math.floor(finalMultiplier));
+            if (this.game.activeArchetype === 'scholar') remembranceGain /= 2n;
+            
+            this.game.remembrance += remembranceGain;
+            this.game.stats.totalRemembrance += remembranceGain;
+            
+            this.floatingTexts.push({
+                text: `+${this.formatNumber(remembranceGain)}` + (notificationText.length > 0 ? `\n${notificationText.join('\n')}` : ''),
+                x: this.chain[length - 1].x,
+                y: this.chain[length - 1].y,
+                life: 2.5,
+                color: `rgba(255, 255, 255, 1)`
+            });
+            
+            // NEW: Pity timer and twinkling stars
+            if (chainScore > 50) {
+                this.game.chainDifficultyModifier = 1.0; // Reset on good chain
+                this.chain.forEach(node => this.twinkleParticles.push({x: node.x, y: node.y, life: 1, size: Math.random() * 2 + 2}));
+            } else {
+                this.game.chainDifficultyModifier = Math.min(2.0, this.game.chainDifficultyModifier + 0.05); // Increase on bad chain
+            }
+
+            // NEW: Schematic creation is based on score
+            if (length > 3 && Math.random() < chainScore / 2000) { // Higher score = higher chance
+                const schematicId = this.createSchematic(chainScore);
+                this.saveChainToHistory(chainScore, schematicId);
+            } else if (chainScore > 100) {
+                this.saveChainToHistory(chainScore, null);
+            }
+            
+            this.chain = [];
+        }
+
+        createSchematic(chainScore) {
+            // NEW: Expanded schematic generation with rarities and varied effects
+            const rarityRoll = Math.random();
+            let rarity, name, effect;
+
+            if (rarityRoll < 0.6) {
+                rarity = 'Common';
+                effect = { type: 'RPS_PERCENT', value: 0.01 + Math.random() * 0.04 }; // 1-5%
+                name = "Faint Echo";
+            } else if (rarityRoll < 0.9) {
+                rarity = 'Uncommon';
+                const buildingKeys = Object.keys(this.staticData.buildings);
+                const targetBuilding = buildingKeys[Math.floor(Math.random() * buildingKeys.length)];
+                effect = { type: 'BUILDING_BONUS', target: targetBuilding, value: 0.10 + Math.random() * 0.15 }; // 10-25%
+                name = `Echo of ${this.staticData.buildings[targetBuilding].name.split(' ')[1]}`;
+            } else {
+                rarity = 'Rare';
+                const rareTypeRoll = Math.random();
+                if (rareTypeRoll < 0.5) {
+                    effect = { type: 'CHAIN_TIME', value: 1.1 + Math.random() * 0.15 }; // 10-25% longer chain time
+                    name = "Temporal Echo";
+                } else {
+                    // Player's own chain becomes a new constellation!
+                    const normalizedPoints = this.chain.map(p => ({ x: p.x / this.canvas.width, y: p.y / this.canvas.height }));
+                    effect = { type: 'ADD_CONSTELLATION', value: { name: "Personal Schema", points: normalizedPoints, color: `hsl(${Math.random()*360}, 100%, 75%)` } };
+                    name = "Echo of Your Path";
+                }
+            }
+
+            // MODIFIED: Fix for full inventory
+            if (this.game.schematics.inventory.length >= 12) {
+                this.showNotification("Inventory full. Oldest Echo discarded.", 3000);
+                this.game.schematics.inventory.shift();
+            }
+
+            const newSchematic = {
+                id: 's' + Date.now() + Math.random(),
+                name: name,
+                rarity: rarity,
+                effect: effect
+            };
+            this.game.schematics.inventory.push(newSchematic);
+            this.showNotification(`New ${rarity} Echo created!`, 4000);
+            this.renderSchematics();
+            return newSchematic.id;
+        }
+
+        equipSchematic(id) {
+            if (this.game.schematics.equipped.length >= this.game.schematics.slots) {
+                this.showNotification("All Schematic Slots are full.", 3000);
+                return;
+            }
+            const schematicIndex = this.game.schematics.inventory.findIndex(s => s.id === id);
+            if (schematicIndex > -1) {
+                const [schematic] = this.game.schematics.inventory.splice(schematicIndex, 1);
+                this.game.schematics.equipped.push(schematic);
+                this.recalculateStats();
+                this.renderSchematics();
+                this.playSound(440, 0.1, 'triangle');
+            }
+        }
+
+        unequipSchematic(id) {
+            const schematicIndex = this.game.schematics.equipped.findIndex(s => s.id === id);
+            if (schematicIndex > -1) {
+                const [schematic] = this.game.schematics.equipped.splice(schematicIndex, 1);
+                if (this.game.schematics.inventory.length < 12) {
+                    this.game.schematics.inventory.push(schematic);
+                } else {
+                    this.showNotification("Inventory full, Echo discarded.", 3000);
+                }
+                this.recalculateStats();
+                this.renderSchematics();
+                this.playSound(330, 0.1, 'triangle');
+            }
+        }
+
+        buyBuilding(id) {
+            const buildingData = this.staticData.buildings[id];
+            const buildingState = this.game.buildings[id];
+            const cost = this.getBuildingCost(id);
+
+            if (this.game.remembrance >= cost) {
+                this.game.remembrance -= cost;
+                buildingState.count++;
+                this.recalculateStats();
+                this.renderBuildings();
+                this.playSound(150 + Object.keys(this.staticData.buildings).indexOf(id) * 50, 0.2, 'square');
+            }
+        }
+        
+        buyUpgrade(id) {
+            if (this.game.upgrades[id]) return;
+            const upgrade = this.staticData.upgrades[id];
+            if (this.game.insight >= upgrade.cost) {
+                this.game.insight -= upgrade.cost;
+                this.game.upgrades[id] = true;
+                
+                if (upgrade.effect.type === 'schematic_slot') {
+                    this.game.schematics.slots += upgrade.effect.value;
+                }
+
+                this.recalculateStats();
+                this.renderAllUI();
+                this.playSound(600, 0.2, 'sawtooth');
+            }
+        }
+
+        promptSublimate() {
+            const gain = this.calculateInsightGain();
+            if (gain <= 0) return;
+            this.dom.modalTitle.textContent = "Confirm Sublimation";
+            this.dom.modalBody.innerHTML = `Are you sure you want to Sublimate? Your Remembrance, Structures, and Schematics will be reset.<br><br>You will gain <strong>${this.formatNumber(gain)}</strong> Insight.`;
+            this.dom.prestigeModal.style.display = 'flex';
+            this.dom.modalConfirmBtn.onclick = () => this.performSublimation(gain);
+        }
+
+        performSublimation(gain) {
+            // MODIFIED: Correctly preserves stats across prestige
+            const currentInsight = this.game.insight;
+            const currentKernels = this.game.kernels;
+            const permanentUpgrades = this.game.upgrades;
+            const currentArchetype = this.game.activeArchetype;
+            const oldStats = this.game.stats;
+
+            this.game = this.getInitialGameState(); // Reset
+            
+            this.game.insight = currentInsight + gain;
+            this.game.kernels = currentKernels;
+            this.game.upgrades = permanentUpgrades;
+            this.game.activeArchetype = currentArchetype;
+            this.game.stats.sublimations = oldStats.sublimations + 1;
+            this.game.stats.transcendences = oldStats.transcendences;
+            this.game.stats.playTime = oldStats.playTime;
+            
+            this.recalculateStats();
+            this.renderAllUI();
+            this.dom.prestigeModal.style.display = 'none';
+            this.showNotification("You have Sublimated, gaining new Insight.", 5000);
+        }
+
+        promptTranscend() {
+            if (this.game.insight < this.staticData.constants.TRANSCEND_REQ) return;
+            this.dom.modalTitle.textContent = "Confirm Transcendence";
+            this.dom.modalBody.innerHTML = `This is a momentous choice. You will sacrifice <strong>everything</strong>, including all your Insight and its upgrades, to be reborn with a new perspective.<br><br>This will grant you <strong>1</strong> Metempsychosis Kernel. Are you certain?`;
+            this.dom.prestigeModal.style.display = 'flex';
+            this.dom.modalConfirmBtn.onclick = () => this.performTranscendence();
+        }
+
+        performTranscendence() {
+            this.game = this.getInitialGameState(); // Full reset
+            this.game.kernels++;
+            this.game.stats.transcendences++;
+            
+            this.recalculateStats();
+            this.dom.prestigeModal.style.display = 'none';
+            this.showNotification("You have Transcended.", 5000);
+            this.promptArchetypeSelection();
+        }
+
+        promptArchetypeSelection() {
+            const container = document.getElementById('archetype-selection-container');
+            container.innerHTML = '';
+            for (const id in this.staticData.archetypes) {
+                const data = this.staticData.archetypes[id];
+                const card = document.createElement('div');
+                card.className = 'archetype-card';
+                card.innerHTML = `<div class="archetype-name">${data.name}</div><div class="archetype-desc">${data.desc}</div>`;
+                card.onclick = () => {
+                    this.game.activeArchetype = id;
+                    this.dom.archetypeModal.style.display = 'none';
+                    this.recalculateStats();
+                    this.renderAllUI();
+                    this.showNotification(`You are now The ${data.name}.`, 5000);
+                };
+                container.appendChild(card);
+            }
+            this.dom.archetypeModal.style.display = 'flex';
+        }
+
+        // --- CALCULATIONS ---
+        recalculateStats() {
+            let baseRps = 0n;
+            for (const id in this.staticData.buildings) {
+                let buildingBaseRps = BigInt(this.game.buildings[id].count) * this.staticData.buildings[id].baseRps;
+                let buildingMultiplier = 1.0;
+                // Synergy upgrades
+                for (const upgId in this.game.upgrades) {
+                    const upgrade = this.staticData.upgrades[upgId];
+                    if (upgrade.effect.type === 'synergy' && upgrade.effect.target === id) {
+                        buildingMultiplier += this.game.buildings[upgrade.effect.source].count * upgrade.effect.value;
+                    }
+                }
+                // Schematic building bonus
+                this.game.schematics.equipped.forEach(s => {
+                    if (s.effect.type === 'BUILDING_BONUS' && s.effect.target === id) {
+                        buildingMultiplier += s.effect.value;
+                    }
+                });
+                baseRps += buildingBaseRps * BigInt(Math.floor(buildingMultiplier * 100)) / 100n;
+            }
+
+            let globalMultiplier = 1.0;
+            for (const upgId in this.game.upgrades) {
+                const upgrade = this.staticData.upgrades[upgId];
+                if (upgrade.effect.type === 'global_rps_mod') globalMultiplier += upgrade.effect.value;
+            }
+            globalMultiplier += this.game.buildings.core.count * 0.01;
+            if (this.game.activeArchetype === 'anchorite') globalMultiplier *= 6;
+
+            let schematicEffectiveness = 1.0;
+            if (this.game.upgrades.u03) schematicEffectiveness += this.staticData.upgrades.u03.effect.value;
+            if (this.game.activeArchetype === 'scholar') schematicEffectiveness *= 1.5;
+
+            let schematicRpsMultiplier = 1.0;
+            this.game.schematics.equipped.forEach(s => {
+                if (s.effect.type === 'RPS_PERCENT') {
+                    schematicRpsMultiplier += s.effect.value * schematicEffectiveness;
+                }
+            });
+            globalMultiplier *= schematicRpsMultiplier;
+
+            this.game.rps = baseRps * BigInt(Math.floor(globalMultiplier * 100)) / 100n;
+        }
+
+        getBuildingCost(id) {
+            const data = this.staticData.buildings[id];
+            const count = this.game.buildings[id].count;
+            // MODIFIED: This is a workaround for BigInt not supporting fractional exponents.
+            // It will lose precision at extremely high building counts, but is fine for most of the game.
+            const multiplier = Math.pow(this.staticData.constants.BUILDING_COST_MULT, count);
+            return data.baseCost * BigInt(Math.floor(multiplier));
+        }
+
+        calculateInsightGain() {
+            // MODIFIED: Convert BigInt to Number for this calculation, as the result is small.
+            // This is a necessary compromise without a full BigNumber library.
+            return Math.floor(Math.pow(Number(this.game.stats.peakRemembrance) / 1e4, 0.5));
+        }
+
+        // --- UI & RENDERING ---
+        renderAllUI() {
+            this.renderBuildings();
+            this.renderSchematics();
+            this.renderUpgrades();
+            this.updateUI();
+        }
+
+        updateUI() {
+            this.dom.remembranceDisplay.textContent = this.formatNumber(this.game.remembrance);
+            this.dom.rpsDisplay.textContent = `per second: ${this.formatNumber(this.game.rps)}`;
+
+            for (const id in this.staticData.buildings) {
+                const cost = this.getBuildingCost(id);
+                const el = document.getElementById(`building-${id}`);
+                if (el) {
+                    el.querySelector('.item-cost').textContent = this.formatNumber(cost);
+                    el.querySelector('.item-owned').textContent = this.game.buildings[id].count;
+                    if (this.game.remembrance >= cost) el.classList.remove('disabled');
+                    else el.classList.add('disabled');
+                }
+            }
+            for (const id in this.staticData.upgrades) {
+                 const el = document.getElementById(`upgrade-${id}`);
+                 if (el) {
+                    if (this.game.insight >= this.staticData.upgrades[id].cost && !this.game.upgrades[id]) {
+                        el.classList.remove('disabled');
+                    } else {
+                        el.classList.add('disabled');
+                    }
+                 }
+            }
+
+            this.dom.insightDisplay.textContent = this.formatNumber(this.game.insight);
+            this.dom.kernelDisplay.textContent = this.formatNumber(this.game.kernels);
+            const insightGain = this.calculateInsightGain();
+            this.dom.sublimateGain.textContent = this.formatNumber(insightGain);
+            this.dom.sublimateButton.disabled = insightGain <= 0;
+            this.dom.transcendButton.disabled = this.game.insight < this.staticData.constants.TRANSCEND_REQ;
+            this.dom.activeArchetypeName.textContent = this.game.activeArchetype ? this.staticData.archetypes[this.game.activeArchetype].name : "None";
+        }
+
+        renderBuildings() {
+            let html = '';
+            for (const id in this.staticData.buildings) {
+                const data = this.staticData.buildings[id];
+                html += `
+                    <div id="building-${id}" class="store-item disabled">
+                        <button data-id="${id}">
+                            <div class="item-info">
+                                <div class="item-name">${data.name}</div>
+                                <div class="item-stats">+${this.formatNumber(data.baseRps)} base RPS</div>
+                            </div>
+                            <div class="item-cost"></div>
+                            <div class="item-owned"></div>
+                        </button>
+                    </div>
+                `;
+            }
+            this.dom.buildingsContainer.innerHTML = html;
+        }
+
+        renderSchematics() {
+            // Helper to generate tooltip text for a schematic
+            const getSchematicTooltip = (s) => {
+                let desc = `${s.rarity}: ${s.name}\n`;
+                switch(s.effect.type) {
+                    case 'RPS_PERCENT': desc += `+${(s.effect.value * 100).toFixed(1)}% global RPS.`; break;
+                    case 'BUILDING_BONUS': desc += `+${(s.effect.value * 100).toFixed(1)}% RPS for ${this.staticData.buildings[s.effect.target].name}.`; break;
+                    case 'CHAIN_TIME': desc += `Resonance Chains can be held ${(s.effect.value * 100 - 100).toFixed(0)}% longer.`; break;
+                    case 'ADD_CONSTELLATION': desc += `Adds your "${s.effect.value.name}" pattern to the collection of traceable Constellations.`; break;
+                }
+                return desc;
+            };
+
+            let equippedHtml = '';
+            for (let i = 0; i < this.game.schematics.slots; i++) {
+                const schematic = this.game.schematics.equipped[i];
+                if (schematic) {
+                    equippedHtml += `
+                        <div class="schematic-slot equipped" data-id="${schematic.id}" title="${getSchematicTooltip(schematic)}">
+                            <div class="schematic-bonus">${schematic.name}</div>
+                            <div class="schematic-label">${schematic.rarity}</div>
+                        </div>
+                    `;
+                } else {
+                    equippedHtml += `<div class="schematic-slot empty"><div class="schematic-label">Empty Slot</div></div>`;
+                }
+            }
+            this.dom.equippedSchematics.innerHTML = equippedHtml;
+
+            let inventoryHtml = '';
+            this.game.schematics.inventory.forEach(schematic => {
+                inventoryHtml += `
+                    <div class="schematic-slot" data-id="${schematic.id}" title="${getSchematicTooltip(schematic)}">
+                        <div class="schematic-bonus">${schematic.name}</div>
+                        <div class="schematic-label">${schematic.rarity}</div>
+                    </div>
+                `;
+            });
+            this.dom.inventorySchematics.innerHTML = inventoryHtml;
+        }
+
+        renderUpgrades() {
+            let html = '';
+            for (const id in this.staticData.upgrades) {
+                const data = this.staticData.upgrades[id];
+                const isPurchased = this.game.upgrades[id];
+                html += `
+                    <div id="upgrade-${id}" class="store-item ${isPurchased ? 'disabled' : ''}">
+                        <button data-id="${id}" ${isPurchased ? 'disabled' : ''}>
+                            <div class="item-info">
+                                <div class="item-name">${data.name}</div>
+                                <div class="item-desc">${data.desc}</div>
+                            </div>
+                            <div class="item-cost">${this.formatNumber(data.cost)} Insight</div>
+                        </button>
+                    </div>
+                `;
+            }
+            this.dom.insightUpgradesContainer.innerHTML = html;
+        }
+        
+        updateCanvas(delta) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+            // NEW: Draw Ghosts
+            this.activeGhosts.forEach((ghost, i) => {
+                ghost.progress += delta * 2; // Draw over 0.5s
+                ghost.life -= delta * 0.1;
+                if (ghost.life <= 0) this.activeGhosts.splice(i, 1);
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(ghost.points[0].x, ghost.points[0].y);
+                const segmentsToDraw = Math.min(ghost.points.length - 1, ghost.progress * (ghost.points.length-1));
+                for (let j = 1; j < segmentsToDraw; j++) {
+                    this.ctx.lineTo(ghost.points[j].x, ghost.points[j].y);
+                }
+                this.ctx.strokeStyle = `rgba(199, 146, 234, ${ghost.life * 0.3})`;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+            });
+
+            // NEW: Draw active Constellation
+            if (this.activeConstellation) {
+                const points = this.activeConstellation.scaledPoints;
+                this.ctx.beginPath();
+                this.ctx.moveTo(points[0].x, points[0].y);
+                for(let i=1; i<points.length; i++) {
+                    this.ctx.lineTo(points[i].x, points[i].y);
+                }
+                this.ctx.setLineDash([5, 10]);
+                this.ctx.strokeStyle = this.activeConstellation.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                points.forEach(p => {
+                    this.ctx.fillStyle = this.activeConstellation.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+
+            // Resonance Chain
+            if (this.chain.length > 1) {
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.chain[0].x, this.chain[0].y);
+                for (let i = 1; i < this.chain.length; i++) this.ctx.lineTo(this.chain[i].x, this.chain[i].y);
+                const dynamicMaxTime = (this.staticData.constants.CHAIN_MAX_TIME * Math.pow(this.staticData.constants.CHAIN_TIME_DECAY, this.chain.length)) * this.game.chainDifficultyModifier;
+                const life = 1 - (Date.now() - this.lastClickTime) / dynamicMaxTime;
+                this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, life)})`;
+                this.ctx.lineWidth = 2 + this.chain.length * 0.2;
+                this.ctx.stroke();
+            }
+            this.chain.forEach(node => {
+                this.ctx.fillStyle = 'white';
+                this.ctx.beginPath();
+                this.ctx.arc(node.x, node.y, 4, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+
+            // NEW: Twinkle particles
+            this.twinkleParticles.forEach((p, i) => {
+                p.life -= delta * 1.5;
+                if (p.life <= 0) this.twinkleParticles.splice(i, 1);
+                const currentSize = p.size * (Math.sin(p.life * Math.PI * 2) * 0.5 + 0.5);
+                this.ctx.fillStyle = `rgba(255, 255, 224, ${p.life})`;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+
+            // Floating texts
+            this.floatingTexts.forEach((ft, i) => {
+                ft.y -= 50 * delta;
+                ft.life -= delta;
+                if (ft.life <= 0) this.floatingTexts.splice(i, 1);
+                this.ctx.fillStyle = `rgba(199, 146, 234, ${ft.life})`;
+                this.ctx.font = 'bold 20px ' + this.constructor.fontFamily;
+                this.ctx.textAlign = 'center';
+                ft.text.split('\n').forEach((line, index) => {
+                    this.ctx.fillText(line, ft.x, ft.y + (index * 20));
+                });
+            });
+        }
+        
+        switchTab(tabId) {
+            this.dom.tabContents.forEach(content => content.classList.remove('active'));
+            this.dom.tabs.forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabId + '-tab').classList.add('active');
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+        }
+
+        // --- UTILITIES & NEW FEATURE HELPERS ---
+        formatNumber(num) {
+            // MODIFIED: Now supports BigInt
+            if (typeof num !== 'bigint') {
+                num = BigInt(Math.round(num));
+            }
+            if (num < 1000n) return num.toString();
+            const suffixes = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp"];
+            const numStr = num.toString();
+            const i = Math.floor((numStr.length - 1) / 3);
+            if (i >= suffixes.length) return num.toString().slice(0,1) + "." + num.toString().slice(1,3) + "e" + (numStr.length-1);
+            const main = numStr.slice(0, numStr.length - (i * 3));
+            const remainder = main.length > 3 ? '' : '.' + numStr.slice(main.length, main.length + 2);
+            return main.slice(0,3) + remainder + suffixes[i];
+        }
+
+        showNotification(message, duration = 3000) {
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = message;
+            this.dom.notificationArea.appendChild(notif);
+            notif.style.animationDuration = `${duration / 1000}s`;
+            setTimeout(() => notif.remove(), duration - 100);
+        }
+
+        playSound(frequency, duration, type) {
+            if (!this.audioContext) {
+                try { this.audioContext = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; }
+            }
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
+            oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+            oscillator.type = type;
+            oscillator.start(this.audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, this.audioContext.currentTime + duration);
+            oscillator.stop(this.audioContext.currentTime + duration);
+        }
+        
+        // NEW: All helper functions for the new features
+        calculateChainScore(length, speed, patterns) {
+            return (Math.pow(length, 1.5) * speed) + (patterns.length * 100);
+        }
+
+        detectPatterns(chain) {
+            if (chain.length < 3) return [];
+            const recognizedPatterns = [];
+            const points = chain.map(node => ({ x: node.x, y: node.y }));
+            
+            // Right Angle
+            const p1 = points[points.length - 3], p2 = points[points.length - 2], p3 = points[points.length - 1];
+            const angle = Math.abs((Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x)) * 180 / Math.PI);
+            if (Math.abs(angle - 90) < 15 || Math.abs(angle - 270) < 15) {
+                recognizedPatterns.push({ name: "Sudden Insight", reward: { multiplier: 1.5 } });
+            }
+            
+            // Closed Loop
+            if (chain.length >= 5 && Math.hypot(points[0].x - p3.x, points[0].y - p3.y) < 30) {
+                recognizedPatterns.push({ name: "Recurring Thought", reward: { multiplier: 2.5 } });
+            }
+            return recognizedPatterns;
+        }
+
+        saveChainToHistory(score, schematicId) {
+            const newEntry = { score, points: this.chain.map(p => ({ x: p.x, y: p.y })), generatedSchematicId: schematicId };
+            this.game.chainHistory.push(newEntry);
+            this.game.chainHistory.sort((a, b) => b.score - a.score);
+            if (this.game.chainHistory.length > this.staticData.constants.MAX_CHAIN_HISTORY) {
+                this.game.chainHistory.length = this.staticData.constants.MAX_CHAIN_HISTORY;
+            }
+        }
+
+        spawnGhost() {
+            if (this.activeGhosts.length > 5) return;
+            // Weighted selection
+            const totalScore = this.game.chainHistory.reduce((sum, h) => {
+                const isEquipped = this.game.schematics.equipped.some(s => s.id === h.generatedSchematicId);
+                return sum + h.score * (isEquipped ? 10 : 1); // Massive bonus for equipped
+            }, 0);
+            let roll = Math.random() * totalScore;
+            let selected = this.game.chainHistory[this.game.chainHistory.length - 1];
+            for (const history of this.game.chainHistory) {
+                const isEquipped = this.game.schematics.equipped.some(s => s.id === history.generatedSchematicId);
+                roll -= history.score * (isEquipped ? 10 : 1);
+                if (roll <= 0) { selected = history; break; }
+            }
+            this.activeGhosts.push({ points: selected.points, progress: 0, life: 5 });
+        }
+
+        spawnConstellation() {
+            const available = {...this.staticData.constellations};
+            this.game.schematics.equipped.forEach(s => {
+                if(s.effect.type === 'ADD_CONSTELLATION') {
+                    available['player_' + s.id] = s.effect.value;
+                }
+            });
+            const keys = Object.keys(available);
+            if (keys.length === 0) return;
+            const chosenKey = keys[Math.floor(Math.random() * keys.length)];
+            const constellation = available[chosenKey];
+            this.activeConstellation = {
+                ...constellation,
+                scaledPoints: constellation.points.map(p => ({
+                    x: p.x * this.canvas.width,
+                    y: p.y * this.canvas.height
+                }))
+            };
+        }
+
+        calculateConstellationMatch(playerChain, constellation) {
+            let totalDistance = 0;
+            const cPoints = constellation.scaledPoints;
+            // Compare each player point to the closest constellation point
+            playerChain.forEach(pPoint => {
+                let minDistance = Infinity;
+                cPoints.forEach(cPoint => {
+                    minDistance = Math.min(minDistance, Math.hypot(pPoint.x - cPoint.x, pPoint.y - cPoint.y));
+                });
+                totalDistance += minDistance;
+            });
+            const avgDistance = totalDistance / playerChain.length;
+            const accuracy = Math.max(0, 1 - (avgDistance / 50)); // 50px is the 'fail' distance
+            return { accuracy, avgDistance };
+        }
+
+        getSchematicBonus(type) {
+            return this.game.schematics.equipped.reduce((total, s) => {
+                if (s.effect.type === type) return total * s.effect.value;
+                return total;
+            }, 1.0);
+        }
+
+        // --- SAVE/LOAD ---
+        saveGame() {
+            try {
+                // MODIFIED: BigInt cannot be directly serialized, convert to string
+                const replacer = (key, value) => typeof value === 'bigint' ? value.toString() + 'n' : value;
+                localStorage.setItem('ephemeralEchoesSave', JSON.stringify(this.game, replacer));
+            } catch (e) { console.error("Could not save game:", e); }
+        }
+
+        loadGame() {
+            try {
+                const savedGame = localStorage.getItem('ephemeralEchoesSave');
+                if (savedGame) {
+                    // MODIFIED: Parse and revive BigInts from string
+                    const reviver = (key, value) => {
+                        if (typeof value === 'string' && /^-?\d+n$/.test(value)) {
+                            return BigInt(value.slice(0, -1));
+                        }
+                        return value;
+                    };
+                    const loadedGame = JSON.parse(savedGame, reviver);
+                    this.game = this.deepMerge(this.getInitialGameState(), loadedGame);
+                    this.recalculateStats();
+                }
+            } catch (e) {
+                console.error("Could not load game:", e);
+                this.game = this.getInitialGameState();
+            }
+        }
+        
+        deepMerge(target, source) {
+            const output = { ...target };
+            if (this.isObject(target) && this.isObject(source)) {
+                Object.keys(source).forEach(key => {
+                    if (this.isObject(source[key])) {
+                        if (!(key in target)) Object.assign(output, { [key]: source[key] });
+                        else output[key] = this.deepMerge(target[key], source[key]);
+                    } else {
+                        Object.assign(output, { [key]: source[key] });
+                    }
+                });
+            }
+            return output;
+        }
+        isObject(item) { return (item && typeof item === 'object' && !Array.isArray(item)); }
+    }
+
+    window.onload = () => {
+        const game = new EphemeralEchoesGame();
+    };
+    </script>
+</body>
+</html>

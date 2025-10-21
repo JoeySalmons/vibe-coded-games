@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solarized Clicker: Singularity</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
+    <style>
+        :root {
+            --base03:  #002b36; --base02:  #073642; --base01:  #586e75; --base00:  #657b83;
+            --base0:   #839496; --base1:   #93a1a1; --base2:   #eee8d5; --base3:   #fdf6e3;
+            --yellow:  #b58900; --orange:  #cb4b16; --red:     #dc322f; --magenta: #d33682;
+            --violet:  #6c71c4; --blue:    #268bd2; --cyan:    #2aa198; --green:   #859900;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--base3); color: var(--base01); display: flex;
+            flex-direction: column; height: 100vh; overflow: hidden; user-select: none;
+        }
+        .game-container { display: flex; flex-grow: 1; overflow: hidden; }
+        .left-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background-color: var(--base3); }
+        .right-panel { flex: 1; background-color: var(--base2); overflow-y: auto; border-left: 2px solid var(--base1); }
+        .cookie-section { text-align: center; }
+        #big-cookie {
+            width: 30vw; height: 30vw; max-width: 256px; max-height: 256px;
+            cursor: pointer; transition: transform 0.1s ease;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23b58900" stroke="%23586e75" stroke-width="2"/><circle cx="30" cy="30" r="5" fill="%23586e75"/><circle cx="70" cy="65" r="7" fill="%23586e75"/><circle cx="65" cy="35" r="4" fill="%23586e75"/><circle cx="35" cy="68" r="6" fill="%23586e75"/><circle cx="50" cy="50" r="4" fill="%23586e75"/></svg>');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+        }
+        #big-cookie:active { transform: scale(0.95); }
+        .cookie-display { font-size: 2.5em; font-weight: bold; color: var(--base02); margin-top: 10px; }
+        .cps-display { font-size: 1.2em; color: var(--base00); }
+        .stats-section {
+            margin-top: 40px; background-color: var(--base2); padding: 20px;
+            border-radius: 8px; width: 80%; max-width: 400px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-line { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 1em; }
+        .stat-line:last-child { margin-bottom: 0; }
+        .stat-label { color: var(--base01); }
+        .stat-value { color: var(--base02); font-weight: bold; }
+        .store-section { padding: 20px; }
+        .store-header { font-size: 1.8em; color: var(--base3); border-bottom: 2px solid var(--base1); padding-bottom: 10px; margin-bottom: 15px; }
+        .store-item { margin-bottom: 10px; }
+        .store-item button {
+            width: 100%; padding: 12px 15px; background-color: var(--base3);
+            border: 1px solid var(--base1); border-radius: 5px; cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 1em; font-family: inherit;
+        }
+        .store-item button:not(:disabled) { border-color: var(--green); }
+        .store-item button:not(:disabled):hover { background-color: #f0ead6; }
+        .store-item button:disabled { opacity: 0.6; cursor: not-allowed; border-color: var(--base1); }
+        .item-info { text-align: left; pointer-events: none; }
+        .item-name { font-size: 1.2em; font-weight: bold; color: var(--base02); }
+        .item-desc, .item-stats { font-size: 0.9em; color: var(--base00); max-width: 400px; }
+        .item-cost { font-size: 1.1em; font-weight: bold; color: var(--blue); text-align: right; min-width: 120px; pointer-events: none; }
+        .item-owned { font-size: 1.5em; font-weight: bold; color: var(--base01); margin-left: 20px; pointer-events: none; }
+        .purchased button { opacity: 0.5; background-color: #d1d1d1; border-color: #d1d1d1; cursor: default; }
+        .upgrade-item.synergy button, .upgrade-item.clickSynergy button { background-color: #dcf5f3; }
+        .upgrade-item.meta button { background-color: #fdf3d9; }
+        .upgrade-item.secret button { background: linear-gradient(45deg, #d33682, #6c71c4); color: white; }
+        .upgrade-item.goldenCookie button { background-color: #fffacd; }
+        .upgrade-item.blackHoleStatic button, .upgrade-item.blackHoleRate button { background-color: #e0d8f5; }
+        .save-load-container { padding: 15px; background-color: var(--base2); text-align: center; border-top: 2px solid var(--base1); box-shadow: 0 -2px 5px rgba(0,0,0,0.1); display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+        .save-load-container button {
+            background-color: var(--blue); color: var(--base3); border: none;
+            padding: 10px 15px; border-radius: 5px; cursor: pointer;
+            font-size: 0.9em; font-weight: bold; transition: background-color 0.2s;
+        }
+        .save-load-container button:hover { background-color: #1a7ab8; }
+        #reset-btn { background-color: var(--red); }
+        #reset-btn:hover { background-color: #c92c29; }
+        #golden-cookie {
+            position: absolute; width: 80px; height: 80px; z-index: 1000; display: none;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23ffd700" stroke="%23b58900" stroke-width="3"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="%23b58900">★</text></svg>');
+            background-size: contain; cursor: pointer; animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+        #notification-area { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; z-index: 2000; }
+        .notification {
+            background-color: var(--green); color: var(--base3); padding: 12px 20px;
+            border-radius: 20px; margin-bottom: 10px; font-size: 1em; opacity: 0;
+            animation: fadeInOut 5s ease-in-out;
+        }
+        @keyframes fadeInOut { 0%, 100% { opacity: 0; transform: translateY(20px); } 10%, 90% { opacity: 1; transform: translateY(0); } }
+        #golden-cookie-bag-container {
+            position: fixed; top: 20px; left: 20px; width: 100px; height: 100px;
+            cursor: pointer; z-index: 1001; display: none;
+        }
+        #golden-cookie-bag-container svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .bag-back { z-index: 1; }
+        .bag-front { z-index: 3; }
+        #stored-cookie-visuals { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
+        .stored-cookie-icon {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            margin-left: -10px; margin-top: -10px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23ffd700"/></svg>');
+            background-size: contain; transition: transform 0.3s ease;
+        }
+        #stored-cookie-count {
+            position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%);
+            background-color: var(--base02); color: var(--base3);
+            padding: 2px 8px; border-radius: 10px; font-size: 1.2em; font-weight: bold;
+            z-index: 4; border: 2px solid var(--base3);
+        }
+    </style>
+</head>
+<body>
+    <div id="golden-cookie-bag-container" aria-label="Golden Cookie Bag">
+        <svg viewBox="0 0 100 100" class="bag-back"><path d="M 20 20 Q 50 10, 80 20 L 90 80 Q 50 95, 10 80 Z" fill="#a5682a" /></svg>
+        <div id="stored-cookie-visuals"></div>
+        <svg viewBox="0 0 100 100" class="bag-front"><path d="M 15 30 Q 50 20, 85 30 L 90 80 Q 50 95, 10 80 Z" fill="#8b4513" /></svg>
+        <div id="stored-cookie-count">0</div>
+    </div>
+
+    <div class="game-container">
+        <div class="left-panel">
+            <div class="cookie-section">
+                <div id="big-cookie" aria-label="Click to get cookies"></div>
+                <div class="cookie-display"><span id="cookie-count">0</span> cookies</div>
+                <div class="cps-display">per second: <span id="cps-count">0.0</span></div>
+            </div>
+            <div class="stats-section">
+                <div class="stat-line"><span class="stat-label">Time Played:</span><span id="time-played" class="stat-value">0s</span></div>
+                <div class="stat-line"><span class="stat-label">Manual Clicks:</span><span id="total-clicks" class="stat-value">0</span></div>
+                <div class="stat-line"><span class="stat-label">Golden Cookies Clicked:</span><span id="golden-clicks" class="stat-value">0</span></div>
+                <div class="stat-line"><span class="stat-label">Cookies per Click:</span><span id="click-power-stat" class="stat-value">1</span></div>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="store-section" id="store-container">
+                <div class="store-header">Buildings</div><div id="buildings-container"></div>
+                <div class="store-header" style="margin-top: 30px;">Upgrades</div><div id="upgrades-container"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification-area"></div>
+    <div id="golden-cookie"></div>
+    <div class="save-load-container">
+        <button id="save-browser-btn">Save to Browser</button>
+        <button id="load-browser-btn">Load from Browser</button>
+        <button id="save-file-btn">Save to File</button>
+        <button id="load-file-btn">Load from File</button>
+        <button id="reset-btn">Reset All Progress</button>
+        <input type="file" id="file-input" style="display: none;" accept=".json">
+    </div>
+    
+    <script>
+    class SolarizedClicker {
+        constructor() {
+            this.game = null;
+            this.dom = {};
+            this.intervals = {};
+            this.timeouts = {};
+            this.upgradeData = this.getUpgradeData();
+            this.CONSTANTS = {
+                BUILDING_COST_MULTIPLIER: 1.15,
+                TICK_RATE_MS: 50,
+                SLOW_TICK_RATE_MS: 1000,
+                RECALC_RATE_MS: 5000,
+                AUTOSAVE_RATE_MS: 30000,
+                OFFLINE_THRESHOLD_MS: 5000,
+                OFFLINE_EFFICIENCY: 0.5,
+                GOLDEN_COOKIE_BAG_VISUAL_LIMIT: 10,
+                SAVE_KEY: 'solarizedClickerSave'
+            };
+        }
+
+        // --- INITIALIZATION ---
+        init() {
+            this.cacheDOMElements();
+            this.populateTierUpgrades();
+            this.game = this.getInitialGameState();
+            this.loadGame();
+            if (!localStorage.getItem(this.CONSTANTS.SAVE_KEY)) {
+                this.setNextGoldenCookieTimer();
+            }
+            this.initializeStore();
+            this.recalculateStats();
+            this.updateBagUI();
+            this.bindEvents();
+            this.startGameLoops();
+        }
+
+        getInitialGameState() {
+            return {
+                cookies: 0, cps: 0, clickPower: 1,
+                stats: { totalCookies: 0, totalClicks: 0, goldenCookiesClicked: 0, gameStartTime: Date.now(), lastSaveTime: Date.now(), firstBlackHoleBuyTime: null },
+                goldenCookie: { minDelay: 80, maxDelay: 240, duration: 10, variedRewards: false, buildingReward: 1, autoCollect: false, magnet: false, timer: 0, bagUnlocked: false, storedCookies: 0, baseMultiplier: 0.5, cpsMultiplier: 1, cpsDuration: 30 },
+                buildings: {
+                    grandma:  { id: 'grandma',  name: 'Grandma',   count: 0, cost: 15,     baseCps: 1,    multiplier: 1, upgradeLevel: 0, icon: "👵" },
+                    farm:     { id: 'farm',     name: 'Farm',      count: 0, cost: 100,    baseCps: 4,    multiplier: 1, upgradeLevel: 0, icon: "🌾" },
+                    mine:     { id: 'mine',     name: 'Mine',      count: 0, cost: 1200,   baseCps: 23.5, multiplier: 1, upgradeLevel: 0, icon: "⛏️" },
+                    factory:  { id: 'factory',  name: 'Factory',   count: 0, cost: 13000,  baseCps: 130,  multiplier: 1, upgradeLevel: 0, icon: "🏭" },
+                    bank:     { id: 'bank',     name: 'Bank',      count: 0, cost: 140000, baseCps: 700,  multiplier: 1, upgradeLevel: 0, icon: "🏦" },
+                    spaceship:{ id: 'spaceship',name: 'Spaceship', count: 0, cost: 2000000,baseCps: 3900, multiplier: 1, upgradeLevel: 0, icon: "🚀" },
+                    planet:   { id: 'planet',   name: 'Planet',    count: 0, cost: 33000000,baseCps: 22000,multiplier: 1, upgradeLevel: 0, icon: "🪐" },
+                    portal:   { id: 'portal',   name: 'Portal',    count: 0, cost: 510000000,baseCps: 130000,multiplier: 1, upgradeLevel: 0, icon: "🌀" },
+                    blackhole:{ id: 'blackhole',name: 'Black Hole',count: 0, cost: 51000000000,baseCps: 130000,multiplier: 1, upgradeLevel: 0, growthRate: 0.01, growthInterval: 60000, icon: "⚫" },
+                },
+                upgrades: {}
+            };
+        }
+
+        getUpgradeData() {
+             return {
+                click: [ { id: 'c1', name: 'Reinforced Mouse', cost: 100, requirement: { type: 'building', id: 'grandma', count: 1 } }, { id: 'c2', name: 'Titanium Mouse', cost: 500, requirement: { type: 'building', id: 'farm', count: 1 } }, { id: 'c3', name: 'Quantum Mouse', cost: 10000, requirement: { type: 'building', id: 'mine', count: 1 } } ],
+                clickSynergy: [ { id: 'cs1', name: 'Synergistic Clicks', desc: 'Gain +1 cookie per click for every building you own.', cost: 100000, requirement: { type: 'building', id: 'factory', count: 10 } }, { id: 'cs2', name: "Grandma's Clicking Finger", desc: 'Grandmas gain a 1% production boost for every 25 manual clicks.', cost: 500000, requirement: { type: 'stat', id: 'totalClicks', count: 1000 } }, { id: 'cs3', name: 'CPS Injection', desc: 'Each click also grants 1% of your total CPS.', cost: 100000000, requirement: { type: 'building', id: 'spaceship', count: 1 } } ],
+                tier: {},
+                synergy: [ { id: 'syn1', name: 'Mining Grandmas', desc: 'Mines gain +5% boost per Grandma.', cost: 50000, source: 'grandma', target: 'mine', bonus: 0.05, requirement: { type: 'building', id: 'mine', count: 15 } }, { id: 'syn2', name: 'Farm Factories', desc: 'Farms gain +15% boost per Factory.', cost: 250000, source: 'factory', target: 'farm', bonus: 0.15, requirement: { type: 'building', id: 'factory', count: 15 } }, { id: 'syn3', name: 'Banking Portals', desc: 'Banks gain +500% boost per Portal.', cost: 9999999999, source: 'portal', target: 'bank', bonus: 5.00, requirement: { type: 'building', id: 'portal', count: 10 } }, { id: 'syn4', name: 'Planet-Powered Factories', desc: 'Factories gain +150% boost per Planet.', cost: 165000000, source: 'planet', target: 'factory', bonus: 1.50, requirement: { type: 'building', id: 'planet', count: 1 } }, { id: 'syn5', name: 'Grandma Portals', desc: 'Grandmas gain +1000% boost per Portal.', cost: 510000000, source: 'portal', target: 'grandma', bonus: 10.00, requirement: { type: 'building', id: 'portal', count: 1 } } ],
+                goldenCookie: [ { id: 'gc_bag', name: 'Golden Cookie Bag', desc: 'Allows you to store Golden Cookies for later use.', cost: 1e9, requirement: { type: 'stat', id: 'goldenCookiesClicked', count: 10 } }, { id: 'gc_syrup', name: 'Golden Syrup', desc: 'Golden Cookies also grant 100% of your current cookies instead of 50%.', cost: 1e10, requirement: { type: 'stat', id: 'goldenCookiesClicked', count: 25 } }, { id: 'gc_timeless', name: 'Timeless Treasure', desc: 'The CPS bonus from Golden Cookies is calculated over 5 minutes instead of 30 seconds.', cost: 1e11, requirement: { type: 'stat', id: 'goldenCookiesClicked', count: 50 } }, { id: 'gc_magnet', name: 'Golden Magnet', desc: 'Instantly and automatically collects Golden Cookies.', cost: 1e12, requirement: { type: 'stat', id: 'goldenCookiesClicked', count: 100 } }, { id: 'gc1', name: 'Lucky Clover', desc: 'Golden cookies appear twice as often.', cost: 77777, requirement: { type: 'building', id: 'grandma', count: 20 } }, { id: 'gc2', name: 'Serendipity', desc: 'Golden cookies stay 50% longer and may grant a random building.', cost: 777777, requirement: { type: 'building', id: 'farm', count: 20 } }, { id: 'gc3', name: 'Get Lucky', desc: 'Golden cookies appear even more often and stay much longer.', cost: 77777777, requirement: { type: 'building', id: 'factory', count: 20 } }, { id: 'gc4', name: 'Golden Hoard', desc: 'Golden cookies can now grant 3 free buildings instead of 1.', cost: 777777777, requirement: { type: 'building', id: 'bank', count: 20 } }, { id: 'gc5', name: 'Lasting Luck', desc: 'Golden cookies will be automatically collected 1 second before they disappear.', cost: 77777777777, requirement: { type: 'building', id: 'spaceship', count: 20 } } ],
+                meta: [ { id: 'meta1', name: "Builder's Legacy", desc: 'All buildings gain +5% per 100 total buildings.', cost: 1000000, requirement: { type: 'building', id: 'factory', count: 1 } }, { id: 'meta2', name: 'Carpal Tunnel Cream', desc: 'All buildings gain +1% per 100 clicks.', cost: 5000000, requirement: { type: 'building', id: 'bank', count: 1 } }, { id: 'meta2b', name: 'Advanced Ergonomics', desc: 'All buildings gain another +1% per 100 clicks.', cost: 5e8, requirement: { type: 'upgrade', id: 'meta2' } }, { id: 'meta2c', name: 'Robotic Assistance', desc: 'All buildings gain another +1% per 100 clicks.', cost: 5e10, requirement: { type: 'upgrade', id: 'meta2b' } }, { id: 'meta3', name: 'Gilded Touch', desc: 'All buildings gain +5% per Golden Cookie clicked.', cost: 100000000, requirement: { type: 'building', id: 'spaceship', count: 1 } } ],
+                blackHoleStatic: [ { id: 'bhs1', name: 'Event Horizon', desc: 'Increases the Black Hole growth rate by +0.01.', cost: 2.55e12, requirement: { type: 'building', id: 'blackhole', count: 1 } }, { id: 'bhs2', name: 'Singularity', desc: 'Increases the Black Hole growth rate by another +0.01.', cost: 2.55e13, requirement: { type: 'building', id: 'blackhole', count: 10 } }, { id: 'bhs3', name: 'Time Dilation', desc: 'Black Hole time compounds every 45 seconds instead of 60.', cost: 5.1e14, requirement: { type: 'building', id: 'blackhole', count: 25 } }, { id: 'bh_gc_1', name: 'Gravitational Well', desc: 'The immense gravity of your black holes speeds up time, making Golden Cookies appear 1.5x more often.', cost: 1e18, requirement: { type: 'building', id: 'blackhole', count: 200 } }, { id: 'bh_gc_2', name: 'Temporal Distortion', desc: 'Golden Cookies appear another 1.5x more often.', cost: 1e21, requirement: { type: 'building', id: 'blackhole', count: 300 } }, { id: 'bh_all_200', name: 'Universal Harmony', desc: 'Owning 200 of every building type harmonizes cosmic frequencies, increasing the Black Hole growth rate by +0.01.', cost: 1e24, requirement: { type: 'all_buildings', count: 200 } } ],
+                blackHoleRate: [], secret: [ { id: 'secret1', name: '??????', desc: 'The universe bends to your will.', cost: 1, requirement: { type: 'building', id: 'blackhole', count: 100 } } ]
+            };
+        }
+
+        populateTierUpgrades() {
+            const initialBuildings = this.getInitialGameState().buildings;
+            for (const key in initialBuildings) {
+                if (key !== 'blackhole') {
+                    const buildingInfo = initialBuildings[key];
+                    this.upgradeData.tier[key] = [
+                        { id: `${key[0]}1`, name: `Upgraded ${buildingInfo.name}`, cost: buildingInfo.cost * 10, desc: "Doubles production.", requirement: { count: 1 } },
+                        { id: `${key[0]}2`, name: `Advanced ${buildingInfo.name}`, cost: buildingInfo.cost * 50, desc: "Doubles production again.", requirement: { count: 25 } },
+                        { id: `${key[0]}3`, name: `Pristine ${buildingInfo.name}`, cost: buildingInfo.cost * 200, desc: "Doubles production yet again.", requirement: { count: 50 } }
+                    ];
+                }
+            }
+        }
+
+        cacheDOMElements() {
+            this.dom = {
+                cookieCount: document.getElementById('cookie-count'), cpsCount: document.getElementById('cps-count'),
+                bigCookie: document.getElementById('big-cookie'), storeContainer: document.getElementById('store-container'),
+                buildingsContainer: document.getElementById('buildings-container'), upgradesContainer: document.getElementById('upgrades-container'),
+                notificationArea: document.getElementById('notification-area'), timePlayed: document.getElementById('time-played'),
+                totalClicks: document.getElementById('total-clicks'), goldenClicks: document.getElementById('golden-clicks'),
+                clickPowerStat: document.getElementById('click-power-stat'), goldenCookie: document.getElementById('golden-cookie'),
+                goldenCookieBagContainer: document.getElementById('golden-cookie-bag-container'), storedCookieCount: document.getElementById('stored-cookie-count'),
+                storedCookieVisuals: document.getElementById('stored-cookie-visuals'), saveBrowserBtn: document.getElementById('save-browser-btn'),
+                loadBrowserBtn: document.getElementById('load-browser-btn'), saveFileBtn: document.getElementById('save-file-btn'),
+                loadFileBtn: document.getElementById('load-file-btn'), fileInput: document.getElementById('file-input'),
+                resetBtn: document.getElementById('reset-btn'),
+            };
+        }
+
+        bindEvents() {
+            this.dom.bigCookie.addEventListener('click', this.clickCookie.bind(this));
+            this.dom.goldenCookie.addEventListener('click', this.clickGoldenCookie.bind(this));
+            this.dom.goldenCookieBagContainer.addEventListener('click', this.useStoredGoldenCookie.bind(this));
+            this.dom.storeContainer.addEventListener('click', this.handleStoreClick.bind(this));
+            this.dom.saveBrowserBtn.addEventListener('click', () => this.saveGame(true));
+            this.dom.loadBrowserBtn.addEventListener('click', this.loadGame.bind(this));
+            this.dom.saveFileBtn.addEventListener('click', this.exportSave.bind(this));
+            this.dom.loadFileBtn.addEventListener('click', () => this.dom.fileInput.click());
+            this.dom.fileInput.addEventListener('change', this.handleFileLoad.bind(this));
+            this.dom.resetBtn.addEventListener('click', this.resetGame.bind(this));
+        }
+
+        startGameLoops() {
+            this.intervals.gameLoop = setInterval(() => this.gameLoop(), this.CONSTANTS.TICK_RATE_MS);
+            this.intervals.slowLoop = setInterval(() => this.slowLoop(), this.CONSTANTS.SLOW_TICK_RATE_MS);
+            this.intervals.recalc = setInterval(() => this.recalculateStats(), this.CONSTANTS.RECALC_RATE_MS);
+            this.intervals.autosave = setInterval(() => this.saveGame(false), this.CONSTANTS.AUTOSAVE_RATE_MS);
+        }
+
+        // --- GAME LOOPS ---
+        gameLoop() {
+            const cookiesFromCps = this.game.cps / (1000 / this.CONSTANTS.TICK_RATE_MS);
+            this.game.cookies += cookiesFromCps;
+            this.game.stats.totalCookies += cookiesFromCps;
+            this.updateUI();
+        }
+
+        slowLoop() {
+            this.updateStoreAvailability();
+            this.checkAndRenderUpgrades();
+            this.game.goldenCookie.timer -= 1000;
+            if (this.game.goldenCookie.timer <= 0) {
+                this.spawnGoldenCookie();
+            }
+        }
+
+        // --- CORE LOGIC ---
+        clickCookie() {
+            this.game.cookies += this.game.clickPower;
+            this.game.stats.totalCookies += this.game.clickPower;
+            this.game.stats.totalClicks++;
+            this.updateUI();
+        }
+
+        handleStoreClick(event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const buildingId = button.dataset.buildingId;
+            const upgradeType = button.dataset.upgradeType;
+            const upgradeId = button.dataset.upgradeId;
+
+            if (buildingId) {
+                this.buyBuilding(buildingId, event.shiftKey);
+            } else if (upgradeType && upgradeId) {
+                this.buyUpgrade(upgradeType, upgradeId);
+            }
+        }
+
+        buyBuilding(id, isShift) {
+            const building = this.game.buildings[id];
+            const buyCount = isShift ? 5 : 1;
+            let purchased = 0;
+            for (let i = 0; i < buyCount; i++) {
+                if (this.game.cookies >= building.cost) {
+                    this.game.cookies -= building.cost;
+                    building.count++;
+                    building.cost = Math.ceil(building.cost * this.CONSTANTS.BUILDING_COST_MULTIPLIER);
+                    purchased++;
+                } else { break; }
+            }
+            if (purchased > 0) {
+                if (id === 'blackhole' && !this.game.stats.firstBlackHoleBuyTime) {
+                    this.game.stats.firstBlackHoleBuyTime = Date.now();
+                }
+                this.recalculateStats(); this.updateUI(); this.updateStoreAvailability();
+            }
+        }
+
+        buyUpgrade(type, id) {
+            let upgrade;
+            if (type === 'tier') {
+                upgrade = this.upgradeData.tier[id][this.game.buildings[id].upgradeLevel];
+            } else if (type === 'blackHoleRate') {
+                upgrade = this.upgradeData.blackHoleRate.find(u => u.id === id);
+            } else {
+                upgrade = this.upgradeData[type].find(u => u.id === id);
+            }
+            if (!upgrade || this.game.upgrades[upgrade.id] || this.game.cookies < upgrade.cost) return;
+            this.game.cookies -= upgrade.cost;
+            this.game.upgrades[upgrade.id] = true;
+            this._applyUpgradeEffect(type, id);
+            document.getElementById(`upgrade-${upgrade.id}`).classList.add('purchased');
+            this.recalculateStats(); this.updateUI(); this.updateStoreAvailability();
+        }
+
+        _applyUpgradeEffect(type, id) {
+            if (type === 'tier') this.game.buildings[id].upgradeLevel++;
+            if (type === 'goldenCookie') {
+                const gc = this.game.goldenCookie;
+                if (id === 'gc_bag') { gc.bagUnlocked = true; this.updateBagUI(); }
+                if (id === 'gc_syrup') gc.baseMultiplier = 1.0;
+                if (id === 'gc_timeless') gc.cpsDuration = 300;
+                if (id === 'gc_magnet') gc.magnet = true;
+                if (id === 'gc1') { gc.minDelay /= 2; gc.maxDelay /= 2; }
+                if (id === 'gc2') { gc.duration *= 1.5; gc.variedRewards = true; }
+                if (id === 'gc3') { gc.minDelay /= 1.5; gc.maxDelay /= 1.5; gc.duration *= 2; }
+                if (id === 'gc4') gc.buildingReward = 3;
+                if (id === 'gc5') gc.autoCollect = true;
+            }
+            if (type === 'blackHoleStatic') {
+                if (id === 'bh_gc_1' || id === 'bh_gc_2') { this.game.goldenCookie.minDelay /= 1.5; this.game.goldenCookie.maxDelay /= 1.5; }
+                if (id === 'bh_all_200') this.game.buildings.blackhole.growthRate += 0.01;
+                if (id === 'bhs1' || id === 'bhs2') this.game.buildings.blackhole.growthRate += 0.01;
+                if (id === 'bhs3') this.game.buildings.blackhole.growthInterval = 45000;
+            }
+            if (type === 'blackHoleRate') this.game.buildings.blackhole.growthRate += 0.01;
+            if (type === 'secret' && id === 'secret1') { this.game.goldenCookie.minDelay /= 3; this.game.goldenCookie.maxDelay /= 3; }
+        }
+
+        // --- STATS RECALCULATION ---
+        recalculateStats() {
+            this._calculateClickPower();
+            this._calculateTotalCPS();
+        }
+
+        _calculateClickPower() {
+            let baseClickPower = 1;
+            this.upgradeData.click.forEach(u => { if (this.game.upgrades[u.id]) baseClickPower *= 2; });
+            let flatBonus = 0;
+            if (this.game.upgrades['cs1']) {
+                flatBonus += Object.values(this.game.buildings).reduce((sum, b) => sum + b.count, 0);
+            }
+            let cpsBonus = 0;
+            if (this.game.upgrades['cs3']) {
+                cpsBonus = this.game.cps * 0.01;
+            }
+            this.game.clickPower = baseClickPower + flatBonus + cpsBonus;
+        }
+
+        _calculateTotalCPS() {
+            const globalMultiplier = this._calculateGlobalMultipliers();
+            let totalCps = 0;
+            for (const key in this.game.buildings) {
+                const b = this.game.buildings[key];
+                let buildingMultiplier = 1;
+                this.upgradeData.tier[key]?.forEach((tier, i) => { if (b.upgradeLevel > i) buildingMultiplier *= 2; });
+                let synergyMultiplier = 1;
+                this.upgradeData.synergy.forEach(upg => {
+                    if (this.game.upgrades[upg.id] && upg.target === key) {
+                        synergyMultiplier += this.game.buildings[upg.source].count * upg.bonus;
+                    }
+                });
+                let grandmaClickBonus = 1;
+                if (key === 'grandma' && this.game.upgrades['cs2']) {
+                    grandmaClickBonus += Math.floor(this.game.stats.totalClicks / 25) * 0.01;
+                }
+                let buildingCps = b.count * b.baseCps * buildingMultiplier * synergyMultiplier * grandmaClickBonus;
+                if (key === 'blackhole' && this.game.stats.firstBlackHoleBuyTime) {
+                    const intervalsSinceStart = (Date.now() - this.game.stats.firstBlackHoleBuyTime) / b.growthInterval;
+                    const timeBonus = Math.pow(1 + b.growthRate, intervalsSinceStart);
+                    buildingCps *= timeBonus;
+                }
+                totalCps += buildingCps;
+            }
+            this.game.cps = totalCps * globalMultiplier;
+        }
+
+        _calculateGlobalMultipliers() {
+            let builderBonus = 1, clickBonus = 1, gildedBonus = 1;
+            const totalBuildings = Object.values(this.game.buildings).reduce((sum, b) => sum + b.count, 0);
+            if (this.game.upgrades['meta1']) builderBonus += Math.floor(totalBuildings / 100) * 0.05;
+            let clickMetaBonus = 0;
+            if (this.game.upgrades['meta2']) clickMetaBonus += 0.01;
+            if (this.game.upgrades['meta2b']) clickMetaBonus += 0.01;
+            if (this.game.upgrades['meta2c']) clickMetaBonus += 0.01;
+            clickBonus += Math.floor(this.game.stats.totalClicks / 100) * clickMetaBonus;
+            if (this.game.upgrades['meta3']) gildedBonus += this.game.stats.goldenCookiesClicked * 0.05;
+            return builderBonus * clickBonus * gildedBonus;
+        }
+        
+        // --- UI & RENDERING ---
+        initializeStore() {
+            this.dom.buildingsContainer.innerHTML = '';
+            this.dom.upgradesContainer.innerHTML = '';
+            for (const key in this.game.buildings) {
+                const b = this.game.buildings[key];
+                const element = document.createElement('div');
+                element.className = 'store-item';
+                element.id = `building-${b.id}`;
+                if (b.id !== 'grandma') element.style.display = 'none';
+                element.innerHTML = `<button data-building-id="${b.id}"><div class="item-info"><div class="item-name">${b.icon} ${b.name}</div></div><div class="item-cost" id="cost-building-${b.id}"></div><div class="item-owned" id="count-building-${b.id}"></div></button>`;
+                this.dom.buildingsContainer.appendChild(element);
+            }
+        }
+        
+        updateUI() {
+            document.title = `${this.formatNumber(Math.floor(this.game.cookies))} cookies - Solarized Clicker`;
+            this.dom.cookieCount.textContent = this.formatNumber(Math.floor(this.game.cookies));
+            this.dom.cpsCount.textContent = this.formatNumber(this.game.cps);
+            this.dom.totalClicks.textContent = this.game.stats.totalClicks.toLocaleString();
+            this.dom.goldenClicks.textContent = this.game.stats.goldenCookiesClicked.toLocaleString();
+            this.dom.clickPowerStat.textContent = this.formatNumber(this.game.clickPower);
+            const timePlayed = (Date.now() - this.game.stats.gameStartTime) / 1000;
+            const s = Math.floor(timePlayed % 60);
+            const m = Math.floor((timePlayed / 60) % 60);
+            const h = Math.floor(timePlayed / 3600);
+            this.dom.timePlayed.textContent = `${h}h ${m}m ${s}s`;
+        }
+
+        updateStoreAvailability() {
+            const buildingKeys = Object.keys(this.game.buildings);
+            for (let i = 0; i < buildingKeys.length; i++) {
+                const key = buildingKeys[i];
+                const b = this.game.buildings[key];
+                document.getElementById(`building-${key}`).querySelector('button').disabled = this.game.cookies < b.cost;
+                document.getElementById(`cost-building-${key}`).textContent = this.formatNumber(b.cost);
+                document.getElementById(`count-building-${key}`).textContent = b.count;
+                if (i < buildingKeys.length - 1 && b.count > 0) {
+                    document.getElementById(`building-${buildingKeys[i+1]}`).style.display = 'block';
+                }
+            }
+            document.querySelectorAll('.upgrade-btn').forEach(button => {
+                if (!button.parentElement.classList.contains('purchased')) {
+                    button.disabled = this.game.cookies < parseFloat(button.dataset.cost);
+                }
+            });
+        }
+
+        checkAndRenderUpgrades() {
+            this._checkAndRenderDynamicUpgrades();
+            const staticUpgradeTypes = ['click', 'clickSynergy', 'synergy', 'goldenCookie', 'meta', 'blackHoleStatic', 'tier', 'secret'];
+            staticUpgradeTypes.forEach(type => this._checkAndRenderStaticUpgrades(type));
+        }
+
+        _checkAndRenderDynamicUpgrades() {
+            if (this.game.buildings.blackhole.count === 0) return;
+            const thresholds = [100, 200, 300];
+            const roman = ['I', 'II', 'III'];
+            for (const key in this.game.buildings) {
+                if (key === 'blackhole') continue;
+                const b = this.game.buildings[key];
+                thresholds.forEach((threshold, index) => {
+                    const upgradeId = `bhr_${b.id}_${threshold}`;
+                    if (b.count >= threshold && !this.upgradeData.blackHoleRate.some(u => u.id === upgradeId)) {
+                        const cost = this.getInitialGameState().buildings.blackhole.cost + (100 * this._calculateNthBuildingCost(b.id, threshold));
+                        this.upgradeData.blackHoleRate.push({
+                            id: upgradeId, name: `${b.name} Singularity ${roman[index]}`,
+                            desc: `Reaching ${threshold} ${b.name}s increases Black Hole growth rate by +0.01.`,
+                            cost: cost, requirement: { type: 'none' }
+                        });
+                    }
+                });
+            }
+            this._checkAndRenderStaticUpgrades('blackHoleRate');
+        }
+
+        _checkAndRenderStaticUpgrades(type) {
+            const createUpgrade = (upgrade, typeArg, idArg) => {
+                if (this.game.upgrades[upgrade.id] || document.getElementById(`upgrade-${upgrade.id}`)) return;
+                const element = document.createElement('div');
+                element.className = `store-item upgrade-item ${type}`;
+                element.id = `upgrade-${upgrade.id}`;
+                element.innerHTML = `<button class="upgrade-btn" data-upgrade-type="${typeArg}" data-upgrade-id="${idArg}" data-cost="${upgrade.cost}"><div class="item-info"><div class="item-name">${upgrade.name}</div><div class="item-desc">${upgrade.desc || ''}</div></div><div class="item-cost">${this.formatNumber(upgrade.cost)}</div></button>`;
+                this.dom.upgradesContainer.appendChild(element);
+            };
+            if (type === 'tier') {
+                for (const key in this.upgradeData.tier) {
+                    const building = this.game.buildings[key];
+                    if (building.upgradeLevel < this.upgradeData.tier[key].length) {
+                        const upgrade = this.upgradeData.tier[key][building.upgradeLevel];
+                        if (building.count >= upgrade.requirement.count) createUpgrade(upgrade, 'tier', key);
+                    }
+                }
+            } else {
+                this.upgradeData[type].forEach(upgrade => {
+                    let reqMet = false;
+                    const req = upgrade.requirement;
+                    if (req.type === 'building' && this.game.buildings[req.id]?.count >= req.count) reqMet = true;
+                    else if (req.type === 'stat' && this.game.stats[req.id] >= req.count) reqMet = true;
+                    else if (req.type === 'upgrade' && this.game.upgrades[req.id]) reqMet = true;
+                    else if (req.type === 'all_buildings') {
+                        reqMet = Object.values(this.game.buildings).every(b => b.id === 'blackhole' || b.count >= req.count);
+                    }
+                    else if (req.type === 'none') reqMet = true;
+                    if (reqMet) createUpgrade(upgrade, type, upgrade.id);
+                });
+            }
+        }
+        
+        // --- GOLDEN COOKIE ---
+        setNextGoldenCookieTimer() {
+            const { minDelay, maxDelay } = this.game.goldenCookie;
+            this.game.goldenCookie.timer = (Math.random() * (maxDelay - minDelay) + minDelay) * 1000;
+        }
+        
+        spawnGoldenCookie() {
+            if (this.dom.goldenCookie.style.display === 'block') return;
+            if (this.game.goldenCookie.magnet) {
+                this.clickGoldenCookie();
+                return;
+            }
+            const gc = this.dom.goldenCookie;
+            gc.style.top = `${Math.random() * (window.innerHeight - 80)}px`;
+            gc.style.left = `${Math.random() * (window.innerWidth - 80)}px`;
+            gc.style.display = 'block';
+            
+            clearTimeout(this.timeouts.despawn);
+            this.timeouts.despawn = setTimeout(() => {
+                if (gc.style.display === 'block') {
+                    if (this.game.goldenCookie.autoCollect) {
+                        this.clickGoldenCookie();
+                    } else {
+                        gc.style.display = 'none';
+                        this.setNextGoldenCookieTimer();
+                    }
+                }
+            }, this.game.goldenCookie.duration * 1000 - (this.game.goldenCookie.autoCollect ? 1000 : 0));
+        }
+
+        clickGoldenCookie() {
+            this.dom.goldenCookie.style.display = 'none';
+            clearTimeout(this.timeouts.despawn);
+            this.game.stats.goldenCookiesClicked++;
+            if (this.game.goldenCookie.bagUnlocked) {
+                this.game.goldenCookie.storedCookies++;
+                this.updateBagUI();
+                this.showNotification("Golden Cookie stored in bag!");
+            } else {
+                this.applyGoldenCookieEffect();
+            }
+            this.recalculateStats();
+            this.setNextGoldenCookieTimer();
+        }
+
+        useStoredGoldenCookie() {
+            if (this.game.goldenCookie.storedCookies > 0) {
+                this.game.goldenCookie.storedCookies--;
+                this.applyGoldenCookieEffect();
+                this.updateBagUI();
+                this.recalculateStats();
+            }
+        }
+
+        applyGoldenCookieEffect() {
+            const { baseMultiplier, cpsMultiplier, cpsDuration } = this.game.goldenCookie;
+            const reward = (this.game.cookies * baseMultiplier) + (this.game.cps * cpsDuration * cpsMultiplier);
+            this.game.cookies += reward;
+            this.showNotification(`Golden Cookie! +${this.formatNumber(reward)} cookies!`);
+        }
+
+        updateBagUI() {
+            this.dom.goldenCookieBagContainer.style.display = this.game.goldenCookie.bagUnlocked ? 'block' : 'none';
+            if (!this.game.goldenCookie.bagUnlocked) return;
+            this.dom.storedCookieCount.textContent = this.game.goldenCookie.storedCookies;
+            this.dom.storedCookieVisuals.innerHTML = '';
+            const numToDisplay = Math.min(this.game.goldenCookie.storedCookies, this.CONSTANTS.GOLDEN_COOKIE_BAG_VISUAL_LIMIT);
+            for (let i = 0; i < numToDisplay; i++) {
+                const icon = document.createElement('div');
+                icon.className = 'stored-cookie-icon';
+                const angle = -45 + (90 / (numToDisplay + 1)) * (i + 1);
+                icon.style.transform = `rotate(${angle}deg) translateY(-25px) rotate(${-angle}deg)`;
+                this.dom.storedCookieVisuals.appendChild(icon);
+            }
+        }
+        
+        // --- HELPERS & SAVE/LOAD ---
+        formatNumber(num) {
+            if (num < 1000) return num.toFixed(1);
+            const suffixes = ["", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc"];
+            const i = Math.floor(Math.log10(Math.abs(num)) / 3);
+            if (i >= suffixes.length) return num.toExponential(2);
+            return (num / Math.pow(10, i * 3)).toFixed(2) + suffixes[i];
+        }
+
+        _calculateNthBuildingCost(buildingId, n) {
+            const baseCost = this.getInitialGameState().buildings[buildingId].cost;
+            return baseCost * Math.pow(this.CONSTANTS.BUILDING_COST_MULTIPLIER, n - 1);
+        }
+
+        showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'notification'; notif.textContent = message;
+            this.dom.notificationArea.appendChild(notif);
+            setTimeout(() => notif.remove(), 4900);
+        }
+
+        saveGame(showNotif = false) { this.game.stats.lastSaveTime = Date.now(); localStorage.setItem(this.CONSTANTS.SAVE_KEY, JSON.stringify(this.game)); if (showNotif) this.showNotification("Game Saved!"); }
+        
+        loadGame() { const savedGame = localStorage.getItem(this.CONSTANTS.SAVE_KEY); if (savedGame) this.processLoadedData(savedGame, "Game Loaded!"); }
+        
+        exportSave() { this.saveGame(); const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.game)); const a = document.createElement('a'); a.href = dataStr; a.download = `solarized_clicker_${Date.now()}.json`; a.click(); a.remove(); this.showNotification("Save file downloaded!"); }
+        
+        handleFileLoad(event) { const file = event.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = e => this.processLoadedData(e.target.result, "Save file imported!"); reader.readAsText(file); } }
+        
+        resetGame() {
+            if (confirm("Are you sure you want to reset all your progress? This action cannot be undone.")) {
+                localStorage.removeItem(this.CONSTANTS.SAVE_KEY);
+                location.reload();
+            }
+        }
+
+        processLoadedData(jsonData, message) {
+            try {
+                const loaded = JSON.parse(jsonData);
+                const timeOffline = Date.now() - (loaded.stats.lastSaveTime || Date.now());
+                if (timeOffline > this.CONSTANTS.OFFLINE_THRESHOLD_MS) {
+                    const tempGame = this.getInitialGameState();
+                    tempGame.buildings = loaded.buildings; tempGame.upgrades = loaded.upgrades; tempGame.stats = loaded.stats;
+                    const tempInstance = new SolarizedClicker(); tempInstance.game = tempGame; tempInstance.upgradeData = this.upgradeData;
+                    tempInstance.recalculateStats();
+                    const blackHoleBaseCps = tempGame.buildings.blackhole.count * tempGame.buildings.blackhole.baseCps;
+                    const offlineCps = tempInstance.game.cps - blackHoleBaseCps;
+                    const earned = (timeOffline / 1000) * Math.max(0, offlineCps) * this.CONSTANTS.OFFLINE_EFFICIENCY;
+                    loaded.cookies += earned;
+                    this.showNotification(`Welcome back! You earned ${this.formatNumber(earned)} cookies while away.`);
+                }
+                this.game = loaded;
+                const defaultState = this.getInitialGameState();
+                if (!this.game.stats.gameStartTime) this.game.stats.gameStartTime = this.game.stats.lastSaveTime;
+                if (this.game.buildings.blackhole.count > 0 && !this.game.stats.firstBlackHoleBuyTime) {
+                    this.game.stats.firstBlackHoleBuyTime = this.game.stats.gameStartTime;
+                }
+                this.game.goldenCookie = {...defaultState.goldenCookie, ...this.game.goldenCookie};
+                this.initializeStore();
+                Object.keys(this.game.upgrades).forEach(id => {
+                    const el = document.getElementById(`upgrade-${id}`);
+                    if (el) el.classList.add('purchased');
+                });
+                this.recalculateStats(); this.updateUI(); this.updateBagUI();
+                this.showNotification(message);
+            } catch (error) { this.showNotification("Error: Invalid save file."); console.error(error); }
+        }
+    }
+
+    window.onload = () => {
+        const gameInstance = new SolarizedClicker();
+        gameInstance.init();
+    };
+    </script>
+</body>
+</html>

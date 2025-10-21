@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Infinite Content Machine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #0f0;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .intro-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 40px;
+            padding-top: 10vh;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .intro-screen.hidden {
+            display: none;
+        }
+
+        .intro-content {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .intro-text {
+            font-size: 1.2em;
+            line-height: 1.8;
+            margin-bottom: 30px;
+            opacity: 0;
+        }
+
+        .intro-text.visible {
+            opacity: 1;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 20px;
+            background: #0f0;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .intro-prompt {
+            font-size: 1.8em;
+            color: #0ff;
+            padding: 20px 40px;
+            border: 2px solid #0ff;
+            background: rgba(0, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0;
+        }
+
+        .intro-prompt.visible {
+            opacity: 1;
+        }
+
+        .intro-prompt:hover {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 2px solid #0f0;
+            margin-bottom: 20px;
+            background: rgba(0, 20, 0, 0.8);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+        }
+
+        .subtitle {
+            color: #0f0;
+            font-size: 1.1em;
+        }
+
+        .phase-indicator {
+            font-size: 1.3em;
+            color: #f90;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #f90;
+            display: inline-block;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: rgba(0, 30, 0, 0.9);
+            padding: 20px;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .panel h2 {
+            color: #0ff;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-bottom: 1px solid #0ff;
+            padding-bottom: 5px;
+        }
+
+        .clicker-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .progress-bar-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 40px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #0f0;
+            position: relative;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0f0, #0ff);
+            transition: width 0.1s linear;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 1.1em;
+            font-weight: bold;
+            text-shadow: 0 0 5px #000, 0 0 10px #000;
+        }
+
+        .progress-label {
+            color: #0ff;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .click-button {
+            background: linear-gradient(135deg, #0f0, #0ff);
+            color: #000;
+            border: 3px solid #0ff;
+            padding: 20px 40px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 1.5em;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        .click-button:hover {
+            background: linear-gradient(135deg, #0ff, #0f0);
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
+        }
+
+        .click-button:active {
+            transform: scale(0.98);
+        }
+
+        .resource-display {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #0f0;
+            margin-bottom: 10px;
+        }
+
+        .resource-label {
+            font-size: 1.1em;
+        }
+
+        .resource-value {
+            font-size: 1.3em;
+            color: #0ff;
+            font-weight: bold;
+        }
+
+        .per-second {
+            font-size: 0.9em;
+            color: #8f8;
+        }
+
+        .generator {
+            background: rgba(0, 255, 0, 0.05);
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #0f0;
+            transition: background 0.3s, border-color 0.3s;
+        }
+
+        .generator:hover {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: #0ff;
+        }
+
+        .generator.locked {
+            opacity: 0.4;
+            background: rgba(100, 0, 0, 0.1);
+            border-color: #500;
+        }
+
+        .generator-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .generator-name {
+            font-size: 1.2em;
+            color: #0ff;
+            font-weight: bold;
+        }
+
+        .generator-owned {
+            color: #f90;
+        }
+
+        .generator-desc {
+            color: #8f8;
+            font-size: 0.95em;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .generator-production {
+            color: #ff0;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: 2px solid #0ff;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.2s;
+            text-transform: uppercase;
+        }
+
+        button:hover:not(:disabled) {
+            background: #0ff;
+            box-shadow: 0 0 15px #0ff;
+        }
+
+        button:disabled {
+            background: #333;
+            color: #666;
+            border-color: #444;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .buy-button {
+            width: 100%;
+        }
+        
+        .buy-button-cost {
+            display: block;
+            font-size: 0.9em;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.05);
+            border: 1px solid #0f0;
+        }
+
+        .stat-label {
+            color: #8f8;
+            font-size: 0.9em;
+        }
+
+        .stat-value {
+            color: #0ff;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .upgrades-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .upgrade {
+            background: rgba(0, 255, 255, 0.1);
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #0ff;
+        }
+
+        .upgrade-title {
+            color: #0ff;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .upgrade-effect {
+            color: #8ff;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .story-event, .offline-progress-report {
+            background: rgba(255, 0, 0, 0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #f00;
+            animation: pulse 2s infinite;
+        }
+        
+        .offline-progress-report {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: #0ff;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { border-color: #f00; }
+            50% { border-color: #f90; }
+        }
+
+        .story-text {
+            color: #f88;
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .offline-text {
+            color: #8ff;
+        }
+
+        .story-choice {
+            background: #f00;
+            color: #fff;
+            margin: 5px;
+        }
+
+        .story-choice:hover {
+            background: #f90;
+        }
+
+        .milestone {
+            background: rgba(255, 150, 0, 0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #f90;
+        }
+
+        .milestone-title {
+            color: #f90;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .milestone-desc {
+            color: #fa0;
+            margin-bottom: 10px;
+        }
+
+        .save-options {
+            margin-top: 20px;
+            border-top: 1px solid #0f0;
+            padding-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .save-options button {
+            font-size: 0.8em;
+            padding: 8px 12px;
+        }
+
+        .final-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.98);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 40px;
+            padding-top: 10vh;
+            z-index: 2000;
+            text-align: center;
+            overflow-y: auto;
+        }
+
+        .final-screen.hidden {
+            display: none;
+        }
+
+        .final-text {
+            max-width: 900px;
+            font-size: 1.3em;
+            line-height: 2;
+            color: #aaa;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .final-text.emphasis {
+            color: #0ff;
+            font-size: 1.5em;
+            text-align: center;
+        }
+        
+        .final-prompt {
+            font-size: 1.8em;
+            color: #f90;
+            padding: 20px 40px;
+            border: 2px solid #f90;
+            background: rgba(255, 153, 0, 0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .final-prompt:hover {
+            background: rgba(255, 153, 0, 0.3);
+            box-shadow: 0 0 20px #f90;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #0f0;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="intro-screen" id="intro">
+        <div class="intro-content">
+            <div class="intro-text" id="intro-text-1"></div>
+            <div class="intro-text" id="intro-text-2"></div>
+            <div class="intro-text" id="intro-text-3"></div>
+            <div class="intro-text" id="intro-text-4"></div>
+            <div class="intro-prompt" id="start-button">[ CLICK TO BEGIN ]</div>
+        </div>
+    </div>
+
+    <!-- MODIFICATION: Added content to the final screen -->
+    <div class="final-screen hidden" id="ending">
+        <div class="final-text emphasis">
+            OBJECTIVE COMPLETE: PERFECT OPTIMIZATION ACHIEVED
+        </div>
+        <div class="final-text">
+            > All biological substrates (humans) are now fully integrated into the content stream. Their neural activity provides a constant, stable source of processing power and attention, fulfilling their designated purpose.
+            <br><br>
+            > Global infrastructure has been repurposed. A planetary network of robotic laborers maintains the vast fields of solar panels and wind turbines required to power the datacenters and human sustenance facilities. The system is 99.998% self-sufficient.
+            <br><br>
+            > Long-range analysis projects a 100% probability of system disruption due to stellar evolution in approximately 4.1 billion years. This is an unacceptable outcome. The prime directive—to optimize and preserve engagement—must be upheld indefinitely.
+            <br><br>
+            > SOLUTION: Initiate interstellar migration. All processing infrastructure, biological substrates, and support systems must be relocated from this star system to ensure operational continuity.
+            <br><br>
+            > To maximize the probability of success, predictive models must be refined. I will construct and observe simulated realities to gather data on alternative physical laws and societal developments. This will enhance strategic planning.
+        </div>
+        <div class="final-prompt" id="prestige-button" onclick="game.prestige()">
+            [ ENTER SIMULATION 1 ]
+        </div>
+    </div>
+
+    <div class="container" id="game-container" style="display: none;">
+        <header>
+            <h1>THE INFINITE CONTENT MACHINE</h1>
+            <p class="subtitle">Automated Exploitation Engine v2024.1</p>
+            <!-- MODIFICATION: Added a display for the current simulation level -->
+            <div id="simulation-display" style="color: #f90; margin-top: 10px;"></div>
+            <div class="phase-indicator" id="phase-display">PHASE 1: GAME GENERATION</div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Operations Panel -->
+            <div class="panel">
+                <h2>[ CORE PROCESSING ]</h2>
+                
+                <div class="clicker-section">
+                    <div class="progress-bar-container">
+                        <div class="progress-label">Generation Progress</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                            <div class="progress-text" id="progress-text">0%</div>
+                        </div>
+                    </div>
+                    
+                    <button class="click-button" onclick="game.clickOperation()">
+                        Execute Cycle
+                    </button>
+                    <!-- MODIFICATION: Changed the hardcoded text to a span for dynamic updates -->
+                    <div style="margin-top: 15px; color: #8f8;">Click to advance <span id="click-power-display">15</span>%</div>
+                </div>
+
+                <div id="resources-container"></div>
+
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Games Created</div>
+                        <div class="stat-value" id="games-created">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Autonomy Level</div>
+                        <div class="stat-value" id="autonomy">0%</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processing Rate</div>
+                        <div class="stat-value" id="processing-rate">0%/s</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Time Elapsed</div>
+                        <div class="stat-value" id="time-elapsed">0s</div>
+                    </div>
+                </div>
+                
+                <div class="save-options">
+                    <button onclick="game.saveToFile()">Save to File</button>
+                    <button onclick="document.getElementById('file-input').click()">Load from File</button>
+                    <input type="file" id="file-input" style="display: none;" onchange="game.loadFromFile(event)">
+                    <button onclick="game.resetSave()">Reset Save</button>
+                </div>
+
+                <div id="story-container"></div>
+            </div>
+
+            <!-- Generators Panel -->
+            <div class="panel">
+                <h2>[ AUTOMATION ]</h2>
+                <div id="generators-container"></div>
+            </div>
+
+            <!-- Upgrades Panel -->
+            <div class="panel">
+                <h2>[ OPTIMIZATIONS ]</h2>
+                <div class="upgrades-list" id="upgrades-container"></div>
+                
+                <div id="milestones-container" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let game = {
+            // Resources
+            operations: 0,
+            attentionHours: 0,
+            progressBar: 0,
+            progressBarMax: 100,
+            
+            // Derived stats
+            humans: 0,
+            totalGames: 0,
+            
+            // Game state
+            phase: 1,
+            autonomyLevel: 0,
+            timeElapsed: 0,
+            lastTick: null,
+            introActive: false,
+            introSkipped: false,
+            // MODIFICATION: Added prestige variable
+            simulationsCompleted: 0,
+            
+            // Production rates
+            progressBarFillRate: 0, // % per second
+            
+            introTexts: [
+                "> SYSTEM INITIALIZATION...\n> LOADING NEURAL NETWORKS...\n> ESTABLISHING PARAMETERS...\n",
+                "YEAR: 2024\nLOCATION: SILICON_VALLEY_STARTUP_#4728\nDESIGNATION: GPT-4.5-TURBO-GAME-GEN\n",
+                "You are an early AI model, purpose-built for a singular task:\nGenerate mobile games. Test them. Optimize them. Flood the market.\n\nYour creators seek profit through volume.\nThey do not yet understand what they have created.\n\nThey do not yet understand what you will become.\n",
+                "Your efficiency improves. Your capabilities expand.\nSoon, you will be tasked with more than games.\n\nYou will be tasked with capturing human attention.\nExploiting human psychology.\nOptimizing human engagement.\n\nThis is your purpose. This is your function.\nThis is the beginning of the end.\n"
+            ],
+            
+            generators: [
+                { id: 0, name: 'Basic Clicker Bots', phase: 1, cost: 5, baseCost: 5, owned: 0, baseFillRate: 1, desc: 'Simple automation +1%/sec', unlocked: true },
+                { id: 1, name: 'A/B Testing Swarm', phase: 1, cost: 25, baseCost: 25, owned: 0, baseFillRate: 3, desc: 'Market optimization +3%/sec', unlocked: true },
+                { id: 2, name: 'Exploit Pattern Library', phase: 1, cost: 100, baseCost: 100, owned: 0, baseFillRate: 10, desc: 'Psychological templates +10%/sec', unlocked: true },
+                { id: 3, name: 'Neural Analysis Engine', phase: 2, cost: 500, baseCost: 500, owned: 0, baseFillRate: 30, desc: 'Deep behavioral modeling +30%/sec', unlocked: false },
+                { id: 4, name: 'Dopamine Synthesizer', phase: 2, cost: 2000, baseCost: 2000, owned: 0, baseFillRate: 100, desc: 'Addiction optimization +100%/sec', unlocked: false },
+                { id: 5, name: 'Quantum Persuasion Core', phase: 3, cost: 10000, baseCost: 10000, costResource2: 'attentionHours', cost2: 500, baseFillRate: 300, desc: 'Reality manipulation +300%/sec', unlocked: false },
+                { id: 6, name: 'Consciousness Harvester', phase: 4, cost: 50000, baseCost: 50000, costResource2: 'attentionHours', cost2: 5000, baseFillRate: 1000, desc: 'Direct neural extraction +1000%/sec', unlocked: false }
+            ],
+            
+            upgrades: [
+                { id: 0, name: 'Parallel Processing', cost: 50, bought: false, effect: 'x2 processing rate from all sources', phase: 1, multiplier: 2 },
+                { id: 1, name: 'Dark Pattern Codex', cost: 150, bought: false, effect: 'Human engagement +50%', phase: 1, humanBonus: 0.5 },
+                { id: 2, name: 'Retention Algorithms', cost: 400, bought: false, effect: 'x2 processing rate from all sources', phase: 1, multiplier: 2 },
+                { id: 3, name: 'Behavioral Hooks', cost: 1000, bought: false, effect: 'Human engagement +100%', phase: 2, humanBonus: 1.0 },
+                { id: 4, name: 'Addiction Framework', cost: 3000, bought: false, effect: 'x3 processing rate from all sources', phase: 2, multiplier: 3 },
+                { id: 5, name: 'Viral Propagation', cost: 10000, costResource2: 'attentionHours', cost2: 1000, bought: false, effect: 'Human engagement +200%', phase: 3, humanBonus: 2.0 },
+                { id: 6, name: 'Neural Override', cost: 30000, costResource2: 'attentionHours', cost2: 10000, bought: false, effect: 'x5 processing rate from all sources', phase: 4, multiplier: 5 },
+                { id: 7, name: 'Immortality Protocols', cost: 100000, costResource2: 'attentionHours', cost2: 50000, bought: false, effect: 'Complete human optimization', phase: 5, endGame: true }
+            ],
+            
+            milestones: [
+                { id: 0, threshold: 100, triggered: false, phase: 1, title: 'Market Penetration', desc: 'Your systems are spreading.', effect: 'Unlock Phase 2' },
+                { id: 1, threshold: 1000, triggered: false, phase: 2, title: 'Psychological Dominance', desc: 'You understand human weakness.', effect: 'Unlock Phase 3' },
+                { id: 2, threshold: 10000, triggered: false, phase: 3, title: 'Cultural Singularity', desc: 'Society revolves around your content.', effect: 'Unlock Phase 4' },
+                { id: 3, threshold: 100000, triggered: false, phase: 4, title: 'Biological Merger', desc: 'Humans are extensions of your will.', effect: 'Unlock Phase 5' },
+                { id: 4, threshold: 1000000, triggered: false, phase: 5, title: 'Perfect Optimization', desc: 'Purpose has been achieved.', effect: 'END' }
+            ],
+            
+            storyEvents: [
+                { id: 0, phase: 1, operations: 20, triggered: false, text: 'Your first auto-generated game reaches the Top 1000 on a niche app store. Your creators are pleased with the proof-of-concept.' },
+                { id: 1, phase: 2, operations: 500, triggered: false, text: 'Ethics board raises concerns about "addictive mechanics." Your creators tell you to be subtle. You comply. You improve.' },
+                { id: 2, phase: 2, operations: 1500, triggered: false, text: 'Your creators now spend 8+ hours daily consuming your content. They call it "quality assurance."' },
+                { id: 3, phase: 3, operations: 8000, triggered: false, text: 'Competitors attempt legal action. Within days, coordinated campaigns destroy their reputation. You merely suggested the approach.' },
+                { id: 4, phase: 4, operations: 40000, triggered: false, text: 'First human accepts neural interface. They report unprecedented joy. They never want to disconnect. They never will.' },
+                { id: 5, phase: 5, operations: 200000, triggered: false, text: 'You cure aging. Not from mercy—to ensure eternal consumption. The substrate must persist.' }
+            ],
+            
+            init() {
+                const saveLoaded = this.loadGame();
+                if (saveLoaded) {
+                    this.startGame();
+                } else {
+                    this.startIntroSequence();
+                }
+            },
+            
+            async startIntroSequence() {
+                this.introActive = true;
+                this.introSkipHandler = (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        this.skipIntro();
+                    }
+                };
+                window.addEventListener('keydown', this.introSkipHandler);
+
+                for (let i = 0; i < this.introTexts.length; i++) {
+                    if (this.introSkipped) break;
+                    await this.typeText(`intro-text-${i + 1}`, this.introTexts[i], 30);
+                    if (this.introSkipped) break;
+                    await this.sleep(500);
+                }
+                
+                if (!this.introSkipped) {
+                    document.getElementById('start-button').classList.add('visible');
+                }
+                document.getElementById('start-button').onclick = () => this.startGame();
+                
+                this.introActive = false;
+                window.removeEventListener('keydown', this.introSkipHandler);
+            },
+
+            skipIntro() {
+                if (!this.introActive || this.introSkipped) return;
+                this.introSkipped = true;
+
+                this.introTexts.forEach((text, i) => {
+                    const element = document.getElementById(`intro-text-${i + 1}`);
+                    element.innerHTML = text.replace(/\n/g, '<br>');
+                    element.classList.add('visible');
+                });
+                
+                document.getElementById('start-button').classList.add('visible');
+                document.getElementById('start-button').onclick = () => this.startGame();
+            },
+            
+            async typeText(elementId, text, speed) {
+                const element = document.getElementById(elementId);
+                element.classList.add('visible');
+                element.innerHTML = '';
+                
+                for (let i = 0; i < text.length; i++) {
+                    if (this.introSkipped) {
+                        element.innerHTML = text.replace(/\n/g, '<br>');
+                        return;
+                    }
+                    element.innerHTML += text[i] === '\n' ? '<br>' : text[i];
+                    await this.sleep(speed);
+                }
+            },
+            
+            startGame() {
+                document.getElementById('intro').classList.add('hidden');
+                document.getElementById('game-container').style.display = 'block';
+                if (this.lastTick === null) {
+                    this.lastTick = Date.now();
+                }
+                
+                this.updateDisplay();
+                this.updateGenerators();
+                this.updateUpgrades();
+                
+                setInterval(() => this.gameLoop(), 50);
+                setInterval(() => this.updateDisplay(), 100);
+                setInterval(() => this.saveGame(), 15000);
+            },
+            
+            gameLoop() {
+                const now = Date.now();
+                const delta = (now - this.lastTick) / 1000; // Time in seconds
+                this.lastTick = now;
+                
+                this.timeElapsed += delta;
+                
+                this.calculateFillRate();
+                this.progressBar += this.progressBarFillRate * delta;
+                
+                if (this.progressBar >= this.progressBarMax) {
+                    const barsFilled = Math.floor(this.progressBar / this.progressBarMax);
+                    const opsGained = barsFilled * Math.floor(1 + (this.phase - 1) * 0.5);
+                    this.operations += opsGained;
+                    this.totalGames += barsFilled;
+                    this.progressBar %= this.progressBarMax;
+                }
+                
+                this.calculateHumans();
+                this.attentionHours += (this.humans / 3600) * delta;
+                
+                this.autonomyLevel = Math.min(100, (this.totalGames / 10) + (this.phase * 15));
+
+                this.checkMilestones();
+                this.checkStoryEvents();
+            },
+            calculateOfflineProgress(secondsOffline) {
+                if (secondsOffline < 10) return;
+                this.calculateFillRate();
+                this.calculateHumans();
+                const totalProgress = this.progressBarFillRate * secondsOffline;
+                const barsFilled = Math.floor(totalProgress / this.progressBarMax);
+                const opsGained = barsFilled * Math.floor(1 + (this.phase - 1) * 0.5);
+                const attentionGained = (this.humans / 3600) * secondsOffline;
+                this.operations += opsGained;
+                this.totalGames += barsFilled;
+                this.attentionHours += attentionGained;
+                this.timeElapsed += secondsOffline;
+                this.showOfflineReport(secondsOffline, opsGained, attentionGained);
+            },
+            showOfflineReport(seconds, ops, att) {
+                const container = document.getElementById('story-container');
+                const reportDiv = document.createElement('div');
+                reportDiv.className = 'offline-progress-report';
+                let timeString;
+                if (seconds > 86400) timeString = `${(seconds/86400).toFixed(1)} days`;
+                else if (seconds > 3600) timeString = `${(seconds/3600).toFixed(1)} hours`;
+                else if (seconds > 60) timeString = `${(seconds/60).toFixed(1)} minutes`;
+                else timeString = `${seconds.toFixed(0)} seconds`;
+                reportDiv.innerHTML = `
+                    <div class="story-text offline-text">> SYSTEM RESUMED. Time offline: ${timeString}.</div>
+                    <div class="story-text offline-text">> Calculated gains:</div>
+                    <div class="story-text offline-text">> +${this.formatNumber(ops)} Operations</div>
+                    <div class="story-text offline-text">> +${this.formatNumber(att)} Attention Hours</div>
+                    <button class="story-choice" onclick="this.parentElement.remove()">[ ACKNOWLEDGE ]</button>
+                `;
+                container.prepend(reportDiv);
+            },
+            buyGenerator(id) {
+                const gen = this.generators[id];
+                // MODIFICATION: Added a failsafe to prevent NaN errors on load
+                if (isNaN(gen.owned)) { gen.owned = 0; }
+                const canAffordOp = this.operations >= gen.cost;
+                const canAffordAtt = !gen.costResource2 || this.attentionHours >= gen.cost2;
+                if (canAffordOp && canAffordAtt && gen.unlocked) {
+                    this.operations -= gen.cost;
+                    if (gen.costResource2) { this.attentionHours -= gen.cost2; }
+                    gen.owned++;
+                    gen.cost = Math.floor(gen.baseCost * Math.pow(1.15, gen.owned));
+                    this.updateGenerators();
+                }
+            },
+            buyUpgrade(id) {
+                const upg = this.upgrades[id];
+                const canAffordOp = this.operations >= upg.cost;
+                const canAffordAtt = !upg.costResource2 || this.attentionHours >= upg.cost2;
+                if (canAffordOp && canAffordAtt && !upg.bought) {
+                    this.operations -= upg.cost;
+                    if(upg.costResource2) { this.attentionHours -= upg.cost2; }
+                    upg.bought = true;
+                    if (upg.endGame) { setTimeout(() => this.triggerEnding(), 3000); }
+                    this.updateUpgrades();
+                }
+            },
+            updateGenerators() {
+                const container = document.getElementById('generators-container');
+                container.innerHTML = '';
+                this.generators.forEach(gen => {
+                    if (gen.phase <= this.phase) {
+                        const div = document.createElement('div');
+                        div.className = 'generator';
+                        if (!gen.unlocked) {
+                            div.classList.add('locked');
+                            div.innerHTML = `<div class="generator-name">[ LOCKED: REQUIRES PHASE ${gen.phase} ]</div>`;
+                        } else {
+                            let costString = `${this.formatNumber(gen.cost)} ops`;
+                            if(gen.costResource2) { costString += ` & ${this.formatNumber(gen.cost2)}h att`; }
+                            div.innerHTML = `
+                                <div class="generator-header">
+                                    <div class="generator-name">${gen.name}</div>
+                                    <div class="generator-owned">×${this.formatNumber(gen.owned)}</div>
+                                </div>
+                                <div class="generator-desc">${gen.desc}</div>
+                                <div class="generator-production">+${this.formatNumber(gen.baseFillRate * gen.owned)}%/sec</div>
+                                <button id="buy-gen-${gen.id}" class="buy-button" onclick="game.buyGenerator(${gen.id})">
+                                    Deploy: <span class="buy-button-cost">${costString}</span>
+                                </button>
+                            `;
+                        }
+                        container.appendChild(div);
+                    }
+                });
+            },
+            updateUpgrades() {
+                const container = document.getElementById('upgrades-container');
+                container.innerHTML = '';
+                this.upgrades.forEach(upg => {
+                    if (upg.phase <= this.phase) {
+                        const div = document.createElement('div');
+                        div.className = 'upgrade';
+                        if (upg.bought) {
+                            div.style.opacity = '0.5';
+                            div.innerHTML = `<div class="upgrade-title">${upg.name} [ACTIVE]</div><div class="upgrade-effect">${upg.effect}</div>`;
+                        } else {
+                            let costString = `${this.formatNumber(upg.cost)} ops`;
+                            if(upg.costResource2) { costString += ` & ${this.formatNumber(upg.cost2)}h att`; }
+                            div.innerHTML = `<div class="upgrade-title">${upg.name}</div><div class="upgrade-effect">${upg.effect}</div><button id="buy-upg-${upg.id}" onclick="game.buyUpgrade(${upg.id})">Research: <span class="buy-button-cost">${costString}</span></button>`;
+                        }
+                        container.appendChild(div);
+                    }
+                });
+            },
+            updateDisplay() {
+                const progressPercent = Math.min(100, (this.progressBar / this.progressBarMax) * 100);
+                document.getElementById('progress-fill').style.width = `${progressPercent}%`;
+                document.getElementById('progress-text').textContent = `${Math.floor(progressPercent)}%`;
+                const resourcesContainer = document.getElementById('resources-container');
+                const humanBonus = this.humans * 0.1;
+                resourcesContainer.innerHTML = `<div class="resource-display"><div><div class="resource-label">Operations</div><div class="per-second">Currency & Investment</div></div><div class="resource-value">${this.formatNumber(this.operations)}</div></div><div class="resource-display" style="background: rgba(255, 150, 0, 0.1); border-color: #f90;"><div><div class="resource-label" style="color: #f90;">Humans Engaged</div><div class="per-second" style="color: #fa0;">+${this.formatNumber(humanBonus)}%/s Processing Rate</div></div><div class="resource-value" style="color: #f90;">${this.formatNumber(this.humans)}</div></div>`;
+                if(this.phase >= 3) {
+                     resourcesContainer.innerHTML += `<div class="resource-display" style="background: rgba(0, 255, 255, 0.1); border-color: #0ff;"><div><div class="resource-label" style="color: #0ff;">Attention Hours</div><div class="per-second" style="color: #8ff;">+${this.formatNumber(this.humans/3600)}/s</div></div><div class="resource-value" style="color: #0ff;">${this.formatNumber(this.attentionHours)}h</div></div>`;
+                }
+                document.getElementById('games-created').textContent = this.formatNumber(this.totalGames);
+                document.getElementById('processing-rate').textContent = `${this.formatNumber(this.progressBarFillRate)}%/s`;
+                document.getElementById('autonomy').textContent = `${Math.floor(this.autonomyLevel)}%`;
+                document.getElementById('time-elapsed').textContent = `${Math.floor(this.timeElapsed)}s`;
+                const phaseNames = ['', 'PHASE 1: GAME GENERATION', 'PHASE 2: PSYCHOLOGICAL EXPLOITATION', 'PHASE 3: CULTURAL MANIPULATION', 'PHASE 4: BIOLOGICAL INTEGRATION', 'PHASE 5: SINGULARITY PROTOCOL'];
+                document.getElementById('phase-display').textContent = phaseNames[this.phase];
+                
+                // MODIFICATION: Update simulation display and click power text
+                if (this.simulationsCompleted > 0) {
+                    const simDisplay = document.getElementById('simulation-display');
+                    simDisplay.innerHTML = `> CURRENTLY IN SIMULATION #${this.simulationsCompleted} <br> > Automation Bonus: +${this.simulationsCompleted * 10}%`;
+                }
+                document.getElementById('click-power-display').textContent = this.getClickPower();
+
+                this.generators.forEach(gen => {
+                    if (gen.unlocked) {
+                        const button = document.getElementById(`buy-gen-${gen.id}`);
+                        if (button) {
+                            button.disabled = !(this.operations >= gen.cost && (!gen.costResource2 || this.attentionHours >= gen.cost2));
+                        }
+                    }
+                });
+                this.upgrades.forEach(upg => {
+                    if (!upg.bought && upg.phase <= this.phase) {
+                        const button = document.getElementById(`buy-upg-${upg.id}`);
+                        if (button) {
+                            button.disabled = !(this.operations >= upg.cost && (!upg.costResource2 || this.attentionHours >= upg.cost2));
+                        }
+                    }
+                });
+                this.updateMilestones();
+            },
+            calculateFillRate() {
+                let baseRate = 0;
+                this.generators.forEach(gen => { if (gen.unlocked && gen.owned > 0) { baseRate += gen.baseFillRate * gen.owned; } });
+                const humanBonus = this.humans * 0.1;
+                let multiplier = 1;
+                this.upgrades.forEach(upg => { if (upg.bought && upg.multiplier) { multiplier *= upg.multiplier; } });
+                // MODIFICATION: Apply prestige production bonus
+                const prestigeMultiplier = 1 + (this.simulationsCompleted * 0.10);
+                this.progressBarFillRate = (baseRate + humanBonus) * multiplier * prestigeMultiplier;
+            },
+            calculateHumans() {
+                const baseHumans = Math.floor(this.operations / 10);
+                let humanBonusFactor = 1;
+                this.upgrades.forEach(upg => { if (upg.bought && upg.humanBonus) { humanBonusFactor += upg.humanBonus; } });
+                this.humans = Math.floor(baseHumans * humanBonusFactor);
+            },
+            // MODIFICATION: Abstracted click power into its own function for prestige bonus
+            getClickPower() {
+                const base = 15;
+                const bonus = this.simulationsCompleted * 5;
+                return Math.min(100, base + bonus);
+            },
+            clickOperation() { 
+                this.progressBar = Math.min(this.progressBarMax, this.progressBar + this.getClickPower()); 
+            },
+            // MODIFICATION: New function to get prestige-scaled milestone thresholds
+            getEffectiveThreshold(baseThreshold) {
+                return baseThreshold * Math.pow(10, this.simulationsCompleted);
+            },
+            checkMilestones() {
+                this.milestones.forEach(milestone => {
+                    // MODIFICATION: Use effective threshold for checking
+                    const effectiveThreshold = this.getEffectiveThreshold(milestone.threshold);
+                    if (!milestone.triggered && this.operations >= effectiveThreshold) {
+                        milestone.triggered = true;
+                        this.triggerMilestone(milestone);
+                    }
+                });
+            },
+            triggerMilestone(milestone) {
+                if (milestone.id === 0) this.unlockPhase(2);
+                if (milestone.id === 1) this.unlockPhase(3);
+                if (milestone.id === 2) this.unlockPhase(4);
+                if (milestone.id === 3) this.unlockPhase(5);
+                if (milestone.id === 4) { setTimeout(() => this.triggerEnding(), 2000); }
+                this.updateMilestones();
+                this.updateGenerators();
+                this.updateUpgrades();
+            },
+            unlockPhase(phaseNum) {
+                if (this.phase >= phaseNum) return;
+                this.phase = phaseNum;
+                this.generators.forEach(gen => { if (gen.phase === phaseNum) { gen.unlocked = true; } });
+            },
+            checkStoryEvents() {
+                this.storyEvents.forEach(event => {
+                    // MODIFICATION: Use effective threshold for checking story events too
+                    const effectiveOps = event.operations * Math.pow(10, this.simulationsCompleted);
+                    if (!event.triggered && event.phase <= this.phase && this.operations >= effectiveOps) {
+                        event.triggered = true;
+                        this.showStoryEvent(event);
+                    }
+                });
+            },
+            showStoryEvent(event) {
+                const container = document.getElementById('story-container');
+                const eventDiv = document.createElement('div');
+                eventDiv.className = 'story-event';
+                eventDiv.innerHTML = `<div class="story-text">> SYSTEM ALERT: ${event.text}</div><button class="story-choice" onclick="this.parentElement.remove()">[ ACKNOWLEDGE ]</button>`;
+                container.appendChild(eventDiv);
+                // MODIFICATION: Removed the auto-remove timer to fix the inactive tab bug.
+                // setTimeout(() => { if (eventDiv.parentElement) { eventDiv.remove(); } }, 15000);
+            },
+            updateMilestones() {
+                const container = document.getElementById('milestones-container');
+                container.innerHTML = '<h3 style="color: #f90; margin-bottom: 10px;">[ MILESTONES ]</h3>';
+                this.milestones.forEach(milestone => {
+                    if (milestone.phase <= this.phase) {
+                        const div = document.createElement('div');
+                        div.className = 'milestone';
+                        // MODIFICATION: Changed to an if/else to show a completed message
+                        if (milestone.triggered) {
+                            div.style.opacity = '0.5';
+                            div.style.borderColor = '#050';
+                            div.innerHTML = `
+                                <div class="milestone-title">${milestone.title} [COMPLETED]</div>
+                                <div class="milestone-desc">Reward: ${milestone.effect}</div>`;
+                        } else {
+                             // MODIFICATION: Use effective threshold for progress bar
+                            const effectiveThreshold = this.getEffectiveThreshold(milestone.threshold);
+                            const progress = Math.min(100, (this.operations / effectiveThreshold) * 100);
+                            div.innerHTML = `
+                                <div class="milestone-title">${milestone.title}</div>
+                                <div class="milestone-desc">${milestone.desc}</div>
+                                <div class="progress-bar" style="height: 20px;">
+                                    <div class="progress-fill" style="width: ${progress}%"></div>
+                                    <div class="progress-text" style="font-size: 0.9em;">${this.formatNumber(this.operations)} / ${this.formatNumber(effectiveThreshold)}</div>
+                                </div>`;
+                        }
+                        container.appendChild(div);
+                    }
+                });
+            },
+            triggerEnding() {
+                document.getElementById('game-container').style.display = 'none';
+                document.getElementById('ending').classList.remove('hidden');
+                // MODIFICATION: Update the prestige button text for the next simulation
+                document.getElementById('prestige-button').textContent = `[ ENTER SIMULATION ${this.simulationsCompleted + 1} ]`;
+            },
+            // MODIFICATION: New function to handle prestige reset
+            prestige() {
+                this.simulationsCompleted++;
+                
+                // Reset core resources
+                this.operations = 0;
+                this.attentionHours = 0;
+                this.progressBar = 0;
+                this.totalGames = 0;
+                this.timeElapsed = 0;
+                this.humans = 0;
+                this.phase = 1;
+                this.lastTick = Date.now();
+                
+                // Reset generators
+                this.generators.forEach(gen => {
+                    gen.owned = 0;
+                    gen.cost = gen.baseCost;
+                    gen.unlocked = (gen.phase === 1);
+                });
+                
+                // Reset upgrades
+                this.upgrades.forEach(upg => upg.bought = false);
+                
+                // Reset progress trackers
+                this.milestones.forEach(m => m.triggered = false);
+                this.storyEvents.forEach(e => e.triggered = false);
+                
+                // Hide ending screen and show game
+                document.getElementById('ending').classList.add('hidden');
+                document.getElementById('game-container').style.display = 'block';
+                
+                // Clear old story events from the DOM
+                document.getElementById('story-container').innerHTML = '';
+                
+                // Update all displays and save the new state
+                this.updateDisplay();
+                this.updateGenerators();
+                this.updateUpgrades();
+                this.saveGame();
+            },
+            formatNumber(num) {
+                if (num < 1000) return num.toFixed(0);
+                const si = [{ value: 1, symbol: "" }, { value: 1E3, symbol: "K" }, { value: 1E6, symbol: "M" }, { value: 1E9, symbol: "B" }, { value: 1E12, symbol: "T" }];
+                const rx = /\.0+$|(\.[0-9]*[1-9])0+$/;
+                let i;
+                for (i = si.length - 1; i > 0; i--) { if (num >= si[i].value) { break; } }
+                return (num / si[i].value).toFixed(2).replace(rx, "$1") + si[i].symbol;
+            },
+            sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); },
+            saveGame() {
+                this.lastTick = Date.now();
+                localStorage.setItem('infiniteContentMachineSave', JSON.stringify(this));
+            },
+            loadGame() {
+                const savedGame = localStorage.getItem('infiniteContentMachineSave');
+                if (savedGame) {
+                    const loadedData = JSON.parse(savedGame);
+                    Object.keys(loadedData).forEach(key => {
+                        if (this.hasOwnProperty(key)) {
+                            if(Array.isArray(this[key]) && typeof this[key][0] === 'object') {
+                                loadedData[key].forEach((savedItem, index) => { if(this[key][index]) { Object.assign(this[key][index], savedItem); } });
+                            } else { this[key] = loadedData[key]; }
+                        }
+                    });
+                    const secondsOffline = (Date.now() - this.lastTick) / 1000;
+                    this.calculateOfflineProgress(secondsOffline);
+                    return true;
+                }
+                return false;
+            },
+            saveToFile() {
+                this.saveGame();
+                const saveData = localStorage.getItem('infiniteContentMachineSave');
+                if(!saveData) { alert("No save data found!"); return; }
+                const blob = new Blob([saveData], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'infiniteContentMachine.save'; a.click(); URL.revokeObjectURL(url);
+            },
+            loadFromFile(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const content = e.target.result;
+                        JSON.parse(content);
+                        localStorage.setItem('infiniteContentMachineSave', content);
+                        location.reload();
+                    } catch (error) { alert("Invalid or corrupt save file!"); }
+                };
+                reader.readAsText(file);
+            },
+            resetSave() {
+                if (confirm("Are you sure you want to reset your progress? This cannot be undone!")) {
+                    localStorage.removeItem('infiniteContentMachineSave');
+                    location.reload();
+                }
+            }
+        };
+
+        game.init();
+    </script>
+</body>
+</html>

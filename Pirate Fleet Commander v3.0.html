@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pirate Fleet Commander v3.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(to bottom, #1a3a52 0%, #2d5f7f 100%);
+            color: #f0e6d2;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #game-container {
+            display: flex;
+            height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        #left-panel {
+            width: 250px;
+            background: rgba(20, 30, 40, 0.8);
+            border: 2px solid #8b6f47;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        #game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #canvas {
+            border: 3px solid #8b6f47;
+            background: #1a4d6d;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: pointer;
+        }
+        
+        #right-panel {
+            width: 280px;
+            background: rgba(20, 30, 40, 0.8);
+            border: 2px solid #8b6f47;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        h2, h3 {
+            color: #ffd700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .stat-line {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+        }
+        
+        .resource {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(139, 111, 71, 0.3);
+            border-radius: 4px;
+        }
+        
+        .ship-card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid #8b6f47;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .ship-card:hover {
+            background: rgba(0, 0, 0, 0.6);
+            border-color: #ffd700;
+        }
+        
+        .ship-card.selected {
+            border: 2px solid #ffd700;
+            background: rgba(139, 111, 71, 0.3);
+        }
+        
+        .ship-name {
+            color: #ffd700;
+            font-weight: bold;
+        }
+        
+        .health-bar {
+            width: 100%;
+            height: 12px;
+            background: #2d1810;
+            border: 1px solid #000;
+            border-radius: 3px;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+        
+        .health-fill {
+            height: 100%;
+            background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+            transition: width 0.3s;
+        }
+        
+        button {
+            background: #8b6f47;
+            color: #f0e6d2;
+            border: 2px solid #5d4a2f;
+            padding: 8px 15px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background: #a58857;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background: #4a4a4a;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .shop-item {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #8b6f47;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 5px;
+        }
+        
+        .shop-item-name {
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .cost {
+            color: #ffaa00;
+            font-size: 0.9em;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .control-group {
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ffd700;
+        }
+        
+        #message-log {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #8b6f47;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.85em;
+        }
+        
+        .message {
+            margin: 3px 0;
+            padding: 3px;
+        }
+        
+        .message.important {
+            color: #ffd700;
+            font-weight: bold;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #8b6f47;
+            color: #f0e6d2;
+            border-radius: 3px;
+            font-family: inherit;
+            margin: 5px 0;
+        }
+        
+        .unit-detail {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #8b6f47;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .unit-icon {
+            font-size: 48px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 3px;
+            text-align: center;
+        }
+        
+        .upgrade-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+        }
+        
+        .upgrade-row button {
+            width: 60px;
+            padding: 4px;
+            margin: 0;
+            font-size: 0.85em;
+        }
+        
+        .cargo-display {
+            display: flex;
+            gap: 5px;
+            margin: 5px 0;
+        }
+        
+        .cargo-icon {
+            font-size: 1.2em;
+        }
+        
+        .rename-section {
+            margin: 10px 0;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .rename-section input {
+            flex: 1;
+            margin: 0;
+        }
+        
+        .rename-section button {
+            width: auto;
+            padding: 5px 10px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="left-panel">
+            <h2>Fleet Status</h2>
+            <div class="resource">
+                <span>💰 Treasure:</span>
+                <span id="treasure-count">0</span>
+            </div>
+            <div class="resource">
+                <span>⚙️ Salvage:</span>
+                <span id="salvage-count">0</span>
+            </div>
+            <div class="resource">
+                <span>🐉 Scales:</span>
+                <span id="scales-count">0</span>
+            </div>
+            <div class="resource">
+                <span>🔧 Upgrades:</span>
+                <span id="upgrade-count">0</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Game Speed: <span id="speed-value">5</span></label>
+                <input type="range" id="game-speed" min="0" max="10" value="5">
+            </div>
+            
+            <div class="control-group">
+                <label>Follow Distance: <span id="follow-distance-value">3</span></label>
+                <input type="range" id="follow-distance" min="2" max="5" value="3">
+            </div>
+            
+            <h3>Your Ships</h3>
+            <div id="fleet-list"></div>
+            
+            <div style="margin-top: 20px;">
+                <button id="save-btn">💾 Save Game</button>
+                <button id="load-btn">📂 Load Game</button>
+                <button id="new-btn">🆕 New Game</button>
+            </div>
+            
+            <div id="message-log"></div>
+        </div>
+        
+        <div id="game-area">
+            <canvas id="canvas" width="800" height="800"></canvas>
+        </div>
+        
+        <div id="right-panel" class="hidden">
+            <div id="unit-info-panel" class="hidden">
+                <h2>Unit Information</h2>
+                <div id="unit-details"></div>
+            </div>
+            
+            <div id="shop-panel" class="hidden">
+                <h2>Island Port</h2>
+                <p id="port-welcome">Welcome to the port!</p>
+                
+                <h3>Buy Ships</h3>
+                <div id="ships-shop"></div>
+                
+                <h3>Upgrades</h3>
+                <div id="upgrades-shop"></div>
+                
+                <button id="close-shop-btn" style="margin-top: 20px;">⚓ Set Sail</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const CANVAS_SIZE = 600;
+        const BASE_TICK_INTERVAL = 200;
+        
+        canvas.width = CANVAS_SIZE;
+        canvas.height = CANVAS_SIZE;
+        
+        let game = {
+            player: null,
+            ships: [],
+            enemies: [],
+            projectiles: [],
+            items: [],
+            islands: [],
+            visitedIslands: [],
+            recentTiles: [],
+            tick: 0,
+            visibility: 7,
+            maxEnemies: 1,
+            followDistance: 3,
+            mapSize: 31,
+            offsetX: 0,
+            offsetY: 0,
+            resources: { treasure: 0, salvage: 0, scales: 0, upgrades: 0 },
+            islandSpawnChance: 0.01,
+            islandSpawnDecay: 0.0001,
+            minIslandSpawnChance: 1/750,
+            islandsSpawned: 0,
+            currentPort: null,
+            spyglassLevel: 0,
+            distanceTraveled: 0,
+            startX: 0,
+            startY: 0,
+            hasVisitedFirstPort: false,
+            selectedUnit: null,
+            gameSpeed: 5,
+            tickInterval: BASE_TICK_INTERVAL
+        };
+        
+        let keys = {};
+        let lastTick = 0;
+        let damageNumbers = [];
+        
+        const shipTemplates = {
+            basic: { name: 'Sloop', hp: 4, maxHp: 4, damage: 1, range: 2, speed: 5, cargo: 2, cost: 0 },
+            fighter: { name: 'Frigate', hp: 6, maxHp: 6, damage: 2, range: 3, speed: 4, cargo: 2, cost: 8 },
+            cargo: { name: 'Cargo Ship', hp: 5, maxHp: 5, damage: 0, range: 0, speed: 3, cargo: 8, cost: 6 },
+            heavy: { name: 'Galleon', hp: 10, maxHp: 10, damage: 3, range: 3, speed: 3, cargo: 4, cost: 15 }
+        };
+        
+        const enemyTemplates = {
+            basic: { name: 'Pirate Boat', hp: 2, damage: 1, range: 2, speed: 2, loot: 'salvage' },
+            strong: { name: 'War Frigate', hp: 4, damage: 1, range: 3, speed: 2, loot: 'treasure' },
+            kraken: { name: 'Kraken', hp: 3, damage: 1, range: 2, speed: 2, loot: 'scales' },
+            serpent: { name: 'Sea Serpent', hp: 2, damage: 1, range: 3, speed: 3, loot: 'scales' }
+        };
+        
+        class Entity {
+            constructor(x, y, type, team) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+                this.team = team;
+                this.moveCooldown = 0;
+                this.attackCooldown = 0;
+                this.inventory = [];
+                this.target = null;
+                this.sunk = false;
+                this.customName = '';
+                this.aiState = 'chase';
+            }
+            
+            canMove() {
+                return this.moveCooldown === 0 && !this.sunk;
+            }
+            
+            canAttack() {
+                return this.attackCooldown === 0 && !this.sunk;
+            }
+            
+            takeDamage(amount) {
+                this.hp -= amount;
+                showDamageNumber(this.x, this.y, amount);
+                if (this.hp <= 0) {
+                    this.hp = 0;
+                    this.sunk = true;
+                    if (this.team === 'enemy') {
+                        this.dropLoot();
+                    }
+                }
+            }
+            
+            dropLoot() {
+                const lootType = this.loot || 'treasure';
+                game.items.push({
+                    x: this.x,
+                    y: this.y,
+                    type: lootType
+                });
+            }
+            
+            tryPickupItem() {
+                const maxCargo = this.cargo || 2;
+                if (this.inventory.length >= maxCargo) return;
+                
+                const itemIndex = game.items.findIndex(item => item.x === this.x && item.y === this.y);
+                if (itemIndex !== -1) {
+                    const item = game.items.splice(itemIndex, 1)[0];
+                    this.inventory.push(item.type);
+                }
+            }
+        }
+        
+        function initGame() {
+            game.ships = [];
+            game.enemies = [];
+            game.projectiles = [];
+            game.items = [];
+            game.islands = [];
+            game.visitedIslands = [];
+            game.recentTiles = [];
+            game.tick = 0;
+            game.visibility = 7;
+            game.followDistance = 3;
+            game.resources = { treasure: 0, salvage: 0, scales: 0, upgrades: 0 };
+            game.islandSpawnChance = 0.01;
+            game.islandsSpawned = 0;
+            game.currentPort = null;
+            game.spyglassLevel = 0;
+            game.distanceTraveled = 0;
+            game.startX = 0;
+            game.startY = 0;
+            game.maxEnemies = 1;
+            game.hasVisitedFirstPort = false;
+            game.selectedUnit = null;
+            
+            document.getElementById('message-log').innerHTML = '';
+            
+            const playerShip = new Entity(0, 0, shipTemplates.basic, 'player');
+            Object.assign(playerShip, JSON.parse(JSON.stringify(shipTemplates.basic)));
+            playerShip.isPlayer = true;
+            playerShip.customName = 'The Revenge';
+            game.player = playerShip;
+            game.ships.push(playerShip);
+            
+            createIsland(3, 3, 3);
+            
+            addMessage('Welcome, Captain! Use WASD or Arrow Keys to sail.', true);
+            addMessage('Find the nearby island port to trade and heal!', true);
+            
+            updateUI();
+        }
+        
+        function gameLoop(timestamp) {
+            const currentInterval = game.gameSpeed === 0 ? Infinity : BASE_TICK_INTERVAL / (game.gameSpeed / 5);
+            
+            if (timestamp - lastTick >= currentInterval && game.gameSpeed > 0) {
+                lastTick = timestamp;
+                gameTick();
+            }
+            
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function gameTick() {
+            game.tick++;
+            
+            if (game.player && !game.player.sunk) {
+                let dx = 0, dy = 0;
+                if (keys['w'] || keys['ArrowUp']) dy = -1;
+                if (keys['s'] || keys['ArrowDown']) dy = 1;
+                if (keys['a'] || keys['ArrowLeft']) dx = -1;
+                if (keys['d'] || keys['ArrowRight']) dx = 1;
+                
+                if ((dx !== 0 || dy !== 0) && game.player.canMove()) {
+                    tryMove(game.player, dx, dy);
+                }
+            }
+            
+            for (let ship of game.ships) {
+                if (ship.moveCooldown > 0) ship.moveCooldown--;
+                if (ship.attackCooldown > 0) ship.attackCooldown--;
+                
+                if (!ship.isPlayer && !ship.sunk) {
+                    updateFollowerAI(ship);
+                }
+                
+                if (ship.canAttack() && !ship.sunk) {
+                    tryAttack(ship);
+                }
+            }
+            
+            const activeRange = Math.min(19, game.visibility + 4);
+            
+            for (let i = game.enemies.length - 1; i >= 0; i--) {
+                const enemy = game.enemies[i];
+                if (enemy.moveCooldown > 0) enemy.moveCooldown--;
+                if (enemy.attackCooldown > 0) enemy.attackCooldown--;
+                
+                if (Math.abs(enemy.x - game.player.x) > activeRange || Math.abs(enemy.y - game.player.y) > activeRange) {
+                    game.enemies.splice(i, 1);
+                    continue;
+                }
+                
+                if (!enemy.sunk) {
+                    updateEnemyAI(enemy);
+                    if (enemy.canAttack()) {
+                        tryAttack(enemy);
+                    }
+                }
+            }
+            
+            for (let i = game.projectiles.length - 1; i >= 0; i--) {
+                const proj = game.projectiles[i];
+                proj.ticksLeft--;
+                
+                if (proj.ticksLeft <= 0 && proj.travelTicks-- > 0) {
+                    proj.x += proj.dx;
+                    proj.y += proj.dy;
+                    proj.ticksLeft = proj.speed;
+                    
+                    const targets = proj.team === 'player' ? game.enemies : game.ships;
+                    const hit = targets.find(t => t.x === proj.x && t.y === proj.y && !t.sunk);
+                    
+                    if (hit) {
+                        hit.takeDamage(proj.damage);
+                        game.projectiles.splice(i, 1);
+                        continue;
+                    }
+                    
+                    if (isIslandTile(proj.x, proj.y)) {
+                        game.projectiles.splice(i, 1);
+                        continue;
+                    }
+                } else if (proj.travelTicks <= 0) {
+                    game.projectiles.splice(i, 1);
+                }
+            }
+            
+            if (game.enemies.length < game.maxEnemies && Math.random() < 0.005) {
+                spawnEnemy();
+            }
+            
+            if (Math.random() < game.islandSpawnChance) {
+                trySpawnIsland();
+            }
+            
+            for (let i = damageNumbers.length - 1; i >= 0; i--) {
+                damageNumbers[i].life--;
+                if (damageNumbers[i].life <= 0) {
+                    damageNumbers.splice(i, 1);
+                }
+            }
+            
+            if (game.player) {
+                const posKey = `${game.player.x},${game.player.y}`;
+                if (!game.recentTiles.includes(posKey)) {
+                    game.recentTiles.push(posKey);
+                    if (game.recentTiles.length > 500) {
+                        game.recentTiles.shift();
+                    }
+                }
+            }
+            
+            updateUI();
+        }
+        
+        function tryMove(entity, dx, dy) {
+            const newX = entity.x + dx;
+            const newY = entity.y + dy;
+            
+            if (isIslandTile(newX, newY)) {
+                return false;
+            }
+            
+            const blocked = [...game.ships, ...game.enemies].some(e => 
+                e !== entity && e.x === newX && e.y === newY && !e.sunk
+            );
+            
+            if (!blocked) {
+                entity.x = newX;
+                entity.y = newY;
+                entity.moveCooldown = Math.max(1, Math.floor(10 / entity.speed));
+                entity.tryPickupItem();
+                
+                if (entity.isPlayer) {
+                    game.distanceTraveled++;
+                    checkPortProximity();
+                }
+                
+                return true;
+            }
+            return false;
+        }
+        
+        function updateFollowerAI(ship) {
+            if (!game.player || !ship.canMove()) return;
+            
+            const dist = Math.abs(ship.x - game.player.x) + Math.abs(ship.y - game.player.y);
+            
+            if (dist > 10) {
+                const spots = [];
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dy = -2; dy <= 2; dy++) {
+                        const tx = game.player.x + dx;
+                        const ty = game.player.y + dy;
+                        if (!isIslandTile(tx, ty) && !isOccupied(tx, ty)) {
+                            spots.push([tx, ty]);
+                        }
+                    }
+                }
+                if (spots.length > 0) {
+                    const [tx, ty] = spots[Math.floor(Math.random() * spots.length)];
+                    ship.x = tx;
+                    ship.y = ty;
+                }
+                return;
+            }
+            
+            if (dist > game.followDistance) {
+                const dx = Math.sign(game.player.x - ship.x);
+                const dy = Math.sign(game.player.y - ship.y);
+                
+                if (Math.random() < 0.5 && dx !== 0) {
+                    tryMove(ship, dx, 0);
+                } else if (dy !== 0) {
+                    tryMove(ship, 0, dy);
+                }
+            } else if (Math.random() < 0.1) {
+                const dx = Math.floor(Math.random() * 3) - 1;
+                const dy = Math.floor(Math.random() * 3) - 1;
+                tryMove(ship, dx, dy);
+            }
+        }
+        
+        function updateEnemyAI(enemy) {
+            if (!enemy.canMove()) return;
+            
+            if (isNearPort(enemy.x, enemy.y, 5)) {
+                if (Math.random() < 0.7) {
+                    enemy.aiState = 'flee';
+                }
+            }
+            
+            if (Math.random() < 0.05) {
+                const states = ['chase', 'random', 'flee'];
+                enemy.aiState = states[Math.floor(Math.random() * states.length)];
+            }
+            
+            let dx = 0, dy = 0;
+            
+            if (enemy.aiState === 'chase') {
+                const target = findNearestShip(enemy);
+                if (target) {
+                    dx = Math.sign(target.x - enemy.x);
+                    dy = Math.sign(target.y - enemy.y);
+                }
+            } else if (enemy.aiState === 'flee') {
+                if (game.player) {
+                    dx = -Math.sign(game.player.x - enemy.x);
+                    dy = -Math.sign(game.player.y - enemy.y);
+                }
+            } else {
+                dx = Math.floor(Math.random() * 3) - 1;
+                dy = Math.floor(Math.random() * 3) - 1;
+            }
+            
+            if (Math.random() < 0.5 && dx !== 0) {
+                tryMove(enemy, dx, 0);
+            } else if (dy !== 0) {
+                tryMove(enemy, 0, dy);
+            }
+        }
+        
+        function tryAttack(entity) {
+            const targets = entity.team === 'player' ? game.enemies : game.ships;
+            let bestTarget = null;
+            let minDist = entity.range + 1;
+            
+            for (let target of targets) {
+                if (target.sunk) continue;
+                const dist = Math.max(Math.abs(target.x - entity.x), Math.abs(target.y - entity.y));
+                if (dist <= entity.range && dist < minDist) {
+                    minDist = dist;
+                    bestTarget = target;
+                }
+            }
+            
+            if (bestTarget) {
+                const dx = Math.sign(bestTarget.x - entity.x);
+                const dy = Math.sign(bestTarget.y - entity.y);
+                
+                game.projectiles.push({
+                    x: entity.x,
+                    y: entity.y,
+                    dx: dx,
+                    dy: dy,
+                    damage: entity.damage,
+                    range: entity.range,
+                    team: entity.team,
+                    travelTicks: entity.range,
+                    speed: 1,
+                    ticksLeft: 1
+                });
+                
+                entity.attackCooldown = Math.max(3, Math.floor(15 / entity.speed));
+            }
+        }
+        
+        function findNearestShip(enemy) {
+            let nearest = null;
+            let minDist = Infinity;
+            
+            for (let ship of game.ships) {
+                if (ship.sunk) continue;
+                const dist = Math.abs(ship.x - enemy.x) + Math.abs(ship.y - enemy.y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = ship;
+                }
+            }
+            
+            return nearest;
+        }
+        
+        function spawnEnemy() {
+            if (!game.player) return;
+            
+            const vis = game.visibility;
+            const angle = Math.random() * Math.PI * 2;
+            const dist = vis;
+            const x = Math.round(game.player.x + Math.cos(angle) * dist);
+            const y = Math.round(game.player.y + Math.sin(angle) * dist);
+            
+            if (isIslandTile(x, y) || isNearPort(x, y, 7)) return;
+            
+            const templates = Object.values(enemyTemplates);
+            const template = templates[Math.floor(Math.random() * templates.length)];
+            
+            const enemy = new Entity(x, y, template, 'enemy');
+            Object.assign(enemy, JSON.parse(JSON.stringify(template)));
+            
+            if (!game.hasVisitedFirstPort) {
+                enemy.speed = Math.max(1, enemy.speed - 1);
+                enemy.attackCooldown = 20;
+            } else {
+                const playerPower = game.ships.length + game.spyglassLevel;
+                const distFromStart = Math.abs(x - game.startX) + Math.abs(y - game.startY);
+                const scaling = Math.min(1.5, 1 + (distFromStart / 500) + (playerPower / 20));
+                
+                enemy.hp = Math.ceil(enemy.hp * scaling);
+                enemy.maxHp = enemy.hp;
+                enemy.damage = Math.ceil(enemy.damage * scaling);
+            }
+            
+            game.enemies.push(enemy);
+        }
+        
+        function trySpawnIsland() {
+            if (!game.player) return;
+            
+            const attempts = 20;
+            for (let i = 0; i < attempts; i++) {
+                const dist = 10 + Math.random() * 20;
+                const angle = Math.random() * Math.PI * 2;
+                const centerX = Math.round(game.player.x + Math.cos(angle) * dist);
+                const centerY = Math.round(game.player.y + Math.sin(angle) * dist);
+                
+                let valid = true;
+                const size = 2 + Math.floor(Math.random() * 6);
+                
+                for (let dx = -size; dx <= size; dx++) {
+                    for (let dy = -size; dy <= size; dy++) {
+                        const checkX = centerX + dx;
+                        const checkY = centerY + dy;
+                        const posKey = `${checkX},${checkY}`;
+                        
+                        if (game.recentTiles.includes(posKey) || isIslandTile(checkX, checkY)) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (!valid) break;
+                }
+                
+                if (valid) {
+                    createIsland(centerX, centerY, size);
+                    game.islandsSpawned++;
+                    game.islandSpawnChance = Math.max(game.minIslandSpawnChance, 
+                        game.islandSpawnChance - game.islandSpawnDecay);
+                    break;
+                }
+            }
+        }
+        
+        function createIsland(centerX, centerY, size) {
+            const tiles = [];
+            
+            tiles.push({ x: centerX, y: centerY, key: `${centerX},${centerY}` });
+            
+            for (let i = 0; i < size - 1; i++) {
+                const baseTile = tiles[Math.floor(Math.random() * tiles.length)];
+                const directions = [
+                    [0, 1], [1, 0], [0, -1], [-1, 0],
+                    [1, 1], [1, -1], [-1, 1], [-1, -1]
+                ];
+                
+                for (let attempt = 0; attempt < 10; attempt++) {
+                    const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+                    const x = baseTile.x + dx;
+                    const y = baseTile.y + dy;
+                    const tileKey = `${x},${y}`;
+                    
+                    if (!tiles.some(t => t.key === tileKey)) {
+                        tiles.push({ x, y, key: tileKey });
+                        break;
+                    }
+                }
+            }
+            
+            let portTile = null;
+            for (let tile of tiles) {
+                let waterCount = 0;
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const checkX = tile.x + dx;
+                        const checkY = tile.y + dy;
+                        if (!tiles.some(t => t.x === checkX && t.y === checkY)) {
+                            waterCount++;
+                        }
+                    }
+                }
+                if (waterCount >= 2) {
+                    portTile = tile;
+                    break;
+                }
+            }
+            
+            if (!portTile) portTile = tiles[0];
+            
+            game.islands.push({
+                tiles: tiles,
+                portX: portTile.x,
+                portY: portTile.y,
+                centerX: centerX,
+                centerY: centerY
+            });
+        }
+        
+        function isIslandTile(x, y) {
+            for (let island of game.islands) {
+                if (island.tiles.some(t => t.x === x && t.y === y)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function isNearPort(x, y, distance) {
+            for (let island of game.islands) {
+                const dist = Math.max(Math.abs(island.portX - x), Math.abs(island.portY - y));
+                if (dist <= distance) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function isOccupied(x, y) {
+            return [...game.ships, ...game.enemies].some(e => e.x === x && e.y === y && !e.sunk);
+        }
+        
+        function checkPortProximity() {
+            if (!game.player) return;
+            
+            for (let island of game.islands) {
+                const dist = Math.max(Math.abs(island.portX - game.player.x), 
+                                     Math.abs(island.portY - game.player.y));
+                
+                if (dist <= 1 && !game.currentPort) {
+                    openPort(island);
+                    return;
+                }
+                
+                if (dist > 2 && game.currentPort === island) {
+                    closeShop();
+                }
+            }
+            
+            if (game.player.sunk && !game.hasVisitedFirstPort) {
+                respawnPlayer();
+            }
+        }
+        
+        function respawnPlayer() {
+            if (game.islands.length > 0) {
+                const island = game.islands[0];
+                const spots = [];
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const x = island.portX + dx;
+                        const y = island.portY + dy;
+                        if (!isIslandTile(x, y) && !isOccupied(x, y)) {
+                            spots.push([x, y]);
+                        }
+                    }
+                }
+                
+                if (spots.length > 0) {
+                    const [x, y] = spots[Math.floor(Math.random() * spots.length)];
+                    game.player.x = x;
+                    game.player.y = y;
+                    game.player.hp = game.player.maxHp;
+                    game.player.sunk = false;
+                    addMessage('Your ship respawns near the port!', true);
+                    addMessage('Dock at the port to heal and regroup.', true);
+                }
+            }
+        }
+        
+        function openPort(island) {
+            game.currentPort = island;
+            
+            for (let ship of game.ships) {
+                ship.hp = ship.maxHp;
+                ship.sunk = false;
+            }
+            
+            const isFirstVisit = !game.hasVisitedFirstPort;
+            
+            if (!game.visitedIslands.includes(island)) {
+                game.visitedIslands.push(island);
+                if (game.visitedIslands.length > 40) {
+                    game.visitedIslands.shift();
+                }
+            }
+            
+            if (isFirstVisit) {
+                game.hasVisitedFirstPort = true;
+                addMessage('Port Master: "Welcome! Here is a free spyglass!"', true);
+                game.visibility = 9;
+                game.spyglassLevel = 1;
+                game.maxEnemies = 2;
+            }
+            
+            document.getElementById('port-welcome').textContent = 
+                isFirstVisit ? 'Welcome to your first port!' : 'Welcome back, Captain!';
+            
+            renderShop();
+            showShopPanel();
+        }
+        
+        function renderShop() {
+            const shipsShop = document.getElementById('ships-shop');
+            const upgradesShop = document.getElementById('upgrades-shop');
+            
+            shipsShop.innerHTML = '';
+            upgradesShop.innerHTML = '';
+            
+            const availableShips = [
+                { ...shipTemplates.basic, key: 'basic' },
+                { ...shipTemplates.fighter, key: 'fighter' },
+                { ...shipTemplates.cargo, key: 'cargo' },
+                { ...shipTemplates.heavy, key: 'heavy' }
+            ];
+            
+            for (let ship of availableShips) {
+                if (ship.cost === 0) continue;
+                
+                const div = document.createElement('div');
+                div.className = 'shop-item';
+                div.innerHTML = `
+                    <div class="shop-item-name">${ship.name}</div>
+                    <div>HP: ${ship.maxHp} | DMG: ${ship.damage} | Range: ${ship.range}</div>
+                    <div>Speed: ${ship.speed} | Cargo: ${ship.cargo}</div>
+                    <div class="cost">Cost: ${ship.cost} treasure</div>
+                `;
+                
+                const btn = document.createElement('button');
+                btn.textContent = 'Buy';
+                btn.disabled = game.resources.treasure < ship.cost;
+                btn.onclick = () => buyShip(ship.key);
+                div.appendChild(btn);
+                
+                shipsShop.appendChild(div);
+            }
+            
+            if (game.spyglassLevel < 5) {
+                const nextVis = game.visibility + 2;
+                const cost = (game.spyglassLevel + 1) * 5;
+                
+                const div = document.createElement('div');
+                div.className = 'shop-item';
+                div.innerHTML = `
+                    <div class="shop-item-name">Spyglass Upgrade</div>
+                    <div>Vision: ${game.visibility}x${game.visibility} → ${nextVis}x${nextVis}</div>
+                    <div class="cost">Cost: ${cost} treasure</div>
+                `;
+                
+                const btn = document.createElement('button');
+                btn.textContent = 'Buy';
+                btn.disabled = game.resources.treasure < cost;
+                btn.onclick = () => buySpyglass();
+                div.appendChild(btn);
+                
+                upgradesShop.appendChild(div);
+            }
+            
+            const upgradeDiv = document.createElement('div');
+            upgradeDiv.className = 'shop-item';
+            upgradeDiv.innerHTML = `
+                <div class="shop-item-name">Upgrade Component</div>
+                <div>Used to improve your ships</div>
+                <div class="cost">Cost: 3 salvage, 2 scales</div>
+            `;
+            
+            const upgradeBtn = document.createElement('button');
+            upgradeBtn.textContent = 'Buy';
+            upgradeBtn.disabled = game.resources.salvage < 3 || game.resources.scales < 2;
+            upgradeBtn.onclick = () => buyUpgradeComponent();
+            upgradeDiv.appendChild(upgradeBtn);
+            
+            upgradesShop.appendChild(upgradeDiv);
+        }
+        
+        function buyShip(shipKey) {
+            const template = shipTemplates[shipKey];
+            if (game.resources.treasure < template.cost) return;
+            
+            game.resources.treasure -= template.cost;
+            
+            const newShip = new Entity(game.player.x + 1, game.player.y, template, 'player');
+            Object.assign(newShip, JSON.parse(JSON.stringify(template)));
+            newShip.customName = `${template.name} ${game.ships.length}`;
+            
+            game.ships.push(newShip);
+            addMessage(`Purchased ${template.name}!`, true);
+            
+            renderShop();
+            updateUI();
+        }
+        
+        function buySpyglass() {
+            const cost = (game.spyglassLevel + 1) * 5;
+            if (game.resources.treasure < cost) return;
+            
+            game.resources.treasure -= cost;
+            game.spyglassLevel++;
+            game.visibility += 2;
+            game.maxEnemies = Math.min(10, 2 + game.spyglassLevel);
+            
+            addMessage(`Spyglass upgraded! Vision: ${game.visibility}x${game.visibility}`, true);
+            
+            renderShop();
+            updateUI();
+        }
+        
+        function buyUpgradeComponent() {
+            if (game.resources.salvage < 3 || game.resources.scales < 2) return;
+            
+            game.resources.salvage -= 3;
+            game.resources.scales -= 2;
+            game.resources.upgrades += 1;
+            
+            addMessage('Purchased Upgrade Component!', true);
+            
+            renderShop();
+            updateUI();
+        }
+        
+        function closeShop() {
+            document.getElementById('shop-panel').classList.add('hidden');
+            game.currentPort = null;
+            if (!document.getElementById('unit-info-panel').classList.contains('hidden')) {
+                return;
+            }
+            document.getElementById('right-panel').classList.add('hidden');
+            addMessage('Setting sail...', false);
+        }
+        
+        function showDamageNumber(x, y, damage) {
+            damageNumbers.push({
+                x: x,
+                y: y,
+                damage: damage,
+                life: 15,
+                offsetY: 0
+            });
+        }
+        
+        function selectUnit(unit) {
+            game.selectedUnit = unit;
+            renderUnitInfo(unit);
+            showUnitPanel();
+        }
+        
+        function renderUnitInfo(unit) {
+            const details = document.getElementById('unit-details');
+            details.innerHTML = '';
+            
+            const unitDiv = document.createElement('div');
+            unitDiv.className = 'unit-detail';
+            
+            const isPlayerShip = unit.team === 'player';
+            const icon = isPlayerShip ? '⛵' : (unit.name.includes('Kraken') || unit.name.includes('Serpent') ? '🐙' : '🏴‍☠️');
+            const team = isPlayerShip ? 'Friendly' : 'Enemy';
+            
+            let html = `
+                <div class="unit-icon">${icon}</div>
+                <div class="ship-name">${unit.customName || unit.name}</div>
+                <div style="text-align: center; color: #aaa; margin-bottom: 10px;">${team}</div>
+            `;
+            
+            if (isPlayerShip && !unit.sunk) {
+                html += `
+                    <div class="rename-section">
+                        <input type="text" id="rename-input" value="${unit.customName}" placeholder="Ship name">
+                        <button onclick="renameShip()">Rename</button>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="health-bar">
+                    <div class="health-fill" style="width: ${(unit.hp / unit.maxHp) * 100}%"></div>
+                </div>
+                <div style="text-align: center; margin: 5px 0;">HP: ${unit.hp}/${unit.maxHp}</div>
+                
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div style="color: #ffd700;">Damage</div>
+                        <div>${unit.damage || 0}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div style="color: #ffd700;">Range</div>
+                        <div>${unit.range || 0}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div style="color: #ffd700;">Speed</div>
+                        <div>${unit.speed}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div style="color: #ffd700;">Cargo</div>
+                        <div>${unit.cargo || 0}</div>
+                    </div>
+                </div>
+            `;
+            
+            if (unit.inventory && unit.inventory.length > 0) {
+                html += `<div style="margin-top: 10px;"><strong>Cargo Hold:</strong></div>`;
+                html += `<div class="cargo-display">`;
+                const icons = { treasure: '💰', salvage: '⚙️', scales: '🐉' };
+                for (let item of unit.inventory) {
+                    html += `<span class="cargo-icon">${icons[item] || '?'}</span>`;
+                }
+                html += `</div>`;
+            }
+            
+            unitDiv.innerHTML = html;
+            details.appendChild(unitDiv);
+            
+            if (isPlayerShip && !unit.sunk && game.resources.upgrades > 0) {
+                const upgradesDiv = document.createElement('div');
+                upgradesDiv.style.marginTop = '15px';
+                upgradesDiv.innerHTML = '<h3>Apply Upgrades</h3>';
+                
+                const stats = [
+                    { name: 'Max HP', key: 'maxHp', cost: 1 },
+                    { name: 'Damage', key: 'damage', cost: 1 },
+                    { name: 'Range', key: 'range', cost: 1 },
+                    { name: 'Speed', key: 'speed', cost: 1 },
+                    { name: 'Cargo', key: 'cargo', cost: 1 }
+                ];
+                
+                for (let stat of stats) {
+                    const row = document.createElement('div');
+                    row.className = 'upgrade-row';
+                    row.innerHTML = `
+                        <div style="flex: 1;">${stat.name}: ${unit[stat.key]}</div>
+                        <button onclick="upgradeShipStat('${stat.key}')" ${game.resources.upgrades < stat.cost ? 'disabled' : ''}>
+                            +1 (${stat.cost}🔧)
+                        </button>
+                    `;
+                    upgradesDiv.appendChild(row);
+                }
+                
+                details.appendChild(upgradesDiv);
+            }
+        }
+        
+        function renameShip() {
+            const input = document.getElementById('rename-input');
+            if (game.selectedUnit && input && input.value.trim()) {
+                game.selectedUnit.customName = input.value.trim();
+                addMessage(`Ship renamed to "${game.selectedUnit.customName}"`, false);
+                updateUI();
+                renderUnitInfo(game.selectedUnit);
+            }
+        }
+        
+        function upgradeShipStat(stat) {
+            if (!game.selectedUnit || game.resources.upgrades < 1) return;
+            
+            game.resources.upgrades -= 1;
+            game.selectedUnit[stat] += 1;
+            
+            if (stat === 'maxHp') {
+                game.selectedUnit.hp = game.selectedUnit.maxHp;
+            }
+            
+            addMessage(`${game.selectedUnit.customName}: ${stat} upgraded!`, true);
+            updateUI();
+            renderUnitInfo(game.selectedUnit);
+        }
+        
+        function showUnitPanel() {
+            document.getElementById('unit-info-panel').classList.remove('hidden');
+            document.getElementById('shop-panel').classList.add('hidden');
+            document.getElementById('right-panel').classList.remove('hidden');
+        }
+        
+        function showShopPanel() {
+            document.getElementById('shop-panel').classList.remove('hidden');
+            document.getElementById('unit-info-panel').classList.add('hidden');
+            document.getElementById('right-panel').classList.remove('hidden');
+        }
+        
+        function render() {
+            if (!game.player) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const vis = game.visibility;
+            const halfVis = Math.floor(vis / 2);
+            const tileSize = CANVAS_SIZE / vis;
+            
+            const offsetX = game.player.x - halfVis;
+            const offsetY = game.player.y - halfVis;
+            
+            for (let x = 0; x < vis; x++) {
+                for (let y = 0; y < vis; y++) {
+                    const worldX = offsetX + x;
+                    const worldY = offsetY + y;
+                    
+                    ctx.fillStyle = '#1a4d6d';
+                    ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                    
+                    if ((worldX + worldY) % 3 === 0) {
+                        ctx.fillStyle = 'rgba(32, 92, 122, 0.4)';
+                        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                    } else if ((worldX * 2 + worldY) % 5 === 0) {
+                        ctx.fillStyle = 'rgba(20, 70, 100, 0.3)';
+                        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                    }
+                }
+            }
+            
+            for (let island of game.islands) {
+                for (let tile of island.tiles) {
+                    const screenX = (tile.x - offsetX);
+                    const screenY = (tile.y - offsetY);
+                    
+                    if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
+                        ctx.fillStyle = '#8b6f47';
+                        ctx.fillRect(screenX * tileSize, screenY * tileSize, tileSize, tileSize);
+                        
+                        ctx.fillStyle = '#6b5437';
+                        ctx.fillRect(screenX * tileSize + 5, screenY * tileSize + 5, 
+                                   tileSize - 10, tileSize - 10);
+                    }
+                }
+                
+                const portScreenX = island.portX - offsetX;
+                const portScreenY = island.portY - offsetY;
+                
+                if (portScreenX >= 0 && portScreenX < vis && 
+                    portScreenY >= 0 && portScreenY < vis) {
+                    
+                    ctx.fillStyle = '#ffd700';
+                    ctx.font = `bold ${Math.floor(tileSize * 0.6)}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('⚓', portScreenX * tileSize + tileSize/2, 
+                               portScreenY * tileSize + tileSize/2);
+                }
+            }
+            
+            for (let item of game.items) {
+                const screenX = item.x - offsetX;
+                const screenY = item.y - offsetY;
+                
+                if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
+                    const icons = { treasure: '💰', salvage: '⚙️', scales: '🐉' };
+                    ctx.font = `${Math.floor(tileSize * 0.5)}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(icons[item.type] || '?', 
+                               screenX * tileSize + tileSize/2, 
+                               screenY * tileSize + tileSize/2);
+                }
+            }
+            
+            for (let proj of game.projectiles) {
+                const screenX = proj.x - offsetX;
+                const screenY = proj.y - offsetY;
+                
+                if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
+                    ctx.fillStyle = proj.team === 'player' ? '#ffff00' : '#ff4444';
+                    ctx.beginPath();
+                    ctx.arc(screenX * tileSize + tileSize/2, 
+                           screenY * tileSize + tileSize/2, 
+                           4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            for (let ship of game.ships) {
+                drawEntity(ship, offsetX, offsetY, tileSize, '⛵', '#4CAF50');
+            }
+            
+            for (let enemy of game.enemies) {
+                const color = enemy.name.includes('Kraken') || enemy.name.includes('Serpent') ? 
+                    '#9C27B0' : '#F44336';
+                const icon = enemy.name.includes('Kraken') || enemy.name.includes('Serpent') ? 
+                    '🐙' : '🏴‍☠️';
+                drawEntity(enemy, offsetX, offsetY, tileSize, icon, color);
+            }
+            
+            for (let dmg of damageNumbers) {
+                dmg.offsetY += 0.5;
+                const screenX = dmg.x - offsetX;
+                const screenY = dmg.y - offsetY;
+                
+                if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = `bold ${Math.floor(tileSize * 0.4)}px monospace`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`-${dmg.damage}`, 
+                               screenX * tileSize + tileSize/2, 
+                               screenY * tileSize - dmg.offsetY);
+                }
+            }
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= vis; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * tileSize, 0);
+                ctx.lineTo(i * tileSize, canvas.height);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, i * tileSize);
+                ctx.lineTo(canvas.width, i * tileSize);
+                ctx.stroke();
+            }
+        }
+        
+        function drawEntity(entity, offsetX, offsetY, tileSize, icon, color) {
+            const screenX = entity.x - offsetX;
+            const screenY = entity.y - offsetY;
+            
+            if (screenX < 0 || screenX >= game.visibility || 
+                screenY < 0 || screenY >= game.visibility) {
+                return;
+            }
+            
+            const pixelX = screenX * tileSize;
+            const pixelY = screenY * tileSize;
+            
+            if (!entity.sunk) {
+                ctx.fillStyle = color;
+                ctx.fillRect(pixelX + 5, pixelY + 5, tileSize - 10, tileSize - 10);
+            } else {
+                ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+                ctx.fillRect(pixelX + 5, pixelY + 5, tileSize - 10, tileSize - 10);
+            }
+            
+            ctx.font = `${Math.floor(tileSize * 0.6)}px serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(icon, pixelX + tileSize/2, pixelY + tileSize/2);
+            
+            if (entity.hp < entity.maxHp) {
+                const barWidth = tileSize - 10;
+                const barHeight = 4;
+                const barX = pixelX + 5;
+                const barY = pixelY + tileSize - 8;
+                
+                ctx.fillStyle = '#000';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                const healthPercent = entity.hp / entity.maxHp;
+                ctx.fillStyle = healthPercent > 0.5 ? '#4CAF50' : '#F44336';
+                ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+            }
+            
+            if (entity.isPlayer) {
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(pixelX + 2, pixelY + 2, tileSize - 4, tileSize - 4);
+            }
+            
+            if (entity === game.selectedUnit) {
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(pixelX + 1, pixelY + 1, tileSize - 2, tileSize - 2);
+            }
+        }
+        
+        function updateUI() {
+            document.getElementById('treasure-count').textContent = game.resources.treasure;
+            document.getElementById('salvage-count').textContent = game.resources.salvage;
+            document.getElementById('scales-count').textContent = game.resources.scales;
+            document.getElementById('upgrade-count').textContent = game.resources.upgrades;
+            document.getElementById('follow-distance-value').textContent = game.followDistance;
+            document.getElementById('speed-value').textContent = game.gameSpeed;
+            
+            const fleetList = document.getElementById('fleet-list');
+            fleetList.innerHTML = '';
+            
+            for (let ship of game.ships) {
+                const div = document.createElement('div');
+                div.className = 'ship-card';
+                if (ship === game.selectedUnit) {
+                    div.classList.add('selected');
+                }
+                
+                const healthPercent = (ship.hp / ship.maxHp) * 100;
+                const status = ship.sunk ? ' [SUNK]' : '';
+                
+                div.innerHTML = `
+                    <div class="ship-name">${ship.customName}${status}</div>
+                    <div style="font-size: 0.85em; color: #ccc;">${ship.name}</div>
+                    <div>HP: ${ship.hp}/${ship.maxHp} | DMG: ${ship.damage || 0}</div>
+                    <div class="health-bar">
+                        <div class="health-fill" style="width: ${healthPercent}%"></div>
+                    </div>
+                    <div style="font-size: 0.8em;">Cargo: ${ship.inventory.length}/${ship.cargo}</div>
+                `;
+                
+                div.onclick = () => selectUnit(ship);
+                
+                fleetList.appendChild(div);
+            }
+            
+            let totalTreasure = 0, totalSalvage = 0, totalScales = 0;
+            for (let ship of game.ships) {
+                for (let item of ship.inventory) {
+                    if (item === 'treasure') totalTreasure++;
+                    if (item === 'salvage') totalSalvage++;
+                    if (item === 'scales') totalScales++;
+                }
+            }
+            
+            if (game.currentPort) {
+                game.resources.treasure += totalTreasure;
+                game.resources.salvage += totalSalvage;
+                game.resources.scales += totalScales;
+                
+                for (let ship of game.ships) {
+                    ship.inventory = [];
+                }
+            }
+            
+            if (game.selectedUnit) {
+                renderUnitInfo(game.selectedUnit);
+            }
+        }
+        
+        function addMessage(text, important = false) {
+            const log = document.getElementById('message-log');
+            const msg = document.createElement('div');
+            msg.className = 'message' + (important ? ' important' : '');
+            msg.textContent = text;
+            log.appendChild(msg);
+            log.scrollTop = log.scrollHeight;
+            
+            while (log.children.length > 20) {
+                log.removeChild(log.firstChild);
+            }
+        }
+        
+        function saveGame() {
+            const saveData = {
+                ships: game.ships,
+                enemies: game.enemies,
+                islands: game.islands,
+                resources: game.resources,
+                visibility: game.visibility,
+                followDistance: game.followDistance,
+                spyglassLevel: game.spyglassLevel,
+                tick: game.tick,
+                islandsSpawned: game.islandsSpawned,
+                islandSpawnChance: game.islandSpawnChance,
+                hasVisitedFirstPort: game.hasVisitedFirstPort,
+                maxEnemies: game.maxEnemies
+            };
+            
+            localStorage.setItem('pirateFleetSave', JSON.stringify(saveData));
+            
+            const blob = new Blob([JSON.stringify(saveData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'pirate_fleet_save.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            addMessage('Game saved!', true);
+        }
+        
+        function loadGame() {
+            const saveStr = localStorage.getItem('pirateFleetSave');
+            if (!saveStr) {
+                addMessage('No save file found!');
+                return;
+            }
+            
+            try {
+                const saveData = JSON.parse(saveStr);
+                
+                game.ships = saveData.ships.map(s => Object.assign(new Entity(s.x, s.y, s, s.team), s));
+                game.enemies = saveData.enemies.map(e => Object.assign(new Entity(e.x, e.y, e, e.team), e));
+                game.islands = saveData.islands;
+                game.resources = saveData.resources;
+                game.visibility = saveData.visibility;
+                game.followDistance = saveData.followDistance;
+                game.spyglassLevel = saveData.spyglassLevel;
+                game.tick = saveData.tick;
+                game.islandsSpawned = saveData.islandsSpawned;
+                game.islandSpawnChance = saveData.islandSpawnChance;
+                game.hasVisitedFirstPort = saveData.hasVisitedFirstPort || false;
+                game.maxEnemies = saveData.maxEnemies || 2;
+                
+                game.player = game.ships.find(s => s.isPlayer);
+                
+                addMessage('Game loaded!', true);
+                updateUI();
+            } catch (e) {
+                addMessage('Error loading save file!');
+            }
+        }
+        
+        function newGame() {
+            if (confirm('Start a new game? Current progress will be lost.')) {
+                initGame();
+            }
+        }
+        
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            
+            const vis = game.visibility;
+            const tileSize = CANVAS_SIZE / vis;
+            const halfVis = Math.floor(vis / 2);
+            const offsetX = game.player.x - halfVis;
+            const offsetY = game.player.y - halfVis;
+            
+            const tileX = Math.floor(clickX / tileSize);
+            const tileY = Math.floor(clickY / tileSize);
+            
+            const worldX = offsetX + tileX;
+            const worldY = offsetY + tileY;
+            
+            let clickedUnit = null;
+            for (let ship of game.ships) {
+                if (ship.x === worldX && ship.y === worldY) {
+                    clickedUnit = ship;
+                    break;
+                }
+            }
+            
+            if (!clickedUnit) {
+                for (let enemy of game.enemies) {
+                    if (enemy.x === worldX && enemy.y === worldY) {
+                        clickedUnit = enemy;
+                        break;
+                    }
+                }
+            }
+            
+            if (clickedUnit) {
+                selectUnit(clickedUnit);
+            }
+        });
+        
+        document.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (['w', 's', 'a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('keyup', e => {
+            keys[e.key] = false;
+        });
+        
+        document.getElementById('follow-distance').addEventListener('input', e => {
+            game.followDistance = parseInt(e.target.value);
+            updateUI();
+        });
+        
+        document.getElementById('game-speed').addEventListener('input', e => {
+            game.gameSpeed = parseInt(e.target.value);
+            updateUI();
+        });
+        
+        document.getElementById('save-btn').addEventListener('click', saveGame);
+        document.getElementById('load-btn').addEventListener('click', loadGame);
+        document.getElementById('new-btn').addEventListener('click', newGame);
+        document.getElementById('close-shop-btn').addEventListener('click', closeShop);
+        
+        initGame();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
