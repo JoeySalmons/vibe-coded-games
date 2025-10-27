@@ -430,6 +430,7 @@
         
         let isPaused = false;
         let lastGameSpeed = 5;
+        let nextShipId = 0;
         
         let game = {
             player: null,
@@ -462,7 +463,8 @@
             hasVisitedFirstPort: false,
             selectedUnit: null,
             gameSpeed: 5,
-            tickInterval: BASE_TICK_INTERVAL
+            tickInterval: BASE_TICK_INTERVAL,
+            shipsPurchased: 0
         };
         
         let keys = {};
@@ -498,6 +500,7 @@
         
         class Entity {
             constructor(x, y, type, team) {
+                this.id = nextShipId++; // Assign a unique ID and increment the counter
                 this.x = x;
                 this.y = y;
                 this.type = type;
@@ -553,8 +556,12 @@
                     threshold += 5;
                 }
                 
+                const isSeaMonster = this.name.includes('Kraken') || this.name.includes('Serpent');
+                const lootTypes = isSeaMonster 
+                    ? ['scales', 'gold']
+                    : ['salvage', 'gold'];
+                
                 for (let i = 0; i < dropCount; i++) {
-                    const lootTypes = ['salvage', 'gold', 'scales'];
                     const lootType = lootTypes[Math.floor(Math.random() * lootTypes.length)];
                     game.items.push({ x: this.x, y: this.y, type: lootType });
                 }
@@ -574,6 +581,7 @@
         }
         
         function initGame() {
+            nextShipId = 0; // Reset the counter for a new game
             game.ships = [];
             game.enemies = [];
             game.projectiles = [];
@@ -599,6 +607,7 @@
             game.maxEnemies = 1;
             game.hasVisitedFirstPort = false;
             game.selectedUnit = null;
+            game.shipsPurchased = 0;
             
             document.getElementById('message-log').innerHTML = '';
             
@@ -611,6 +620,8 @@
             game.ships.push(playerShip);
             
             createIsland(3, 3, 3, 0);
+            
+            game.lastPortIsland = game.islands[0];
             
             addMessage('Welcome, Captain! Use WASD or Arrow Keys to sail.', true);
             addMessage('Press SPACE to pause/resume the game.', true);
@@ -634,7 +645,6 @@
         function gameTick() {
             game.tick++;
             
-            // --- MOVEMENT AND AI LOGIC FIRST ---
             if (game.player && !game.player.sunk) {
                 let dx = 0, dy = 0;
                 if (keys['w'] || keys['ArrowUp']) dy = -1;
@@ -748,9 +758,16 @@
             const baseSpawnChance = 0.02;
             const distFromStart = Math.abs(game.player.x - game.startX) + Math.abs(game.player.y - game.startY);
             const distanceBonus = distFromStart / 20000;
-            const finalSpawnChance = Math.min(0.06, baseSpawnChance + distanceBonus);
-            if (game.enemies.length < game.maxEnemies && Math.random() < finalSpawnChance) {
-                const groupSize = Math.random() < 0.6 ? 1 : (Math.floor(Math.random() * 2) + 2);
+            const fleetSize = game.ships.filter(s => !s.sunk).length;
+            const fleetSpawnBonus = (fleetSize - 1) * 0.005;
+            const fleetSizeBonus = fleetSize - 1;
+            const finalSpawnChance = Math.min(0.06, baseSpawnChance + distanceBonus + fleetSpawnBonus);
+            const effectiveMaxEnemies = game.maxEnemies + fleetSizeBonus;
+
+            if (game.enemies.length < effectiveMaxEnemies && Math.random() < finalSpawnChance) {
+                const maxBonusSize = Math.ceil(effectiveMaxEnemies / 3);
+                const skewFactor = Math.pow(Math.random(), 3);
+                const groupSize = 1 + Math.floor(skewFactor * maxBonusSize);
                 spawnEnemyGroup(groupSize);
             }
             
@@ -803,10 +820,10 @@
             
             if (blockingEntity && entity.isPlayer && blockingEntity.team === 'player') {
                 if (!pushFriendlyShips(newX, newY, entity)) {
-                    return false; // Couldn't push the ship, so can't move
+                    return false;
                 }
             } else if (blockingEntity) {
-                return false; // Blocked by enemy or non-player ship
+                return false;
             }
 
             entity.x = newX;
@@ -823,7 +840,7 @@
         }
 
         function pushFriendlyShips(x, y, pusher, depth = 0) {
-            if (depth > 5) return false; // Safety break to prevent infinite loops
+            if (depth > 5) return false;
 
             const shipToPush = game.ships.find(s => s.x === x && s.y === y && !s.sunk && s !== pusher);
             if (!shipToPush) return true;
@@ -839,7 +856,6 @@
                 }
             }
             
-            // If no empty spot, try a cascading push
             for (const [dx, dy] of directions) {
                 if (pushFriendlyShips(x + dx, y + dy, shipToPush, depth + 1)) {
                     shipToPush.x = x + dx;
@@ -856,7 +872,6 @@
             let target = game.player;
 
             if (game.player.sunk) {
-                // If player is sunk, prioritize moving towards them to repair
                 const distToPlayer = Math.abs(ship.x - game.player.x) + Math.abs(ship.y - game.player.y);
                 if (distToPlayer > 2) {
                     const dx = Math.sign(game.player.x - ship.x);
@@ -864,7 +879,7 @@
                     if (Math.random() < 0.5 && dx !== 0) tryMove(ship, dx, 0);
                     else if (dy !== 0) tryMove(ship, 0, dy);
                 }
-                return; // Override other AI
+                return;
             }
 
             const dist = Math.abs(ship.x - target.x) + Math.abs(ship.y - target.y);
@@ -1332,6 +1347,13 @@
             newShip.customName = `${template.name} ${game.ships.length}`;
             
             game.ships.push(newShip);
+            game.shipsPurchased++;
+            
+            if (game.shipsPurchased === 5) {
+                game.visibility += 4;
+                addMessage('Your fleet has grown! Visibility increased!', true);
+            }
+            
             addMessage(`Purchased ${template.name}!`, true);
             updateUI();
             renderShop();
@@ -1446,7 +1468,6 @@
             
             details.innerHTML = html;
 
-            // Add event listeners after HTML is created to avoid flickering issues
             if (isPlayerShip && !unit.sunk) {
                 document.getElementById('rename-btn')?.addEventListener('click', renameShip);
                 document.querySelectorAll('.upgrade-btn').forEach(btn => {
@@ -1461,7 +1482,7 @@
                 game.selectedUnit.customName = input.value.trim();
                 addMessage(`Ship renamed to "${game.selectedUnit.customName}"`, false);
                 document.getElementById('selected-unit-name').textContent = game.selectedUnit.customName;
-                updateUI(); // For fleet list
+                updateUI();
             }
         }
         
@@ -1474,8 +1495,8 @@
             if (stat === 'maxHp') game.selectedUnit.hp = game.selectedUnit.maxHp;
             
             addMessage(`${game.selectedUnit.customName}: ${stat} upgraded!`, true);
-            updateUI(); // For resources and fleet list
-            renderUnitInfo(game.selectedUnit); // Re-render this panel on change
+            updateUI();
+            renderUnitInfo(game.selectedUnit);
         }
         
         function showUnitPanel() {
@@ -1543,18 +1564,45 @@
                 }
             }
             
+            const itemsByPosition = {};
             for (let item of game.items) {
-                if (game.visibleTiles.has(`${item.x},${item.y}`)) {
-                    const screenX = item.x - offsetX;
-                    const screenY = item.y - offsetY;
-                    
-                    if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
-                        const icons = { gold: '💰', salvage: '⚙️', scales: '🐉' };
-                        ctx.font = `${Math.floor(tileSize * 0.5)}px serif`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(icons[item.type] || '?', screenX * tileSize + tileSize/2, screenY * tileSize + tileSize/2);
-                    }
+                const key = `${item.x},${item.y}`;
+                if (!itemsByPosition[key]) itemsByPosition[key] = [];
+                itemsByPosition[key].push(item);
+            }
+
+            for (let posKey in itemsByPosition) {
+                const items = itemsByPosition[posKey];
+                if (!game.visibleTiles.has(posKey)) continue;
+
+                const [x, y] = posKey.split(',').map(Number);
+                const screenX = x - offsetX;
+                const screenY = y - offsetY;
+
+                if (screenX >= 0 && screenX < vis && screenY >= 0 && screenY < vis) {
+                    const icons = { gold: '💰', salvage: '⚙️', scales: '🐉' };
+                    ctx.font = `${Math.floor(tileSize * 0.5)}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    const maxOffset = tileSize * 0.25;
+                    items.forEach((item, index) => {
+                        let offsetXPos = 0, offsetYPos = 0;
+                        if (items.length === 2) {
+                            offsetXPos = index === 0 ? -maxOffset/2 : maxOffset/2;
+                        } else if (items.length === 3) {
+                            offsetXPos = (index - 1) * maxOffset/2;
+                        } else if (items.length >= 4) {
+                            offsetXPos = (index % 2 === 0 ? -1 : 1) * maxOffset/2;
+                            offsetYPos = (index < 2 ? -1 : 1) * maxOffset/2;
+                        }
+
+                        ctx.fillText(
+                            icons[item.type] || '?',
+                            screenX * tileSize + tileSize/2 + offsetXPos,
+                            screenY * tileSize + tileSize/2 + offsetYPos
+                        );
+                    });
                 }
             }
             
@@ -1729,46 +1777,67 @@
             if (game.player) {
                 document.getElementById('coords-display').textContent = `Player: (${game.player.x}, ${game.player.y})`;
             }
-            
+
             const fleetList = document.getElementById('fleet-list');
-            fleetList.innerHTML = '';
-            
-            for (let ship of game.ships) {
-                const div = document.createElement('div');
-                div.className = 'ship-card';
-                if (ship === game.selectedUnit) div.classList.add('selected');
-                if (ship.repairing) div.classList.add('repairing');
-                
+            const shipsInUI = new Set();
+
+            for (const ship of game.ships) {
+                const shipId = `ship-card-${ship.id}`;
+                shipsInUI.add(shipId);
+
+                let div = document.getElementById(shipId);
+
+                if (!div) {
+                    div = document.createElement('div');
+                    div.id = shipId;
+                    div.className = 'ship-card';
+
+                    div.innerHTML = `
+                        <div class="ship-name"></div>
+                        <div class="ship-type" style="font-size: 0.85em; color: #ccc;"></div>
+                        <div class="ship-stats"></div>
+                        <div class="health-bar"><div class="health-fill"></div></div>
+                        <div class="info-panel"></div>
+                    `;
+
+                    div.addEventListener('click', () => selectUnit(ship));
+                    fleetList.appendChild(div);
+                }
+
                 const healthPercent = (ship.hp / ship.maxHp) * 100;
                 const status = ship.sunk ? ' [SUNK]' : '';
-                
-                let html = `
-                    <div class="ship-name">${ship.customName}${status}</div>
-                    <div style="font-size: 0.85em; color: #ccc;">${ship.name}</div>
-                    <div>HP: ${ship.hp}/${ship.maxHp} | DMG: ${ship.damage || 0}</div>
-                    <div class="health-bar"><div class="health-fill" style="width: ${healthPercent}%"></div></div>
-                `;
-                
+
+                div.classList.toggle('selected', ship === game.selectedUnit);
+                div.classList.toggle('repairing', ship.repairing);
+
+                div.querySelector('.ship-name').textContent = `${ship.customName}${status}`;
+                div.querySelector('.ship-type').textContent = ship.name;
+                div.querySelector('.ship-stats').textContent = `HP: ${ship.hp}/${ship.maxHp} | DMG: ${ship.damage || 0}`;
+                div.querySelector('.health-fill').style.width = `${healthPercent}%`;
+
+                const infoPanel = div.querySelector('.info-panel');
                 if (ship.repairing) {
-                    html += `
+                    infoPanel.innerHTML = `
                         <div class="repair-bar"><div class="repair-fill" style="width: ${ship.repairProgress}%"></div></div>
                         <div style="font-size: 0.8em; color: #2196F3;">Repairing...</div>
                     `;
                 } else {
-                    html += `<div style="font-size: 0.8em;">Cargo: ${ship.inventory.length}/${ship.cargo}</div>`;
+                    infoPanel.innerHTML = `<div style="font-size: 0.8em;">Cargo: ${ship.inventory.length}/${ship.cargo}</div>`;
                 }
-                
-                div.innerHTML = html;
-                div.onclick = () => selectUnit(ship);
-                fleetList.appendChild(div);
             }
-            
+
+            for (const child of Array.from(fleetList.children)) {
+                if (!shipsInUI.has(child.id)) {
+                    child.remove();
+                }
+            }
+
             if (game.currentPort) {
                 game.resources.salvage += game.ships.reduce((acc, s) => acc + s.inventory.filter(i => i === 'salvage').length, 0);
                 game.resources.scales += game.ships.reduce((acc, s) => acc + s.inventory.filter(i => i === 'scales').length, 0);
                 for (let ship of game.ships) ship.inventory = [];
             }
-            
+
             if (game.selectedUnit) {
                 const healthFill = document.getElementById('selected-unit-health-fill');
                 const healthText = document.getElementById('selected-unit-health-text');
@@ -1788,7 +1857,7 @@
         }
         
         function saveGame() {
-            const recentExplored = Array.from(game.exploredTiles).slice(-1000);
+            const recentExplored = Array.from(game.exploredTiles).slice(-10000);
             const saveData = {
                 ships: game.ships,
                 items: game.items,
@@ -1803,7 +1872,8 @@
                 startX: game.startX,
                 startY: game.startY,
                 hasVisitedFirstPort: game.hasVisitedFirstPort,
-                gameSpeed: game.gameSpeed
+                gameSpeed: game.gameSpeed,
+                shipsPurchased: game.shipsPurchased,
             };
             const jsonString = JSON.stringify(saveData);
             const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1832,7 +1902,11 @@
                         }
                     });
 
+                    const maxId = loadedData.ships.reduce((max, ship) => Math.max(max, ship.id || 0), 0);
+                    nextShipId = maxId + 1;
+                    
                     game.exploredTiles = new Set(loadedData.exploredTiles);
+                    game.shipsPurchased = loadedData.shipsPurchased || 0;
                     
                     game.ships = loadedData.ships.map(shipData => {
                         const templateKey = Object.keys(shipTemplates).find(k => shipTemplates[k].name === shipData.name) || 'basic';
