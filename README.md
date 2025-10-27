@@ -14,8 +14,8 @@ Click any link to play the game instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Ephemeral%20Echoes%20v3.1.html)
 *   **Description:** An atmospheric idle game where you generate currency by clicking and tracing patterns on a canvas. Use the currency to buy structures that automate production. Equip schematic items and "Sublimate" (prestige) to earn permanent upgrades for future runs.
 
-### Pirate Fleet Commander (v7.1)
-*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pirate%20Fleet%20Commander%20v7.1.html)
+### Pirate Fleet Commander (v7.4)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pirate%20Fleet%20Commander%20v7.4.html)
 *   **Description:** A top-down fleet management and exploration game. Control your flagship to explore a procedurally generated sea, engaging in real-time combat with enemies. Collect loot from defeated ships and use it at island ports to buy new ships and upgrade your fleet.
 
 ### Solarized Clicker: Singularity (v3.2)
