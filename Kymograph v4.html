@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYMOGRAPH</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --monitor-bg: #040804;
+            --monitor-text: #00FF41;
+            --monitor-text-dark: #008F25;
+            --monitor-accent: #FF4100;
+            --border-color: #004F13;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background-color: #111;
+        }
+
+        body {
+            color: var(--monitor-text);
+            font-family: 'VT323', monospace;
+            font-size: calc(16px + 0.5vmin);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            max-width: 1200px;
+            max-height: 800px;
+            background: var(--monitor-bg);
+            border: 5px solid #333;
+            border-radius: 20px;
+            padding: 2vmin;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.2), inset 0 0 20px rgba(0,0,0,0.8);
+            position: relative;
+            display: none;
+            flex-direction: column;
+        }
+
+        #crt-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 100; overflow: hidden; border-radius: 15px;
+        }
+        #crt-overlay::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.4) 0, rgba(0,0,0,0.4) 1px, transparent 1px, transparent 3px);
+            animation: flicker 0.15s infinite;
+        }
+        #crt-overlay::after {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(ellipse at center, rgba(0, 255, 65, 0.1) 0%, rgba(0, 255, 65, 0) 70%);
+        }
+        @keyframes flicker { 0% { opacity: 0.2; } 50% { opacity: 0.5; } 100% { opacity: 0.2; } }
+
+        #intro-screen {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; padding: 40px; text-shadow: 0 0 8px var(--monitor-text);
+            height: 100%;
+        }
+        #intro-screen h1 { font-size: 10vmin; margin-bottom: 2vh; }
+        #intro-screen p { max-width: 60ch; margin-bottom: 3vh; line-height: 1.4; }
+
+        .button {
+            background: transparent; border: 2px solid var(--monitor-text); color: var(--monitor-text);
+            padding: 10px 20px; font-family: inherit; font-size: 1em; cursor: pointer;
+            text-shadow: 0 0 5px var(--monitor-text); transition: all 0.2s ease;
+        }
+        .button:hover { background: var(--monitor-text); color: var(--monitor-bg); box-shadow: 0 0 15px var(--monitor-text); }
+        .button:disabled { border-color: var(--monitor-text-dark); color: var(--monitor-text-dark); cursor: not-allowed; text-shadow: none; }
+        .button:disabled:hover { background: transparent; box-shadow: none; }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--border-color); padding-bottom: 1vmin; margin-bottom: 1.5vmin;
+        }
+        header h1 { font-size: 2.5em; text-shadow: 0 0 5px var(--monitor-text); }
+        
+        #settings-button { font-size: 1.5em; cursor: pointer; }
+        #settings-menu {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--monitor-bg); border: 2px solid var(--border-color); padding: 30px;
+            z-index: 200; text-align: center;
+        }
+        #settings-menu h2 { margin-bottom: 20px; }
+        #settings-menu .button { margin: 5px; }
+
+        main { display: flex; gap: 1.5vmin; flex-grow: 1; min-height: 0; }
+
+        .left-column { flex: 1.5; display: flex; flex-direction: column; min-width: 0; }
+        .right-column { flex: 1; display: flex; flex-direction: column; gap: 1.5vmin; min-width: 0; }
+
+        .panel { border: 2px solid var(--border-color); padding: 1.5vmin; background: rgba(0, 255, 65, 0.05); }
+        .panel-title { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5vmin; margin-bottom: 1vmin; }
+
+        #scope { display: flex; flex-direction: column; flex-grow: 1; }
+        #adder-display {
+            flex-grow: 1; background: #000; border: 1px solid var(--border-color);
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; position: relative;
+        }
+        #adder-display svg {
+            width: 40%; height: 40%; max-width: 150px;
+            filter: drop-shadow(0 0 10px currentColor); animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        #system-message-container {
+            margin-top: 1vmin; height: 6em; border: 1px solid var(--border-color);
+            padding: 1vmin; font-size: 1em; line-height: 1.4;
+            display: flex; flex-direction: column-reverse; justify-content: flex-start;
+        }
+        .past-message { opacity: 0.4; }
+        
+        .scope-controls { display: flex; gap: 1vmin; align-items: center; }
+        #rescan-button { flex-grow: 1; font-size: 0.9em; padding: 0.5vmin; }
+
+        #journal .builder-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1vmin; }
+        .log-label { color: var(--monitor-text-dark); }
+        .choice-buttons { display: flex; gap: 0.5vmin; }
+        .choice-buttons button {
+            background: transparent; border: 1px solid var(--monitor-text-dark); color: var(--monitor-text-dark);
+            padding: 0.2em 0.6em; font-family: inherit; font-size: 0.9em; cursor: pointer;
+        }
+        .choice-buttons button:hover { border-color: var(--monitor-text); color: var(--monitor-text); }
+        .choice-buttons button.selected { background: var(--monitor-text); color: var(--monitor-bg); }
+        .glyph-button svg { width: 1em; height: 1em; vertical-align: middle; }
+
+        #rules-log-content { font-size: 0.9em; line-height: 1.6; color: var(--monitor-text-dark); }
+        #rules-log-content span { color: var(--monitor-text); }
+
+        #demurrage-bar-outer { width: 100%; height: 2.5vmin; border: 1px solid var(--border-color); padding: 2px; }
+        #demurrage-bar-inner { width: 0%; height: 100%; background: var(--monitor-accent); box-shadow: 0 0 10px var(--monitor-accent); transition: width 0.5s ease; }
+        #submit-riposte { width: 100%; margin-top: 2vmin; font-size: 1.8em; }
+
+        @media (max-width: 1000px) {
+            body { font-size: calc(14px + 1vmin); }
+            header h1 { font-size: 2em; }
+            main { flex-direction: column; }
+            #system-message-container { height: 5.5em; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="intro-screen">
+        <h1>KYMOGRAPH</h1>
+        <p>You are a Chrono-Linguist. Observe hostile signals, deduce their counter-logic, and deface the broadcast to stabilize reality. Your progress is saved automatically.</p>
+        <button class="button" id="start-button">INITIALIZE SYSTEM</button>
+    </div>
+
+    <div id="game-container">
+        <div id="crt-overlay"></div>
+        <header>
+            <h1>KYMOGRAPH</h1>
+            <div>
+                <span id="level-display">SECTOR: 00</span>
+                <span id="settings-button">[::]</span>
+            </div>
+        </header>
+        <main>
+            <div class="left-column">
+                <div class="panel" id="scope">
+                    <div class="panel-title">OBSERVATION SCOPE</div>
+                    <div id="adder-display"></div>
+                    <div class="scope-controls">
+                         <div id="system-message-container"><div>> System nominal. Awaiting input.</div></div>
+                         <button class="button" id="rescan-button">RE-SCAN</button>
+                    </div>
+                </div>
+            </div>
+            <div class="right-column">
+                <div class="panel" id="journal">
+                    <div class="panel-title">COUNTER-RIPOSTE</div>
+                    <div class="builder-row"><span class="log-label">GLYPH:</span><div class="choice-buttons" id="glyph-choices"></div></div>
+                    <div class="builder-row"><span class="log-label">COLOR:</span><div class="choice-buttons" id="color-choices"></div></div>
+                    <div class="builder-row"><span class="log-label">WAVE:</span><div class="choice-buttons" id="wave-choices"></div></div>
+                </div>
+                <div class="panel" id="rules-log">
+                    <div class="panel-title">DEDUCED RULES</div>
+                    <div id="rules-log-content">Awaiting successful defacement to codify logic...</div>
+                </div>
+                <div class="panel" id="editor">
+                    <div class="panel-title">BROADCAST EDITOR</div>
+                    <div id="demurrage-container">
+                        <label>SYSTEM DEMURRAGE:</label>
+                        <div id="demurrage-bar-outer"><div id="demurrage-bar-inner"></div></div>
+                    </div>
+                    <button class="button" id="submit-riposte">DEFACE BROADCAST</button>
+                </div>
+            </div>
+        </main>
+        <div id="settings-menu">
+            <h2>SYSTEM SETTINGS</h2>
+            <button class="button" id="mute-button">MUTE AUDIO</button>
+            <button class="button" id="reset-button">RESET PROGRESS</button>
+            <button class="button" id="close-settings-button">CLOSE</button>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+    // --- 1. DATA & CONFIGURATION ---
+    const CONSTANTS = {
+        DEMURRAGE_PENALTY: { 0: 25, 1: 15, 2: 5 },
+        DEMURRAGE_REWARD: 15,
+        INITIAL_DEMURRAGE: 0,
+        MAX_DEMURRAGE: 100,
+        DEMURRAGE_THRESHOLD: 50,
+        SAVE_KEY: 'kymograph_save_v3',
+        RESCAN_DURATION: 1.5, // seconds
+        RESCAN_COOLDOWN: 3000, // milliseconds
+        MAX_MESSAGES: 4,
+    };
+
+    const DATA = {
+        GLYPHS: {
+            SHARP: `<svg viewBox="0 0 100 100"><polygon points="50,10 90,90 10,90" fill="currentColor"/></svg>`,
+            CURVED: `<svg viewBox="0 0 100 100"><path d="M 20,80 Q 50,20 80,80" stroke="currentColor" stroke-width="10" fill="none"/></svg>`,
+            SPIKE: `<svg viewBox="0 0 100 100"><path d="M10 50 L30 30 L50 50 L70 70 L90 50" stroke="currentColor" stroke-width="10" fill="none"/></svg>`,
+            ORBIT: `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="10" fill="none"/><circle cx="50" cy="50" r="10" fill="currentColor"/></svg>`,
+        },
+        COLORS: {
+            RED: { hex: '#FF4136', name: 'RED' }, CYAN: { hex: '#7FDBFF', name: 'CYAN' },
+            YELLOW: { hex: '#FFDC00', name: 'YLLW' }, PURPLE: { hex: '#B10DC9', name: 'PRPL' },
+        },
+        WAVES: {
+            SINE: { type: 'sine', name: 'SINE', freq: 300 }, SAWTOOTH: { type: 'sawtooth', name: 'SAW', freq: 150 },
+            SQUARE: { type: 'square', name: 'SQR', freq: 440 }, TRIANGLE: { type: 'triangle', name: 'TRI', freq: 220 },
+        },
+        PROPERTIES: {
+            glyph: ['SHARP', 'CURVED', 'SPIKE', 'ORBIT'],
+            color: ['RED', 'CYAN', 'YELLOW', 'PURPLE'],
+            wave: ['SINE', 'SAWTOOTH', 'SQUARE', 'TRIANGLE'],
+        },
+        HOT_COLORS: ['RED', 'YELLOW'],
+        HARSH_WAVES: ['SAWTOOTH', 'SQUARE'], // Kept for contextual rule
+    };
+
+    // --- 2. DOM & GAME STATE ---
+    const dom = {
+        intro: document.getElementById('intro-screen'),
+        game: document.getElementById('game-container'),
+        startButton: document.getElementById('start-button'),
+        levelDisplay: document.getElementById('level-display'),
+        adderDisplay: document.getElementById('adder-display'),
+        sysMsgContainer: document.getElementById('system-message-container'),
+        choices: {
+            glyph: document.getElementById('glyph-choices'),
+            color: document.getElementById('color-choices'),
+            wave: document.getElementById('wave-choices'),
+        },
+        rulesLog: document.getElementById('rules-log-content'),
+        demurrageBar: document.getElementById('demurrage-bar-inner'),
+        submitButton: document.getElementById('submit-riposte'),
+        rescanButton: document.getElementById('rescan-button'),
+        settingsButton: document.getElementById('settings-button'),
+        settingsMenu: document.getElementById('settings-menu'),
+        muteButton: document.getElementById('mute-button'),
+        resetButton: document.getElementById('reset-button'),
+        closeSettingsButton: document.getElementById('close-settings-button'),
+    };
+
+    const state = {
+        levelNum: 0,
+        adderIndex: 0,
+        demurrage: CONSTANTS.INITIAL_DEMURRAGE,
+        playerGuess: { glyph: null, color: null, wave: null },
+        lastSuccessfulGuess: { glyph: null, color: null, wave: null },
+        gameOver: false,
+        isMuted: false,
+        currentLevelData: null,
+        messageHistory: [],
+        rescanActive: false,
+    };
+
+    // --- 3. AUDIO ENGINE ---
+    let audioCtx;
+    const audio = {
+        init() {
+            try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+            catch(e) { console.warn("Web Audio API is not supported."); }
+        },
+        play(wave, freq, duration) {
+            if (!audioCtx || state.isMuted) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = wave;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        },
+        feedback(success, partial = 0) {
+            if (success) { this.play('sine', 800, 0.3); this.play('sine', 1200, 0.1, 0.15); }
+            else { this.play('sawtooth', 120 + (partial * 40), 0.5); }
+        }
+    };
+
+    // --- 4. CORE GAME LOGIC & PROCEDURAL GENERATION ---
+
+    function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function cycleProperty(propType, value, direction) {
+        const arr = DATA.PROPERTIES[propType];
+        const currentIndex = arr.indexOf(value);
+        let nextIndex = currentIndex + direction;
+        if (nextIndex < 0) nextIndex = arr.length - 1;
+        if (nextIndex >= arr.length) nextIndex = 0;
+        return arr[nextIndex];
+    }
+
+    const levelGenerator = {
+        tutorial() {
+            return {
+                name: "00 // TUTORIAL",
+                briefing: "> System online. First rule: Counter signals are cyclically additive. Shift each parameter forward by one to proceed.",
+                rules: { glyph: 'ADDITIVE', color: 'ADDITIVE', wave: 'ADDITIVE' },
+                adders: [ { riposte: { glyph: 'SHARP', color: 'RED', wave: 'SQUARE' } }, ]
+            };
+        },
+        generate(levelNum) {
+            const rules = {};
+            let briefing = `> Signal variance detected in Sector ${levelNum}. New logic may be required.`;
+
+            const baseRules = ['ADDITIVE', 'SUBTRACTIVE'];
+            let rulePool = [...baseRules];
+            
+            if (levelNum >= 3) rulePool.push('MATCH');
+            if (levelNum >= 7) rulePool.push('ALTERNATING');
+            if (levelNum >= 11) rulePool.push('CONTEXTUAL_COLOR');
+            if (levelNum >= 16) rulePool.push('DEMURRAGE_STATE');
+            if (levelNum >= 20) rulePool.push('TEMPORAL_ECHO');
+
+            // Assign rules ensuring variety
+            const assignedRules = new Set();
+            for (const prop of ['glyph', 'color', 'wave']) {
+                let rule;
+                do {
+                    rule = getRandomElement(rulePool);
+                } while (assignedRules.has(rule) && assignedRules.size < rulePool.length); // Try not to repeat rules if possible
+                rules[prop] = rule;
+                assignedRules.add(rule);
+            }
+
+            // Generate adders
+            const numAdders = 2 + Math.floor(levelNum / 4);
+            const adders = [];
+            for (let i = 0; i < numAdders; i++) {
+                adders.push({ riposte: {
+                    glyph: getRandomElement(DATA.PROPERTIES.glyph),
+                    color: getRandomElement(DATA.PROPERTIES.color),
+                    wave: getRandomElement(DATA.PROPERTIES.wave),
+                }});
+            }
+
+            // Set briefing based on hardest rule present
+            if (rules.glyph === 'TEMPORAL_ECHO' || rules.color === 'TEMPORAL_ECHO' || rules.wave === 'TEMPORAL_ECHO') briefing = `> Chronal feedback loop detected in Sector ${levelNum}. Past actions may influence present solutions.`;
+            else if (rules.glyph === 'DEMURRAGE_STATE' || rules.color === 'DEMURRAGE_STATE' || rules.wave === 'DEMURRAGE_STATE') briefing = `> System integrity is fluctuating in Sector ${levelNum}. Counter-logic may shift under pressure.`;
+            else if (rules.glyph === 'ALTERNATING' || rules.color === 'ALTERNATING' || rules.wave === 'ALTERNATING') briefing = `> Signal is oscillating in Sector ${levelNum}. A predictable pattern may govern the counter-logic.`;
+
+            return { name: `${String(levelNum).padStart(2, '0')}`, briefing, rules, adders };
+        }
+    };
+
+    function checkSolution(guess, riposte, rules) {
+        let correctCount = 0;
+        
+        ['glyph', 'color', 'wave'].forEach(prop => {
+            let correctValue;
+            const rule = rules[prop];
+            const riposteValue = riposte[prop];
+
+            switch(rule) {
+                case 'ADDITIVE': correctValue = cycleProperty(prop, riposteValue, 1); break;
+                case 'SUBTRACTIVE': correctValue = cycleProperty(prop, riposteValue, -1); break;
+                case 'MATCH': correctValue = riposteValue; break;
+                case 'ALTERNATING': // Alternates between ADDITIVE and MATCH
+                    correctValue = (state.adderIndex % 2 === 0) ? cycleProperty(prop, riposteValue, 1) : riposteValue;
+                    break;
+                case 'DEMURRAGE_STATE': // ADDITIVE below threshold, SUBTRACTIVE above
+                    correctValue = (state.demurrage < CONSTANTS.DEMURRAGE_THRESHOLD) ? cycleProperty(prop, riposteValue, 1) : cycleProperty(prop, riposteValue, -1);
+                    break;
+                case 'CONTEXTUAL_COLOR': // Only applies to glyph
+                    correctValue = DATA.HOT_COLORS.includes(riposte.color) ? riposte.glyph : cycleProperty('glyph', riposte.glyph, 1);
+                    break;
+                case 'TEMPORAL_ECHO':
+                    correctValue = state.lastSuccessfulGuess[prop];
+                    break;
+                default: correctValue = riposteValue; // Fallback
+            }
+            if (guess[prop] === correctValue) correctCount++;
+        });
+
+        return correctCount;
+    }
+
+    // --- 5. GAME FLOW & STATE MANAGEMENT ---
+
+    function init() {
+        dom.startButton.addEventListener('click', startGame);
+        dom.submitButton.addEventListener('click', handleSubmit);
+        dom.rescanButton.addEventListener('click', handleRescan);
+        dom.settingsButton.addEventListener('click', () => dom.settingsMenu.style.display = 'block');
+        dom.closeSettingsButton.addEventListener('click', () => dom.settingsMenu.style.display = 'none');
+        dom.muteButton.addEventListener('click', toggleMute);
+        dom.resetButton.addEventListener('click', resetProgress);
+        audio.init();
+        loadProgress();
+        displayMessage("> System nominal. Awaiting input.", true);
+    }
+
+    function startGame() {
+        dom.intro.style.display = 'none';
+        dom.game.style.display = 'flex';
+        state.gameOver = false;
+        state.demurrage = CONSTANTS.INITIAL_DEMURRAGE;
+        updateDemurrage();
+        loadLevel();
+    }
+    
+    function loadProgress() {
+        const savedLevel = localStorage.getItem(CONSTANTS.SAVE_KEY);
+        state.levelNum = savedLevel ? parseInt(savedLevel) : 0;
+    }
+    function saveProgress() {
+        localStorage.setItem(CONSTANTS.SAVE_KEY, state.levelNum);
+    }
+    function resetProgress() {
+        if (confirm("Are you sure you want to reset all progress?")) {
+            localStorage.removeItem(CONSTANTS.SAVE_KEY);
+            window.location.reload();
+        }
+    }
+
+    function loadLevel() {
+        state.adderIndex = 0;
+        state.currentLevelData = state.levelNum === 0 ? levelGenerator.tutorial() : levelGenerator.generate(state.levelNum);
+        displayMessage(state.currentLevelData.briefing, true);
+        dom.rulesLog.innerHTML = 'Awaiting successful defacement to codify logic...';
+        setupChoiceButtons();
+        loadAdder();
+    }
+    
+    function loadAdder() {
+        if (state.gameOver) return;
+        const levelData = state.currentLevelData;
+        if (state.adderIndex >= levelData.adders.length) {
+            levelComplete();
+            return;
+        }
+        resetPlayerGuess();
+        updateLevelDisplay();
+        
+        const riposte = levelData.adders[state.adderIndex].riposte;
+        dom.adderDisplay.innerHTML = DATA.GLYPHS[riposte.glyph];
+        dom.adderDisplay.style.color = DATA.COLORS[riposte.color].hex;
+        
+        const wave = DATA.WAVES[riposte.wave];
+        audio.play(wave.type, wave.freq, 0.8);
+    }
+    
+    function handleSubmit() {
+        if (state.gameOver) return;
+        if (Object.values(state.playerGuess).some(v => v === null)) {
+            displayMessage("> INCOMPLETE COUNTER-RIPOSTE. SPECIFY ALL PARAMETERS.");
+            audio.feedback(false, 0);
+            return;
+        }
+
+        const level = state.currentLevelData;
+        const riposte = level.adders[state.adderIndex].riposte;
+        const correctCount = checkSolution(state.playerGuess, riposte, level.rules);
+        
+        if (correctCount === 3) {
+            displayMessage("> RESONANCE! ADDER PACIFIED. DEMURRAGE DECREASED.");
+            audio.feedback(true);
+            changeDemurrage(-CONSTANTS.DEMURRAGE_REWARD);
+            state.lastSuccessfulGuess = { ...state.playerGuess }; // Store for Temporal Echo
+            state.adderIndex++;
+            updateRulesLog(level.rules);
+            setTimeout(loadAdder, 1500);
+        } else {
+            const penalty = CONSTANTS.DEMURRAGE_PENALTY[correctCount];
+            let msg = `> DISSONANCE! (${correctCount}/3 PARAMS CORRECT). DEMURRAGE SPIKE!`;
+            if (correctCount === 0) msg = '> CATASTROPHIC FAILURE! NO MATCH. DEMURRAGE CRITICAL!';
+            if (correctCount === 1) msg = '> Partial match detected. Logic flawed. Demurrage rising.';
+            if (correctCount === 2) msg = '> Strong resonance, but unstable. Fine-tune parameters. Demurrage increasing.';
+
+            displayMessage(msg);
+            audio.feedback(false, correctCount);
+            changeDemurrage(penalty);
+        }
+    }
+    
+    function levelComplete() {
+        displayMessage(`> SECTOR ${state.currentLevelData.name} STABILIZED. PROCEEDING TO NEXT SECTOR.`, true);
+        state.levelNum++;
+        saveProgress();
+        setTimeout(loadLevel, 2500);
+    }
+    
+    function checkGameOver() {
+        if (state.demurrage >= CONSTANTS.MAX_DEMURRAGE) {
+            state.demurrage = CONSTANTS.MAX_DEMURRAGE;
+            updateDemurrage();
+            displayMessage("> CRITICAL DEMURRAGE. SYSTEM CASCADE. CONNECTION LOST.", true);
+            dom.submitButton.disabled = true;
+            state.gameOver = true;
+            setTimeout(() => {
+                dom.intro.style.display = 'flex';
+                dom.game.style.display = 'none';
+                dom.submitButton.disabled = false;
+            }, 4000);
+        }
+    }
+
+    // --- 6. UI & HELPER FUNCTIONS ---
+    function updateLevelDisplay() {
+        const { name, adders } = state.currentLevelData;
+        dom.levelDisplay.textContent = `SECTOR: ${name} // ADDER: ${state.adderIndex + 1}/${adders.length}`;
+    }
+    
+    function displayMessage(msg, important = false) {
+        state.messageHistory.unshift({ text: msg, important });
+        if (state.messageHistory.length > CONSTANTS.MAX_MESSAGES) {
+            state.messageHistory.pop();
+        }
+        
+        dom.sysMsgContainer.innerHTML = state.messageHistory.map((m, index) => {
+            const isPast = index > 0 ? 'class="past-message"' : '';
+            const style = m.important && index === 0 ? 'style="text-shadow: 0 0 5px var(--monitor-text);"' : '';
+            return `<div ${isPast} ${style}>${m.text}</div>`;
+        }).join('');
+    }
+
+    function resetPlayerGuess() {
+        state.playerGuess = { glyph: null, color: null, wave: null };
+        document.querySelectorAll('.choice-buttons button').forEach(btn => btn.classList.remove('selected'));
+        if (state.levelNum > 0) displayMessage("> New acridic riposte detected. Journalise and deface.");
+    }
+    
+    function setupChoiceButtons() {
+        Object.keys(DATA.PROPERTIES).forEach(prop => {
+            const container = dom.choices[prop];
+            container.innerHTML = DATA.PROPERTIES[prop].map(value => {
+                const content = prop === 'glyph' ? DATA.GLYPHS[value] : DATA[prop.toUpperCase() + 'S'][value].name;
+                const className = prop === 'glyph' ? 'glyph-button' : '';
+                return `<button class="${className}" data-type="${prop}" data-value="${value}">${content}</button>`;
+            }).join('');
+        });
+        document.querySelectorAll('.choice-buttons button').forEach(button => button.addEventListener('click', handleChoice));
+    }
+
+    function handleChoice(e) {
+        if (state.gameOver) return;
+        const btn = e.currentTarget;
+        const { type, value } = btn.dataset;
+        state.playerGuess[type] = value;
+        btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        audio.play('sine', 600, 0.05);
+    }
+    
+    function handleRescan() {
+        if (state.rescanActive || state.gameOver || !state.currentLevelData) return;
+        
+        const riposte = state.currentLevelData.adders[state.adderIndex].riposte;
+        const wave = DATA.WAVES[riposte.wave];
+        audio.play(wave.type, wave.freq, CONSTANTS.RESCAN_DURATION);
+        
+        state.rescanActive = true;
+        dom.rescanButton.disabled = true;
+        setTimeout(() => {
+            state.rescanActive = false;
+            dom.rescanButton.disabled = false;
+        }, CONSTANTS.RESCAN_COOLDOWN);
+    }
+
+    function updateRulesLog(rules) {
+        let logHTML = '';
+        const formatRule = (rule) => {
+            const name = rule.replace(/_/g, ' ');
+            return `<span>${name}</span>`;
+        };
+        logHTML += `GLYPH &rarr; ${formatRule(rules.glyph)}<br>`;
+        logHTML += `COLOR &rarr; ${formatRule(rules.color)}<br>`;
+        logHTML += `WAVE &rarr; ${formatRule(rules.wave)}`;
+        dom.rulesLog.innerHTML = logHTML;
+    }
+
+    function changeDemurrage(amount) {
+        state.demurrage += amount;
+        if (state.demurrage < 0) state.demurrage = 0;
+        if (state.demurrage > CONSTANTS.MAX_DEMURRAGE) state.demurrage = CONSTANTS.MAX_DEMURRAGE;
+        updateDemurrage();
+        checkGameOver();
+    }
+
+    function updateDemurrage() {
+        dom.demurrageBar.style.width = `${state.demurrage}%`;
+        const intensity = state.demurrage / CONSTANTS.MAX_DEMURRAGE;
+        dom.game.style.filter = `blur(${intensity * 0.5}px) hue-rotate(${intensity * -10}deg)`;
+    }
+
+    function toggleMute() {
+        state.isMuted = !state.isMuted;
+        dom.muteButton.textContent = state.isMuted ? 'UNMUTE AUDIO' : 'MUTE AUDIO';
+    }
+
+    init();
+    });
+    </script>
+</body>
+</html>

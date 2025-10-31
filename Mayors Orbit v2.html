@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mayor's Orbit</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #1c1e21;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --approval-color: #4CAF50;
+            --budget-color: #2196F3;
+            --scandal-color: #f44336;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 800px;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-color);
+            position: relative;
+        }
+
+        #meters {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+        }
+
+        .meter {
+            flex: 1;
+            background-color: #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 24px;
+            position: relative;
+        }
+
+        .meter-bar {
+            height: 100%;
+            width: 50%;
+            border-radius: 8px;
+            transition: width 0.3s ease-in-out;
+        }
+        
+        .meter-label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        #approval-bar { background-color: var(--approval-color); }
+        #budget-bar { background-color: var(--budget-color); }
+        #scandal-bar { background-color: var(--scandal-color); }
+
+        #card-area {
+            flex-grow: 1;
+            position: relative;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 15px;
+            box-shadow: 0 4px 12px var(--shadow-color);
+            width: 95%;
+            height: 95%;
+            position: absolute;
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        .card:not(.active-card) {
+            transform: scale(0.95) translateY(10px);
+            opacity: 0.8;
+            z-index: -1;
+        }
+
+        .card-text {
+            font-size: 1.4rem;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .character-info {
+            font-size: 1rem;
+            font-style: italic;
+            color: #666;
+            margin-top: auto;
+        }
+
+        .choice-overlay {
+            position: absolute;
+            top: 20px;
+            border: 4px solid;
+            border-radius: 10px;
+            padding: 5px 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        /* FIX BUG #2: Changed ID selectors (#) to class selectors (.) */
+        .choice-left { left: 20px; color: var(--scandal-color); border-color: var(--scandal-color); transform: rotate(-15deg); }
+        .choice-right { right: 20px; color: var(--approval-color); border-color: var(--approval-color); transform: rotate(15deg); }
+
+        .screen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+
+        .screen-overlay h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .screen-overlay p {
+            font-size: 1.2rem;
+            max-width: 500px;
+        }
+
+        .screen-overlay button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="meters">
+            <div class="meter">
+                <div id="approval-bar" class="meter-bar"></div>
+                <div class="meter-label">❤️ Approval</div>
+            </div>
+            <div class="meter">
+                <div id="budget-bar" class="meter-bar"></div>
+                 <div class="meter-label">💰 Budget</div>
+            </div>
+            <div class="meter">
+                <div id="scandal-bar" class="meter-bar"></div>
+                 <div class="meter-label">📰 Scandal</div>
+            </div>
+        </div>
+        <div id="card-area">
+        </div>
+    </div>
+
+    <div id="start-screen" class="screen-overlay">
+        <h1>Mayor's Orbit</h1>
+        <p>You are the new mayor. Swipe left or right to make decisions and navigate your term. Keep your approval high, the budget balanced, and scandals low to survive!</p>
+        <button id="start-button">Begin Your Term</button>
+    </div>
+
+    <div id="game-over-screen" class="screen-overlay hidden">
+        <h1 id="game-over-title"></h1>
+        <p id="game-over-message"></p>
+        <button id="restart-button">Try Again</button>
+    </div>
+
+    <script>
+        // Story and card data remains the same
+        const cards = [
+            {character: "💡 Your Advisor", text: "The business owners who funded your campaign are here. They want to be in your inner orbit.", choices: [{ text: "Ignore them", effects: { approval: 10, budget: -5, scandal: -5 } }, { text: "Welcome them", effects: { approval: -5, budget: 15, scandal: 10 } }] },
+            {character: "🎤 Press Secretary", text: "Time for your first major speech. Do you give your word to lower property taxes?", choices: [{ text: "Too risky", effects: { approval: -10, budget: 0, scandal: 0 } }, { text: "Promise it!", effects: { approval: 15, budget: -10, scandal: 0 } }] },
+            {character: "🏗️ Construction CEO", text: "The economic boom is incredible! We want to fast-track a new skyscraper, but it will require zoning exceptions.", choices: [{ text: "By the book", effects: { approval: 5, budget: -10, scandal: -5 } }, { text: "Make it happen", effects: { approval: -10, budget: 20, scandal: 15 } }] },
+            {character: "🧾 City Comptroller", text: "Sir, I'm handing you a thick report... it details a massive budget shortfall from the previous administration.", choices: [{ text: "Bury it", effects: { approval: 0, budget: 0, scandal: 25 } }, { text: "Go public", effects: { approval: -20, budget: -20, scandal: -15 } }] },
+            {character: "⚔️ Council Opponent", text: "The city needs to compete for the national tech conference. This will be expensive, but prestigious.", choices: [{ text: "Too costly", effects: { approval: 10, budget: 0, scandal: 0 } }, { text: "We must win!", effects: { approval: -10, budget: -25, scandal: 0 } }] },
+            {character: "🕵️ Investigative Reporter", text: "We're investigating a suspicious payment made to your campaign. Care to comment?", choices: [{ text: "No comment", effects: { approval: 0, budget: 0, scandal: 15 } }, { text: "It's a legal donation", effects: { approval: -5, budget: 0, scandal: 10 } }] },
+            {character: "🌳 Parks Department", text: "Word of mouth is spreading about our new park initiative! Can we have more funding?", choices: [{ text: "No more funds", effects: { approval: -10, budget: 5, scandal: 0 } }, { text: "Absolutely!", effects: { approval: 15, budget: -15, scandal: 0 } }] },
+            {character: "🤵 Wealthy Donor", text: "At this velvet rope gala, my new development needs a 'friendly' zoning review.", choices: [{ text: "Can't help", effects: { approval: 5, budget: -15, scandal: -5 } }, { text: "I'll see to it", effects: { approval: -10, budget: 20, scandal: 20 } }] },
+            {character: "📦 FEMA Agent", text: "A storm is coming. We need to use the old city warehouse for emergency supply storage, immediately.", choices: [{ text: "It's condemned", effects: { approval: -15, budget: 0, scandal: 5 } }, { text: "Authorize it", effects: { approval: 10, budget: -10, scandal: 0 } }] },
+            {character: "🚨 Police Chief", text: "We've had an abnormal spike in crime this summer. We need to increase patrols, which means overtime pay.", choices: [{ text: "Deny overtime", effects: { approval: -20, budget: 10, scandal: 10 } }, { text: "Approve it", effects: { approval: 10, budget: -20, scandal: -5 } }] },
+            {character: "💡 Your Advisor", text: "The council just rejected your budget. It's a political slap in the face. How do we respond?", choices: [{ text: "Veto it", effects: { approval: -10, budget: -10, scandal: 10 } }, { text: "Negotiate", effects: { approval: 10, budget: -5, scandal: -5 } }] },
+            {character: "📉 Pollster", text: "The new poll numbers are low enough to discourage anyone. Should we scale back our campaign?", choices: [{ text: "Never!", effects: { approval: 0, budget: -15, scandal: 0 } }, { text: "Be pragmatic", effects: { approval: 5, budget: 10, scandal: -5 } }] },
+            {character: "🌉 State Engineer", text: "We're ready to give final clearance to the new bridge project. It's your legacy... but it's wildly over budget.", choices: [{ text: "Scrap it", effects: { approval: -25, budget: 25, scandal: 0 } }, { text: "Build it!", effects: { approval: 25, budget: -30, scandal: 10 } }] }
+        ];
+
+        let gameState = {};
+        const cardArea = document.getElementById('card-area');
+        
+        // --- State variables for dragging ---
+        let activeCard = null;
+        let isDragging = false;
+        let startX = 0;
+        let currentX = 0;
+
+        function initGame() {
+            gameState = { approval: 50, budget: 50, scandal: 0, cardIndex: 0 };
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            cardArea.innerHTML = '';
+            updateMeters();
+            createCard(gameState.cardIndex);
+            createCard(gameState.cardIndex + 1);
+        }
+
+        function updateMeters() {
+            document.getElementById('approval-bar').style.width = `${gameState.approval}%`;
+            document.getElementById('budget-bar').style.width = `${gameState.budget}%`;
+            document.getElementById('scandal-bar').style.width = `${gameState.scandal}%`;
+        }
+
+        function createCard(index) {
+            if (index >= cards.length) return;
+
+            const cardData = cards[index];
+            const cardEl = document.createElement('div');
+            cardEl.classList.add('card');
+            if (index === gameState.cardIndex) {
+                cardEl.classList.add('active-card');
+                activeCard = cardEl; // Set the first active card
+                addCardEventListeners(cardEl);
+            }
+            
+            // FIX BUG #2: Changed id attributes to class attributes
+            cardEl.innerHTML = `
+                <div class="choice-overlay choice-left">${cardData.choices[0].text}</div>
+                <div class="choice-overlay choice-right">${cardData.choices[1].text}</div>
+                <p class="card-text">${cardData.text}</p>
+                <p class="character-info">${cardData.character}</p>
+            `;
+            cardArea.appendChild(cardEl);
+        }
+        
+        function addCardEventListeners(card) {
+            card.addEventListener('mousedown', dragStart);
+            card.addEventListener('touchstart', dragStart, { passive: true });
+        }
+
+        function dragStart(e) {
+            if (!activeCard || isDragging) return;
+            isDragging = true;
+            startX = e.pageX || e.touches[0].pageX;
+            activeCard.style.transition = 'none';
+            
+            // Add move/end listeners to the whole document to track finger anywhere on screen
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: true });
+            document.addEventListener('mouseup', dragEnd);
+            document.addEventListener('touchend', dragEnd);
+        }
+
+        function drag(e) {
+            if (!isDragging || !activeCard) return;
+            currentX = e.pageX || e.touches[0].pageX;
+            const diffX = currentX - startX;
+            const rotation = diffX / 20;
+            const opacity = Math.min(Math.abs(diffX) / 100, 1);
+            
+            activeCard.style.transform = `translateX(${diffX}px) rotate(${rotation}deg)`;
+            
+            // FIX BUG #2: Query for classes instead of IDs
+            if (diffX > 0) {
+                activeCard.querySelector('.choice-right').style.opacity = opacity;
+                activeCard.querySelector('.choice-left').style.opacity = 0;
+            } else {
+                activeCard.querySelector('.choice-left').style.opacity = opacity;
+                activeCard.querySelector('.choice-right').style.opacity = 0;
+            }
+        }
+
+        function dragEnd() {
+            if (!isDragging || !activeCard) return;
+            isDragging = false;
+            
+            const diffX = currentX - startX;
+            const swipeThreshold = 100;
+
+            // FIX BUG #1: Encapsulate listener cleanup to happen on every drag end
+            const cleanup = () => {
+                document.removeEventListener('mousemove', drag);
+                document.removeEventListener('touchmove', drag);
+                document.removeEventListener('mouseup', dragEnd);
+                document.removeEventListener('touchend', dragEnd);
+                startX = 0;
+                currentX = 0;
+            };
+
+            activeCard.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+
+            if (Math.abs(diffX) > swipeThreshold) {
+                const choiceIndex = diffX > 0 ? 1 : 0;
+                const direction = diffX > 0 ? 1 : -1;
+                activeCard.style.transform = `translateX(${direction * 500}px) rotate(${direction * 30}deg)`;
+                activeCard.style.opacity = 0;
+                
+                // FIX BUG #1: Only nullify activeCard on a successful swipe
+                const swipedCard = activeCard;
+                activeCard = null; 
+
+                setTimeout(() => {
+                    handleChoice(cards[gameState.cardIndex].choices[choiceIndex].effects, swipedCard);
+                }, 300);
+
+            } else { // Snap back
+                activeCard.style.transform = 'translateX(0) rotate(0)';
+                activeCard.querySelector('.choice-left').style.opacity = 0;
+                activeCard.querySelector('.choice-right').style.opacity = 0;
+            }
+
+            cleanup();
+        }
+
+        function handleChoice(effects, swipedCard) {
+            gameState.approval += effects.approval || 0;
+            gameState.budget += effects.budget || 0;
+            gameState.scandal += effects.scandal || 0;
+            gameState.approval = Math.max(0, Math.min(100, gameState.approval));
+            gameState.budget = Math.max(0, Math.min(100, gameState.budget));
+            gameState.scandal = Math.max(0, Math.min(100, gameState.scandal));
+
+            updateMeters();
+            gameState.cardIndex++;
+            
+            if(swipedCard) cardArea.removeChild(swipedCard);
+            if (checkGameOver()) return;
+            if (gameState.cardIndex >= cards.length) {
+                endGame(true);
+                return;
+            }
+
+            const nextCard = cardArea.querySelector('.card:not(.active-card)');
+            if (nextCard) {
+                nextCard.classList.add('active-card');
+                activeCard = nextCard; // Set the new active card
+                addCardEventListeners(nextCard);
+            }
+            createCard(gameState.cardIndex + 1);
+        }
+
+        function checkGameOver() {
+            if (gameState.approval <= 0) { endGame(false, "Recalled!", "Your approval rating hit zero and you were recalled."); return true; }
+            if (gameState.budget <= 0) { endGame(false, "Bankrupt!", "The city's finances collapsed. The state has taken control."); return true; }
+            if (gameState.scandal >= 100) { endGame(false, "Impeached!", "Too many scandals! You have been impeached."); return true; }
+            return false;
+        }
+
+        function endGame(isWin, title, message) {
+            const gameOverTitle = document.getElementById('game-over-title');
+            const gameOverMessage = document.getElementById('game-over-message');
+
+            if (isWin) {
+                gameOverTitle.innerText = "Term Completed!";
+                gameOverMessage.innerText = "You survived. Congratulations, Mayor!";
+            } else {
+                gameOverTitle.innerText = title;
+                gameOverMessage.innerText = message;
+            }
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        document.getElementById('start-button').addEventListener('click', initGame);
+        document.getElementById('restart-button').addEventListener('click', initGame);
+    </script>
+</body>
+</html>

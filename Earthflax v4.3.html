@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EARTHFLAX: The Resonance Protocol</title>
+    <style>
+        :root {
+            --color-bg: #0d1117;
+            --color-panel-bg: #161b22;
+            --color-border: #30363d;
+            --color-text: #c9d1d9;
+            --color-text-dim: #8b949e;
+            --color-accent: #58a6ff;
+            --color-success: #3fb950;
+            --color-fail: #f85149;
+            --font-main: 'Segoe UI', 'Roboto', 'Helvetica Neue', system-ui, sans-serif;
+            --font-mono: 'Consolas', 'Menlo', 'Courier New', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--color-bg); color: var(--color-text); font-family: var(--font-main); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        #game-container { display: flex; width: 1200px; height: 700px; border: 1px solid var(--color-border); background-color: var(--color-panel-bg); box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #provision-view { flex: 2; position: relative; background-color: #000; cursor: crosshair; }
+        #provision-canvas { width: 100%; height: 100%; display: block; }
+        #status-overlay { position: absolute; top: 15px; left: 15px; padding: 10px; background-color: rgba(13, 17, 23, 0.7); border: 1px solid var(--color-border); border-radius: 5px; font-family: var(--font-mono); font-size: 16px; line-height: 1.6; pointer-events: none; transition: opacity 0.5s; }
+        #resonance-bar-container { position: absolute; bottom: 0; left: 0; width: 100%; height: 10px; background-color: var(--color-border); }
+        #resonance-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #58a6ff, #3fb950); transition: width 0.5s ease-out; }
+        #control-panel { flex: 1; padding: 20px; display: flex; flex-direction: column; border-left: 1px solid var(--color-border); }
+        .panel-section { background-color: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px; padding: 15px; margin-bottom: 15px; }
+        .panel-section h3 { color: var(--color-accent); margin-bottom: 10px; font-weight: 500; }
+        #narrative-box { flex-grow: 1; font-style: italic; color: var(--color-text-dim); line-height: 1.5; overflow-y: auto; }
+        #narrative-box p { margin-bottom: 1em; } #narrative-box p:last-child { margin-bottom: 0; }
+        #feedback-text { font-weight: bold; color: var(--color-text); }
+        #heartbeat-pad { width: 100%; height: 80px; background-color: var(--color-panel-bg); border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; transition: background-color 0.1s, transform 0.1s; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--color-text-dim); }
+        #heartbeat-pad:active { background-color: var(--color-accent); transform: scale(0.98); color: var(--color-bg); }
+        #hue-panel-buttons { display: flex; justify-content: space-around; }
+        .hue-btn { border: 2px solid var(--color-border); width: 45px; height: 45px; border-radius: 50%; cursor: pointer; transition: border-color 0.2s, transform 0.2s; }
+        .hue-btn:hover { transform: scale(1.1); }
+        .hue-btn.selected { border-color: #fff; transform: scale(1.1); }
+        /* --- CHANGE: Gradient buttons for hue --- */
+        #hue-red { background: radial-gradient(circle, #ff8a65, #f44336); } /* Orange to Red */
+        #hue-green { background: radial-gradient(circle, #4dd0e1, #4caf50); } /* Cyan to Green */
+        #hue-blue { background: radial-gradient(circle, #7e57c2, #42a5f5); } /* Purple to Blue */
+        #action-buttons { margin-top: auto; }
+        #submit-offering-btn { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; background-color: var(--color-accent); color: var(--color-bg); transition: background-color 0.2s; }
+        #submit-offering-btn:hover { background-color: #79c0ff; }
+        #submit-offering-btn:disabled { background-color: var(--color-border); cursor: not-allowed; }
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        #modal-content { background-color: var(--color-panel-bg); padding: 40px; border-radius: 8px; border: 1px solid var(--color-border); max-width: 600px; text-align: center; }
+        #modal-content h1 { color: var(--color-accent); margin-bottom: 15px; } #modal-content p { line-height: 1.6; margin-bottom: 25px; }
+        #modal-button { padding: 12px 25px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; background-color: var(--color-accent); color: var(--color-bg); }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="provision-view">
+            <canvas id="provision-canvas"></canvas>
+            <div id="status-overlay">
+                <span id="level-status">LEVEL: 1/6</span>
+                <span id="state-status">STATE: CHAOTIC</span>
+                <span id="stability-status">STABILITY: 0.00s / 3.00s</span>
+            </div>
+            <div id="resonance-bar-container">
+                <div id="resonance-bar"></div>
+            </div>
+        </div>
+        <div id="control-panel">
+            <div id="narrative-box" class="panel-section">
+                <p id="narrative-text"></p>
+                <p id="feedback-text">Awaiting input...</p>
+            </div>
+            <div id="heartbeat-panel" class="panel-section">
+                <h3>Heartbeat Channel</h3>
+                <div id="heartbeat-pad">TAP TO SET TEMPO</div>
+            </div>
+            <div id="hue-panel" class="panel-section">
+                <h3>Hue Channel</h3>
+                <div id="hue-panel-buttons">
+                    <button class="hue-btn" id="hue-red" data-hue="15"></button>
+                    <button class="hue-btn" id="hue-green" data-hue="150"></button>
+                    <button class="hue-btn" id="hue-blue" data-hue="245"></button>
+                </div>
+            </div>
+            <div id="action-buttons">
+                <button id="submit-offering-btn">Make Offering</button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-overlay">
+        <div id="modal-content">
+            <h1 id="modal-title">EARTHFLAX</h1>
+            <p id="modal-text">You are Dr. Aris. The entity before you, the Provision, processes reality. It is unstable. Your task is not to control it, but to connect with it. Use your mouse to focus its form, tap a rhythm to give it a heartbeat, and select a hue to give it feeling. Find harmony.</p>
+            <button id="modal-button">Initiate Protocol</button>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const LEVEL_DATA = [
+            { duration: 3, narrative: "It seems lost, scattered. It requires calm, deliberate focus.", targets: { tempo: 800, focus: 0.8, hue: 245 } },
+            { duration: 4, narrative: "A new energy emerges, vibrant and structured. It seems to appreciate warmth and form.", targets: { tempo: 600, focus: 0.7, hue: 15 } },
+            { duration: 5, narrative: "The Provision feels agitated, energetic. A rapid pulse is needed to match its state.", targets: { tempo: 250, focus: 0.4, hue: 150 } },
+            { duration: 6, narrative: "It pulls back, becoming quiet and watchful. A slow heartbeat, a cool color, a tight focus.", targets: { tempo: 1000, focus: 0.9, hue: 245 } },
+            { duration: 7, narrative: "A chaotic, passionate frenzy! It needs to be met with equal intensity. Don't hold back.", targets: { tempo: 150, focus: 0.2, hue: 15 } },
+            { duration: 8, narrative: "Balance. All things in balance. A moderate tempo, a gentle hue, a form neither too tight nor too loose.", targets: { tempo: 500, focus: 0.6, hue: 150 } }
+        ];
+        const PROVISION_STATES = { CHAOTIC: 'CHAOTIC', RESONANT: 'RESONANT', SANCTUARY: 'SANCTUARY' };
+        
+        const GameState = {
+            currentLevel: 0,
+            provisionState: PROVISION_STATES.CHAOTIC,
+            stabilityTimer: 0,
+            mode: 'START',
+            time: 0, // --- NEW: Global timer for oscillations ---
+            mouse: { x: 0, y: 0, over: false },
+            player: { tempo: 1000, baseHue: 150 }, // Renamed to baseHue
+            offeringCooldown: 0,
+        };
+
+        const DOM = {
+            canvas: document.getElementById('provision-canvas'), ctx: document.getElementById('provision-canvas').getContext('2d'),
+            levelStatus: document.getElementById('level-status'), stateStatus: document.getElementById('state-status'), stabilityStatus: document.getElementById('stability-status'),
+            statusOverlay: document.getElementById('status-overlay'),
+            resonanceBar: document.getElementById('resonance-bar'), narrativeText: document.getElementById('narrative-text'), feedbackText: document.getElementById('feedback-text'),
+            heartbeatPad: document.getElementById('heartbeat-pad'), hueButtons: document.querySelectorAll('.hue-btn'),
+            submitBtn: document.getElementById('submit-offering-btn'),
+            modalOverlay: document.getElementById('modal-overlay'), modalTitle: document.getElementById('modal-title'),
+            modalText: document.getElementById('modal-text'), modalButton: document.getElementById('modal-button'),
+        };
+
+        const ParticleSystem = {
+            particles: [], numParticles: 300,
+            init() {
+                DOM.canvas.width = DOM.canvas.offsetWidth; DOM.canvas.height = DOM.canvas.offsetHeight;
+                GameState.mouse.x = DOM.canvas.width / 2; GameState.mouse.y = DOM.canvas.height / 2;
+                for (let i = 0; i < this.numParticles; i++) {
+                    this.particles.push({
+                        x: Math.random() * DOM.canvas.width, y: Math.random() * DOM.canvas.height,
+                        vx: 0, vy: 0, size: Math.random() * 2 + 1, hue: GameState.player.baseHue, angle: Math.random() * Math.PI * 2,
+                    });
+                }
+            },
+            update(deltaTime) {
+                const centerX = DOM.canvas.width / 2, centerY = DOM.canvas.height / 2;
+                const agitation = 1 - (Math.min(1500, GameState.player.tempo) / 1500);
+
+                // --- CHANGE: Hue now oscillates over time ---
+                const oscilatingHueTarget = GameState.player.baseHue + Math.sin(GameState.time) * 25;
+                
+                this.particles.forEach(p => {
+                    let ax = 0, ay = 0;
+                    // --- CHANGE: Color change is much slower ---
+                    p.hue += (oscilatingHueTarget - p.hue) * 0.01;
+
+                    if (GameState.mode === 'FINISHED') {
+                        p.angle += deltaTime * 0.1;
+                        const radius = (p.size * 50) + 50;
+                        const targetX = centerX + Math.cos(p.angle) * radius;
+                        const targetY = centerY + Math.sin(p.angle) * radius;
+                        ax += (targetX - p.x) * 0.005; ay += (targetY - p.y) * 0.005;
+                        if (GameState.mouse.over) {
+                            const dx = p.x - GameState.mouse.x; const dy = p.y - GameState.mouse.y;
+                            const distSq = dx * dx + dy * dy;
+                            if (distSq < 10000) { ax += dx / distSq * 50; ay += dy / distSq * 50; }
+                        }
+                    } else {
+                        // --- CHANGE: New cursor gravity logic ---
+                        if (GameState.mouse.over) {
+                            const dx = GameState.mouse.x - p.x;
+                            const dy = GameState.mouse.y - p.y;
+                            const distSq = dx * dx + dy * dy;
+                            
+                            // Apply max force if too close, otherwise inverse square force
+                            const maxForceDistSq = 2500; // Pixels squared
+                            if (distSq < maxForceDistSq) {
+                                ax += dx * 0.001; ay += dy * 0.001;
+                            } else {
+                                const force = 50 / distSq; // Much weaker force
+                                ax += dx * force; ay += dy * force;
+                            }
+                        }
+                        
+                        if (GameState.provisionState === PROVISION_STATES.CHAOTIC) {
+                            p.vx += (Math.random() - 0.5) * agitation * 2;
+                            p.vy += (Math.random() - 0.5) * agitation * 2;
+                        } else if (GameState.provisionState === PROVISION_STATES.RESONANT) {
+                            const angle = (p.x - centerX) * 0.01;
+                            ax += Math.cos(angle) * 0.1; ay += Math.sin(angle) * 0.1;
+                        }
+                    }
+
+                    p.vx += ax; p.vy += ay; p.vx *= 0.9; p.vy *= 0.9;
+                    p.x += p.vx; p.y += p.vy;
+                });
+            },
+            render() {
+                DOM.ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; DOM.ctx.fillRect(0, 0, DOM.canvas.width, DOM.canvas.height);
+                this.particles.forEach(p => {
+                    DOM.ctx.fillStyle = `hsla(${p.hue % 360}, 100%, 60%, 0.8)`;
+                    DOM.ctx.beginPath(); DOM.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); DOM.ctx.fill();
+                });
+            },
+            getCurrentFocus() {
+                if (!GameState.mouse.over) return 0;
+                let totalDist = 0;
+                this.particles.forEach(p => {
+                    const dx = p.x - GameState.mouse.x; const dy = p.y - GameState.mouse.y;
+                    totalDist += Math.sqrt(dx*dx + dy*dy);
+                });
+                const avgDist = totalDist / this.numParticles;
+                const maxDist = Math.sqrt(DOM.canvas.width**2 + DOM.canvas.height**2);
+                return Math.max(0, 1 - (avgDist / (maxDist * 0.5)));
+            },
+            rejectOffering() {
+                const centerX = DOM.canvas.width / 2, centerY = DOM.canvas.height / 2;
+                this.particles.forEach(p => {
+                    const dx = p.x - centerX; const dy = p.y - centerY;
+                    const dist = Math.sqrt(dx*dx + dy*dy) + 1;
+                    // --- CHANGE: Reduced pulse strength ---
+                    const pulseStrength = 8; 
+                    p.vx += (dx / dist) * pulseStrength; p.vy += (dy / dist) * pulseStrength;
+                });
+            }
+        };
+
+        const Game = {
+            init() {
+                ParticleSystem.init(); this.setupUI();
+                requestAnimationFrame(this.gameLoop);
+            },
+            setupUI() {
+                 DOM.modalButton.addEventListener('click', () => {
+                    if (GameState.mode === 'START') { GameState.mode = 'PLAYING'; DOM.modalOverlay.style.display = 'none'; this.startLevel(0); } 
+                    else if (GameState.mode === 'LEVEL_COMPLETE') { GameState.mode = 'PLAYING'; DOM.modalOverlay.style.display = 'none'; this.startLevel(GameState.currentLevel + 1); } 
+                    else if (GameState.mode === 'FINISHED') { DOM.modalOverlay.style.display = 'none'; }
+                });
+                DOM.submitBtn.addEventListener('click', () => this.handleOffering());
+                let tempoTaps = [];
+                DOM.heartbeatPad.addEventListener('click', () => {
+                    if (GameState.mode !== 'PLAYING') return;
+                    const now = performance.now();
+                    tempoTaps.push(now); if (tempoTaps.length > 4) tempoTaps.shift();
+                    if (tempoTaps.length > 1) {
+                        const intervals = [];
+                        for (let i=1; i < tempoTaps.length; i++) intervals.push(tempoTaps[i] - tempoTaps[i-1]);
+                        GameState.player.tempo = intervals.reduce((a,b) => a+b, 0) / intervals.length;
+                    }
+                });
+                DOM.hueButtons.forEach(btn => btn.addEventListener('click', () => {
+                    if (GameState.mode !== 'PLAYING') return;
+                    GameState.player.baseHue = parseInt(btn.dataset.hue);
+                    DOM.hueButtons.forEach(b => b.classList.remove('selected')); btn.classList.add('selected');
+                }));
+                DOM.canvas.addEventListener('mousemove', e => { const rect = DOM.canvas.getBoundingClientRect(); GameState.mouse.x = e.clientX - rect.left; GameState.mouse.y = e.clientY - rect.top; });
+                DOM.canvas.addEventListener('mouseenter', () => GameState.mouse.over = true);
+                DOM.canvas.addEventListener('mouseleave', () => GameState.mouse.over = false);
+            },
+            startLevel(levelIndex) {
+                GameState.currentLevel = levelIndex; GameState.provisionState = PROVISION_STATES.CHAOTIC;
+                GameState.stabilityTimer = 0; const level = LEVEL_DATA[levelIndex];
+                DOM.narrativeText.textContent = level.narrative; DOM.feedbackText.textContent = "Tune the resonance...";
+            },
+            handleOffering() {
+                if (GameState.mode === 'FINISHED') { ParticleSystem.rejectOffering(); return; }
+                if (GameState.offeringCooldown > 0) return;
+
+                const level = LEVEL_DATA[GameState.currentLevel]; const targets = level.targets;
+                const currentFocus = ParticleSystem.getCurrentFocus();
+                const tempoScore = 1 - Math.abs(GameState.player.tempo - targets.tempo) / targets.tempo;
+                const focusScore = currentFocus / targets.focus;
+                const hueDiff = Math.min(Math.abs(GameState.player.baseHue - targets.hue), 360 - Math.abs(GameState.player.baseHue - targets.hue));
+                const hueScore = 1 - (hueDiff / 180);
+                const overallScore = (tempoScore + focusScore + hueScore) / 3;
+
+                // --- CHANGE: Reduced win condition ---
+                if (overallScore > 0.65) {
+                    GameState.provisionState = PROVISION_STATES.RESONANT;
+                    DOM.feedbackText.textContent = "Resonance achieved! Maintain stability.";
+                } else {
+                    ParticleSystem.rejectOffering(); GameState.provisionState = PROVISION_STATES.CHAOTIC;
+                    let hint = "Resonance rejected. ";
+                    if (tempoScore < focusScore && tempoScore < hueScore) hint += "The tempo is dissonant.";
+                    else if (focusScore < hueScore) hint += "The form lacks focus.";
+                    else hint += "The hue is incorrect.";
+                    DOM.feedbackText.textContent = hint;
+                }
+                GameState.offeringCooldown = 2;
+            },
+            enterSanctuary() {
+                GameState.mode = 'FINISHED'; GameState.provisionState = PROVISION_STATES.SANCTUARY;
+                DOM.statusOverlay.style.opacity = '0'; DOM.submitBtn.textContent = "Pulse";
+                DOM.narrativeText.textContent = "You have created a sanctuary. A place of peace. Play.";
+                DOM.feedbackText.textContent = "The Provision is in harmony.";
+                DOM.hueButtons.forEach(b => b.classList.remove('selected'));
+            },
+            gameLoop(timestamp) {
+                const now = performance.now();
+                const deltaTime = (now - (Game.lastFrameTime || now)) / 1000;
+                Game.lastFrameTime = now;
+                GameState.time += deltaTime;
+
+                if (GameState.mode === 'PLAYING') {
+                    if (GameState.offeringCooldown > 0) {
+                        GameState.offeringCooldown -= deltaTime;
+                        DOM.submitBtn.disabled = true;
+                        DOM.submitBtn.textContent = `Recalibrating... (${GameState.offeringCooldown.toFixed(1)}s)`;
+                    } else {
+                        DOM.submitBtn.disabled = false;
+                        DOM.submitBtn.textContent = "Make Offering";
+                    }
+                    const level = LEVEL_DATA[GameState.currentLevel];
+                    if (GameState.provisionState === PROVISION_STATES.RESONANT) {
+                        GameState.stabilityTimer += deltaTime;
+                        if (GameState.stabilityTimer >= level.duration) {
+                            if (GameState.currentLevel < LEVEL_DATA.length - 1) {
+                                GameState.mode = 'LEVEL_COMPLETE'; DOM.modalOverlay.style.display = 'flex';
+                                DOM.modalTitle.textContent = `Level ${GameState.currentLevel + 1} Complete`;
+                                DOM.modalText.textContent = "The connection strengthens. The Provision is stabilizing. Prepare for the next resonance protocol.";
+                                DOM.modalButton.textContent = "Continue";
+                            } else {
+                                GameState.mode = 'FINISHED'; DOM.modalOverlay.style.display = 'flex';
+                                DOM.modalTitle.textContent = "Resonance Protocol Complete";
+                                DOM.modalText.textContent = "You have learned its true language. Communication is not control; it is an exchange. The Provision is now stable, and it listens. The protocol is complete. Thank you, Dr. Aris.";
+                                DOM.modalButton.textContent = "Enter Sanctuary";
+                                DOM.modalButton.onclick = () => { DOM.modalOverlay.style.display = 'none'; Game.enterSanctuary(); };
+                            }
+                        }
+                    } else {
+                        GameState.stabilityTimer = Math.max(0, GameState.stabilityTimer - deltaTime);
+                    }
+                    DOM.resonanceBar.style.width = `${(GameState.stabilityTimer / level.duration) * 100}%`;
+                    DOM.levelStatus.textContent = `LEVEL: ${GameState.currentLevel + 1}/${LEVEL_DATA.length}`;
+                    DOM.stateStatus.textContent = `STATE: ${GameState.provisionState}`;
+                    DOM.stabilityStatus.textContent = `STABILITY: ${GameState.stabilityTimer.toFixed(2)}s / ${level.duration.toFixed(2)}s`;
+                }
+
+                ParticleSystem.update(deltaTime);
+                ParticleSystem.render();
+                requestAnimationFrame(Game.gameLoop);
+            }
+        };
+
+        Game.init();
+    });
+    </script>
+</body>
+</html>

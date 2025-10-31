@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generally Incompetent: The Work Week</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        :root {
+            --color-bg: #f0f2f5;
+            --color-desk: #a98d75;
+            --color-text: #333;
+            --color-header: #ffffff;
+            --color-primary: #007bff;
+            --color-accent: #ffc107;
+            --color-danger: #dc3545;
+            --color-success: #28a745;
+            --color-patience-bar: #6c757d;
+            --shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 900px;
+            height: 700px;
+            background-color: var(--color-header);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* HUD */
+        #hud {
+            padding: 15px 20px;
+            background-color: var(--color-primary);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        #hud-left, #hud-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #patience-meter-container {
+            width: 200px;
+            height: 20px;
+            background-color: var(--color-patience-bar);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #fff;
+        }
+
+        #patience-meter-fill {
+            height: 100%;
+            width: 0%;
+            background-color: var(--color-danger);
+            transition: width 0.3s ease;
+        }
+
+        #daily-memo-display {
+            background-color: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        /* DESK */
+        #desk {
+            flex-grow: 1;
+            background-color: var(--color-desk);
+            /* Replaced image with a procedural CSS pattern */
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 15px, rgba(0,0,0,0.05) 15px, rgba(0,0,0,0.05) 30px);
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-content: flex-start;
+            overflow-y: auto;
+        }
+
+        .task-note {
+            width: 180px;
+            height: 180px;
+            background-color: var(--color-accent);
+            padding: 15px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            transform: rotate(-2deg);
+        }
+
+        .task-note:nth-child(2n) { transform: rotate(1.5deg); }
+        .task-note:nth-child(3n) { transform: rotate(-1deg); }
+        .task-note:nth-child(4n) { transform: rotate(2.5deg); }
+
+
+        .task-note.targetable:hover {
+            transform: scale(1.05) rotate(0deg);
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .task-note h3 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .task-note .details {
+            font-size: 0.9em;
+        }
+
+        .task-note .deadline {
+            font-weight: bold;
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+        }
+
+        .task-note.urgent {
+            background-color: #ffdddd;
+            border: 2px solid var(--color-danger);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 2px 2px 5px rgba(0,0,0,0.2), 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 2px 2px 5px rgba(0,0,0,0.2), 0 0 0 10px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 2px 2px 5px rgba(0,0,0,0.2), 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+
+        /* ACTIONS */
+        #actions {
+            background-color: #e9ecef;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            border-top: 1px solid #dee2e6;
+            flex-shrink: 0;
+        }
+
+        .action-btn {
+            padding: 10px 15px;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: var(--color-header);
+            border: 1px solid #ccc;
+            transition: all 0.2s;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .action-btn:hover {
+            background-color: #f8f9fa;
+            border-color: #999;
+        }
+
+        .action-btn.selected {
+            background-color: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #action-tooltip {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.75);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        #action-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* MODAL */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-content h2 {
+            margin-bottom: 15px;
+            color: var(--color-primary);
+        }
+        .modal-content p {
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        .modal-content button {
+            padding: 12px 25px;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: var(--color-primary);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="hud">
+            <div id="hud-left">
+                <span id="day-time-display">Monday, Morning</span>
+                <div id="daily-memo-display" style="display: none;"></div>
+            </div>
+            <div id="hud-right">
+                <span>Slacker Points: <b id="slacker-score-display">0</b></span>
+                <span>Manager's Patience:</span>
+                <div id="patience-meter-container">
+                    <div id="patience-meter-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="desk">
+            <!-- Tasks will be generated here -->
+        </div>
+
+        <div id="actions">
+             <!-- Action buttons will be generated here -->
+        </div>
+        <div id="action-tooltip"></div>
+    </div>
+    
+    <div id="modal-container"></div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- DATA ---
+    const TASK_POOLS = {
+        easy: [
+            { title: "Re-align Core Synergies", points: 10, heat: 1, deadline: 3 },
+            { title: "Circle Back on Deliverables", points: 15, heat: 1, deadline: 4 },
+            { title: "Ideate Outside the Box", points: 20, heat: 2, deadline: 3 },
+            { title: "Touch Base Re: The Thing", points: 10, heat: 1, deadline: 5 },
+            { title: "Boil the Ocean", points: 25, heat: 2, deadline: 2 },
+        ],
+        medium: [
+            { title: "Leverage Bleeding-Edge Paradigms", points: 30, heat: 2, deadline: 4 },
+            { title: "Deep Dive on Action Items", points: 35, heat: 3, deadline: 3 },
+            { title: "Unpack Q3 Performance Metrics", points: 40, heat: 3, deadline: 4 },
+            { title: "Right-Size the Organization Chart", points: 50, heat: 4, deadline: 2 },
+            { title: "Deprecate Legacy Workflows", points: 45, heat: 3, deadline: 3 },
+        ],
+        hard: [
+            { title: "Architect a New Value Proposition", points: 70, heat: 4, deadline: 3 },
+            { title: "Operationalize the Strategic Imperative", points: 80, heat: 5, deadline: 3 },
+            { title: "Execute a Proactive Mindset Shift", points: 100, heat: 5, deadline: 2 },
+            { title: "Ping Everyone about the TPS Reports", points: 60, heat: 4, deadline: 4 },
+        ]
+    };
+
+    const ACTIONS = {
+        do_minimum: {
+            name: "Do the Bare Minimum",
+            description: "Complete a task. It will be removed from your desk, stopping it from generating Heat or Slacker Points. You gain its specified Heat.",
+            requiresTarget: true,
+            effect: (state, task) => {
+                addHeat(task.heat);
+                removeTask(task.id);
+                return `Completed "${task.title}". Gained ${task.heat} Heat but will no longer earn points from it.`;
+            }
+        },
+        put_on_hold: {
+            name: "Put It On Hold",
+            description: "Increase a task's deadline by 2 turns. Generates 1 Heat.",
+            requiresTarget: true,
+            effect: (state, task) => {
+                task.deadline += 2;
+                addHeat(1);
+                return `Delayed "${task.title}". Its deadline is now ${task.deadline}. Gained 1 Heat.`;
+            }
+        },
+        head_in_sand: {
+            name: "Head in the Sand",
+            description: "A 50/50 gamble. 50% chance the task completes itself (no Heat!). 50% chance it becomes Urgent and generates 3 Heat.",
+            requiresTarget: true,
+            effect: (state, task) => {
+                if (Math.random() < 0.5) {
+                    removeTask(task.id);
+                    return `You got lucky! "${task.title}" magically completed itself.`;
+                } else {
+                    task.deadline = 0;
+                    task.isUrgent = true;
+                    addHeat(3);
+                    return `Bad luck! "${task.title}" is now Urgent and you've gained 3 Heat.`;
+                }
+            }
+        },
+        delegate: {
+            name: "Delegate to Intern",
+            description: "Remove a task. There is a 25% chance of major blowback, generating 4 Heat.",
+            requiresTarget: true,
+            effect: (state, task) => {
+                removeTask(task.id);
+                if (Math.random() < 0.25) {
+                    addHeat(4);
+                    return `The intern messed up! "${task.title}" is done, but you got a whopping 4 Heat for it.`;
+                }
+                return `You passed off "${task.title}" to the intern. Problem solved.`;
+            }
+        },
+        autocorrect: {
+            name: "Trust Autocorrect",
+            description: "High-risk. 30% chance to complete a task for double its point value THIS turn ONLY. 70% chance to generate double its Heat value.",
+            requiresTarget: true,
+            effect: (state, task) => {
+                if (Math.random() < 0.3) {
+                    const pointsGained = task.points; // It's not *double* points, but it's an extra turn's worth.
+                    state.slackerScore += pointsGained; 
+                    removeTask(task.id);
+                    return `Incredible! Autocorrect finished the job. You get an extra ${pointsGained} bonus points as you remove "${task.title}"!`;
+                } else {
+                    const heatGained = task.heat * 2;
+                    addHeat(heatGained);
+                    return `Disaster! Your email about "${task.title}" caused a major incident. Gained ${heatGained} Heat. The task remains.`;
+                }
+            }
+        },
+        long_lunch: {
+            name: "Take a Long Lunch",
+            description: "Skip your turn, but reduce Manager's Patience by 3.",
+            requiresTarget: false,
+            effect: (state) => {
+                state.managersPatience = Math.max(0, state.managersPatience - 3);
+                return `You return from lunch feeling refreshed. Manager's Patience reduced by 3.`;
+            }
+        },
+        plan_b: {
+            name: "Activate Plan B",
+            description: "Immediately remove all tasks from the desk, but generate 6 Heat.",
+            requiresTarget: false,
+            effect: (state) => {
+                state.activeTasks = [];
+                addHeat(6);
+                return `You shredded everything. The desk is clear, but the manager is suspicious. Gained 6 Heat.`;
+            }
+        }
+    };
+
+    const DAILY_MEMOS = [
+        { id: 'ceo_visit', title: "CEO is Visiting", description: "All Heat gained today is doubled.", effect: { heatMultiplier: 2 } },
+        { id: 'casual_friday', title: "Casual Friday", description: "Start the day with a bonus 2-point reduction to Manager's Patience.", effect: { startingPatienceBonus: -2 } },
+        { id: 'it_down', title: "IT Systems Down", description: "All task deadlines are paused for the day. They will not decrease during the System Phase.", effect: { pauseDeadlines: true } },
+        { id: 'team_building', title: "Mandatory Team-Building", description: "You only get to choose from two actions per turn today.", effect: { actionCount: 2 } },
+    ];
+    
+    // --- GAME STATE ---
+    let gameState;
+
+    function initGameState() {
+        gameState = {
+            slackerScore: 0,
+            managersPatience: 0,
+            turn: 0, // 0-9
+            activeTasks: [],
+            currentActions: [],
+            activeMemo: null,
+            isGameOver: false,
+            isAwaitingTaskSelection: false,
+            selectedAction: null,
+            lastTaskId: 0,
+        };
+    }
+
+    // --- DOM ELEMENTS ---
+    const hudDayTime = document.getElementById('day-time-display');
+    const hudScore = document.getElementById('slacker-score-display');
+    const hudPatienceFill = document.getElementById('patience-meter-fill');
+    const hudMemo = document.getElementById('daily-memo-display');
+    const desk = document.getElementById('desk');
+    const actionsContainer = document.getElementById('actions');
+    const modalContainer = document.getElementById('modal-container');
+    const tooltip = document.getElementById('action-tooltip');
+
+    // --- CORE GAME LOGIC ---
+
+    function startGame() {
+        initGameState();
+        showIntroModal();
+    }
+
+    function beginFirstTurn() {
+        modalContainer.innerHTML = '';
+        gameLoop();
+    }
+
+    function gameLoop() {
+        if (gameState.isGameOver) return;
+        systemPhase();
+        if (gameState.isGameOver) return; // System phase might trigger a loss
+        playerPhase();
+    }
+
+    function systemPhase() {
+        // 0. GAIN SLACKER POINTS for existing tasks
+        gameState.activeTasks.forEach(task => {
+            gameState.slackerScore += task.points;
+        });
+
+        // 1. Decrease deadlines
+        if (!gameState.activeMemo?.effect.pauseDeadlines) {
+            gameState.activeTasks.forEach(task => {
+                task.deadline--;
+                if (task.deadline < 0 && task.isUrgent) {
+                    addHeat(2);
+                } else if (task.deadline <= 0 && !task.isUrgent) {
+                    task.isUrgent = true;
+                    addHeat(1);
+                }
+            });
+        }
+        
+        // 2. Check for win/loss
+        if (gameState.managersPatience >= 10) {
+            loseGame();
+            return;
+        }
+        if (gameState.turn >= 10) {
+            winGame();
+            return;
+        }
+    }
+
+    function playerPhase() {
+        if (isNewDay()) {
+            const memo = DAILY_MEMOS[Math.floor(Math.random() * DAILY_MEMOS.length)];
+            gameState.activeMemo = memo;
+            if (memo.effect.startingPatienceBonus) {
+                gameState.managersPatience = Math.max(0, gameState.managersPatience + memo.effect.startingPatienceBonus);
+            }
+            showMemoModal(memo);
+            return;
+        }
+        
+        continuePlayerPhase();
+    }
+    
+    function continuePlayerPhase() {
+        generateTasks();
+        generateActions();
+        renderAll();
+    }
+    
+    function endTurn(logMessage) {
+        if (logMessage) {
+            updateTooltip(logMessage, 2500);
+        }
+        gameState.turn++;
+        gameState.isAwaitingTaskSelection = false;
+        gameState.selectedAction = null;
+        
+        setTimeout(() => gameLoop(), 500);
+    }
+    
+    function winGame() {
+        gameState.isGameOver = true;
+        let title = "Corporate Drone";
+        if (gameState.slackerScore > 500) title = "Slack Novice";
+        if (gameState.slackerScore > 1200) title = "Procrastination Professional";
+        if (gameState.slackerScore > 2000) title = "Grandmaster of Indolence";
+        if (gameState.slackerScore > 3000) title = "The Void Where Work Was";
+        
+        showEndGameModal(
+            "You Survived!",
+            `You made it through the week! Your final Slacker Points: ${gameState.slackerScore}.<br><br>Your official title: <strong>${title}</strong>`,
+            "Restart the Week"
+        );
+    }
+    
+    function loseGame() {
+        gameState.isGameOver = true;
+        gameState.managersPatience = 10;
+        renderHUD();
+        let title = "Fired Before Lunch";
+        if (gameState.slackerScore > 300) title = "Fired with Untapped Potential";
+        if (gameState.slackerScore > 800) title = "Notoriously Unproductive";
+
+        showEndGameModal(
+            "YOU'RE FIRED!",
+            `The manager's patience has run out. Pack your things. Your final Slacker Points: ${gameState.slackerScore}.<br><br>Your exit title: <strong>${title}</strong>`,
+            "Restart the Week"
+        );
+    }
+    
+    // --- HELPER FUNCTIONS ---
+
+    function addHeat(amount) {
+        const heatMultiplier = gameState.activeMemo?.effect.heatMultiplier || 1;
+        gameState.managersPatience += (amount * heatMultiplier);
+        if(gameState.managersPatience >= 10) {
+             gameState.managersPatience = 10;
+             loseGame();
+        }
+    }
+    
+    function removeTask(taskId) {
+        gameState.activeTasks = gameState.activeTasks.filter(t => t.id !== taskId);
+    }
+
+    function isNewDay() {
+        return gameState.turn % 2 === 0;
+    }
+    
+    function getCurrentDay() {
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        return days[Math.floor(gameState.turn / 2)];
+    }
+    
+    function getCurrentTime() {
+        return isNewDay() ? "Morning" : "Afternoon";
+    }
+
+    function generateTasks() {
+        const day = getCurrentDay();
+        let pool = [];
+        let numTasks = 0;
+
+        if (day === "Monday" || day === "Tuesday") {
+            pool = TASK_POOLS.easy;
+            numTasks = (gameState.activeTasks.length < 3) ? 1 : 0;
+        } else if (day === "Wednesday" || day === "Thursday") {
+            pool = [...TASK_POOLS.easy, ...TASK_POOLS.medium];
+            numTasks = (gameState.activeTasks.length < 4) ? Math.floor(Math.random() * 2) + 1 : 0;
+        } else { // Friday
+            pool = [...TASK_POOLS.medium, ...TASK_POOLS.hard];
+            numTasks = (gameState.activeTasks.length < 4) ? 2 : 0;
+        }
+
+        for (let i = 0; i < numTasks; i++) {
+            if (gameState.activeTasks.length >= 5) break;
+            const taskTemplate = pool[Math.floor(Math.random() * pool.length)];
+            gameState.lastTaskId++;
+            gameState.activeTasks.push({ ...taskTemplate, id: gameState.lastTaskId, isUrgent: false });
+        }
+    }
+
+    function generateActions() {
+        const actionPool = Object.keys(ACTIONS);
+        const actionCount = gameState.activeMemo?.effect.actionCount || 3;
+        gameState.currentActions = [];
+        while (gameState.currentActions.length < actionCount) {
+            const randomActionId = actionPool[Math.floor(Math.random() * actionPool.length)];
+            if (!gameState.currentActions.includes(randomActionId)) {
+                gameState.currentActions.push(randomActionId);
+            }
+        }
+    }
+
+    // --- RENDERING ---
+
+    function renderAll() {
+        renderHUD();
+        renderDesk();
+        renderActions();
+    }
+
+    function renderHUD() {
+        hudDayTime.textContent = `${getCurrentDay()}, ${getCurrentTime()}`;
+        hudScore.textContent = gameState.slackerScore;
+        hudPatienceFill.style.width = `${gameState.managersPatience * 10}%`;
+        
+        if (gameState.activeMemo && !isNewDay()) {
+             hudMemo.textContent = `Memo: ${gameState.activeMemo.title}`;
+             hudMemo.style.display = 'block';
+        } else if (isNewDay() && gameState.turn > 0) {
+            gameState.activeMemo = null;
+            hudMemo.style.display = 'none';
+        }
+    }
+
+    function renderDesk() {
+        desk.innerHTML = '';
+        if (gameState.activeTasks.length === 0) {
+            desk.innerHTML = `<p style="color: white; text-align: center; width: 100%;">Your desk is clear. For now.</p>`;
+        }
+        gameState.activeTasks.forEach(task => {
+            const note = document.createElement('div');
+            note.className = 'task-note';
+            if (task.isUrgent) note.classList.add('urgent');
+            if (gameState.isAwaitingTaskSelection) note.classList.add('targetable');
+
+            note.innerHTML = `
+                <div>
+                    <h3>${task.title}</h3>
+                    <div class="details">
+                        <p>Points/Turn: ${task.points}</p>
+                        <p>Heat: ${task.heat}</p>
+                    </div>
+                </div>
+                <div class="deadline">Deadline: ${task.deadline > 0 ? task.deadline : 'URGENT!'}</div>
+            `;
+            note.addEventListener('click', () => handleTaskClick(task.id));
+            desk.appendChild(note);
+        });
+    }
+
+    function renderActions() {
+        actionsContainer.innerHTML = '';
+        gameState.currentActions.forEach(actionId => {
+            const action = ACTIONS[actionId];
+            const button = document.createElement('button');
+            button.className = 'action-btn';
+            button.textContent = action.name;
+            button.addEventListener('click', () => handleActionClick(actionId));
+            
+            button.addEventListener('mouseover', () => updateTooltip(action.description));
+            button.addEventListener('mouseout', () => updateTooltip(''));
+
+            actionsContainer.appendChild(button);
+        });
+    }
+    
+    function updateTooltip(text, duration = 0) {
+        if(text) {
+            tooltip.textContent = text;
+            tooltip.classList.add('visible');
+        } else {
+            tooltip.classList.remove('visible');
+        }
+        if (duration > 0) {
+            setTimeout(() => tooltip.classList.remove('visible'), duration);
+        }
+    }
+
+    // --- MODALS ---
+    
+    function showModal(title, content, buttonText, onButtonClick) {
+        modalContainer.innerHTML = `
+            <div class="modal-overlay">
+                <div class="modal-content">
+                    <h2>${title}</h2>
+                    <p>${content}</p>
+                    <button id="modal-button">${buttonText}</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('modal-button').addEventListener('click', onButtonClick);
+    }
+    
+    function showIntroModal() {
+        showModal(
+            "Welcome to Generally Incompetent!",
+            "Your goal is to survive the 5-day work week. Each turn, you gain <strong>Slacker Points</strong> for every task still on your desk. Completing tasks stops them from generating points but manages your Manager's Patience. If the patience meter fills, you're FIRED! Good luck.",
+            "Start My Miserable Week",
+            beginFirstTurn
+        );
+    }
+    
+    function showMemoModal(memo) {
+        showModal(
+            `Daily Memo: ${memo.title}`,
+            memo.description,
+            "Acknowledge and Despair",
+            () => {
+                modalContainer.innerHTML = '';
+                continuePlayerPhase();
+            }
+        );
+    }
+    
+    function showEndGameModal(title, content, buttonText) {
+         showModal(title, content, buttonText, startGame);
+    }
+
+    // --- EVENT HANDLERS ---
+    
+    function handleActionClick(actionId) {
+        if (gameState.isAwaitingTaskSelection) return;
+
+        const action = ACTIONS[actionId];
+        if (action.requiresTarget) {
+            if (gameState.activeTasks.length === 0) {
+                 updateTooltip("There are no tasks to target with this action.", 2000);
+                 return;
+            }
+            gameState.isAwaitingTaskSelection = true;
+            gameState.selectedAction = actionId;
+            updateTooltip("Select a task on your desk to apply this action.");
+            
+            document.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+            renderDesk();
+        } else {
+            const logMessage = action.effect(gameState);
+            renderAll();
+            endTurn(logMessage);
+        }
+    }
+    
+    function handleTaskClick(taskId) {
+        if (!gameState.isAwaitingTaskSelection) return;
+
+        const action = ACTIONS[gameState.selectedAction];
+        const task = gameState.activeTasks.find(t => t.id === taskId);
+        
+        const logMessage = action.effect(gameState, task);
+        
+        gameState.isAwaitingTaskSelection = false;
+        gameState.selectedAction = null;
+        
+        renderAll();
+        endTurn(logMessage);
+    }
+
+
+    // --- INITIALIZE ---
+    startGame();
+});
+</script>
+
+</body>
+</html>

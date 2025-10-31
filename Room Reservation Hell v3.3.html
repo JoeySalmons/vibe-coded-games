@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Reservation Hell</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            background: #f7fafc;
+            padding: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .main-content {
+            padding: 30px;
+            min-height: 400px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .story-text {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+
+        .blocker-title {
+            background: #fed7d7;
+            border-left: 4px solid #f56565;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .blocker-title h2 {
+            color: #c53030;
+            font-size: 18px;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button-secondary {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        }
+
+        .button-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .email-interface {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .email-header {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .email-from {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .email-subject {
+            color: #4a5568;
+            margin-top: 5px;
+        }
+
+        .email-body {
+            line-height: 1.6;
+            color: #2d3748;
+        }
+
+        .form-container {
+            background: #fff;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .npc-dialogue {
+            background: #edf2f7;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .npc-name {
+            font-weight: bold;
+            color: #5a67d8;
+            margin-bottom: 10px;
+        }
+
+        .npc-text {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 3px solid #5a67d8;
+        }
+
+        .progress-bar {
+            background: #e2e8f0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .achievement {
+            background: #fef5e7;
+            border: 2px solid #f39c12;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .achievement h3 {
+            color: #d68910;
+            margin-bottom: 5px;
+        }
+
+        .menu-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .ending-screen {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .ending-screen h2 {
+            color: #2d3748;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .ending-screen .ending-text {
+            font-size: 16px;
+            line-height: 1.8;
+            color: #4a5568;
+            margin-bottom: 30px;
+        }
+
+        .puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .puzzle-tile {
+            aspect-ratio: 1;
+            background: #edf2f7;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .puzzle-tile:hover {
+            background: #e2e8f0;
+            transform: scale(1.05);
+        }
+
+        .puzzle-tile.selected {
+            background: #667eea;
+            color: white;
+            border-color: #5a67d8;
+        }
+
+        .intro-screen {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .intro-screen h2 {
+            font-size: 28px;
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+
+        .intro-screen p {
+            font-size: 16px;
+            line-height: 1.8;
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+
+        .warning-box {
+            background: #fff5f5;
+            border: 2px solid #fc8181;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .warning-box p {
+            color: #c53030;
+            margin: 0;
+        }
+
+        @media (max-width: 600px) {
+            .stats-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>🏫 Room Reservation Hell</h1>
+            <p>A Bureaucratic Nightmare Simulator</p>
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-label">Day</div>
+                <div class="stat-value" id="day-counter">1</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Club Funds</div>
+                <div class="stat-value" id="funds-counter">$50</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Morale</div>
+                <div class="stat-value" id="morale-counter">100%</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Sanity</div>
+                <div class="stat-value" id="sanity-counter">100%</div>
+            </div>
+        </div>
+
+        <div class="main-content" id="main-content">
+            <!-- Screens will be dynamically loaded here -->
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const gameState = {
+            day: 1,
+            funds: 50,
+            morale: 100,
+            sanity: 100,
+            currentBlocker: 0,
+            requestedRoom: null,
+            gameOver: false,
+            npcRelationships: {
+                linda: 0,
+                harrington: 0,
+                marcus: 0
+            },
+            completedTasks: [],
+            choices: [],
+            hasAdvisorApproval: false,
+            hasITHelp: false,
+            hasCleaningFunds: false,
+            formAttempts: 0,
+            revolutionPath: false
+        };
+
+        // Blocker definitions
+        const blockers = [
+            {
+                id: 0,
+                title: "The Initial Request",
+                description: "It's Monday morning. Your club's usual meeting spot (a bench outside) was just claimed by construction. You need to reserve an actual room for this Thursday's meeting. How hard could it be?",
+                type: "intro",
+                handler: "handleIntro"
+            },
+            {
+                id: 1,
+                title: "You Need to Fill Out Form 27-B",
+                description: "Linda at the registration desk greets you with a tired smile. \"Room reservation? Sure, just fill out Form 27-B.\" She slides a form across the counter.",
+                type: "form",
+                handler: "handleForm27B"
+            },
+            {
+                id: 2,
+                title: "That Room Is Already Booked",
+                description: "Linda frowns at her computer. \"Oh... it looks like there's an issue with your request. Let me check alternatives...\"",
+                type: "dialogue",
+                handler: "handleRoomBooked"
+            },
+            {
+                id: 3,
+                title: "Your Club Isn't Properly Registered",
+                description: "Linda's expression changes. \"Wait, I need to check something...\" She types for a moment. \"Your club registration expired last semester. You'll need to re-register before I can proceed.\"",
+                type: "puzzle",
+                handler: "handleRegistration"
+            },
+            {
+                id: 4,
+                title: "You Need Faculty Advisor Approval",
+                description: "Registration complete! But now: \"I see you have Dr. Harrington as your advisor. You'll need their signature on the reservation form.\"",
+                type: "dialogue",
+                handler: "handleAdvisorApproval"
+            },
+            {
+                id: 5,
+                title: "The System Is Down",
+                description: "You return with the signed form. Linda tries to enter it into the system. The loading icon spins... and spins... \"The room booking system is down. Again.\"",
+                type: "choice",
+                handler: "handleSystemDown"
+            },
+            {
+                id: 6,
+                title: "There's a $50 Cleaning Deposit",
+                description: "The system is finally back up! Linda processes your request. \"Great! That'll be a $50 refundable cleaning deposit.\"",
+                type: "resource",
+                handler: "handleDeposit"
+            },
+            {
+                id: 7,
+                title: "The Final Obstacle",
+                description: "Just as Linda is about to confirm your reservation, her supervisor walks over. \"Wait, which room are you booking?\"",
+                type: "climax",
+                handler: "handleFinalObstacle"
+            }
+        ];
+
+        // Initialize game
+        function initGame() {
+            updateStats();
+            showScreen('intro');
+        }
+
+        // Update stats display
+        function updateStats() {
+            document.getElementById('day-counter').textContent = gameState.day;
+            document.getElementById('funds-counter').textContent = `$${gameState.funds}`;
+            document.getElementById('morale-counter').textContent = `${gameState.morale}%`;
+            document.getElementById('sanity-counter').textContent = `${gameState.sanity}%`;
+        }
+
+        // Show screen
+        function showScreen(screenId) {
+            const content = document.getElementById('main-content');
+            content.innerHTML = '';
+            
+            const screen = document.createElement('div');
+            screen.className = 'screen active';
+            screen.id = screenId;
+            
+            content.appendChild(screen);
+            
+            if (screenId === 'intro') {
+                renderIntro(screen);
+            } else if (screenId === 'blocker') {
+                renderCurrentBlocker(screen);
+            } else if (screenId.startsWith('ending-')) {
+                renderEnding(screen, screenId);
+            }
+        }
+
+        // Render intro screen
+        function renderIntro(screen) {
+            screen.innerHTML = `
+                <div class="intro-screen">
+                    <h2>Welcome to Room Reservation Hell</h2>
+                    <p>You are Alex, the Vice President of the Gaming & Tabletop Club at State University.</p>
+                    <p>Your club is a haven for students—a place to enjoy strategy games, meet with other students, and learn the art of tabletop classics.</p>
+                    <p>Your usual meeting spot (a bench outside the student union) has been taken over by construction.</p>
+                    <p>You need to reserve an actual room for this Thursday's meeting. You have 11 days.</p>
+                    <div class="warning-box">
+                        <p><strong>How hard could it be?</strong></p>
+                    </div>
+                    <p style="margin-top: 30px;">Manage your resources wisely. Keep your club members happy. Try not to lose your mind.</p>
+                    <button class="button" onclick="startGame()">Start Your Journey</button>
+                </div>
+            `;
+        }
+
+        // Start game
+        function startGame() {
+            gameState.currentBlocker = 0;
+            showScreen('blocker');
+        }
+
+        // Render current blocker
+        function renderCurrentBlocker(screen) {
+            const blocker = JSON.parse(JSON.stringify(blockers[gameState.currentBlocker]));
+
+            if (blocker.id === 2 && gameState.requestedRoom === 'basement') {
+                blocker.title = "A Questionable Choice";
+                blocker.description = "Linda raises an eyebrow at your choice. 'The basement? Are you sure? Well, let me check...'";
+            }
+            
+            screen.innerHTML = `
+                <div class="story-text">
+                    <strong>Day ${gameState.day}</strong>
+                </div>
+                <div class="blocker-title">
+                    <h2>Blocker #${blocker.id}: ${blocker.title}</h2>
+                </div>
+                <div class="story-text">
+                    ${blocker.description}
+                </div>
+                <div id="blocker-content"></div>
+            `;
+            
+            window[blocker.handler]();
+        }
+
+        // Blocker Handlers
+        function handleIntro() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="story-text">
+                    You walk into the Student Union building. The registration desk is on the second floor. A woman with glasses and an expression that says "I've seen everything" sits behind the counter.
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="advanceDay(); nextBlocker()">Approach the desk</button>
+                </div>
+            `;
+        }
+
+        function handleForm27B() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="form-container">
+                    <h3>Room Reservation Form 27-B</h3>
+                    <p style="margin-bottom: 15px; font-size: 14px; color: #4a5568;">
+                        <strong>Official Club Mission:</strong> To foster an enjoyable and collaborative environment where students can learn about and participate in various forms of tabletop and strategic gaming.
+                    </p>
+                    <form id="form27b" onsubmit="submitForm27B(event)">
+                        <div class="form-group">
+                            <label>Organization Name:</label>
+                            <input type="text" id="org-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Requested Room:</label>
+                            <select id="room-choice">
+                                <option value="">Select a room...</option>
+                                <option value="304">Room 304 (The nice one)</option>
+                                <option value="205">Room 205</option>
+                                <option value="basement">Basement Storage</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Purpose of Meeting:</label>
+                            <textarea id="purpose" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Expected Attendance:</label>
+                            <input type="number" id="attendance" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Date Needed:</label>
+                            <input type="date" id="date-needed" required>
+                        </div>
+                        <button type="submit" class="button">Submit Form</button>
+                    </form>
+                    <div id="form-feedback"></div>
+                </div>
+            `;
+        }
+
+        function submitForm27B(event) {
+            event.preventDefault();
+            gameState.formAttempts++;
+            
+            const orgName = document.getElementById('org-name').value;
+            const room = document.getElementById('room-choice').value;
+            const purpose = document.getElementById('purpose').value;
+            const attendance = document.getElementById('attendance').value;
+            const dateNeeded = document.getElementById('date-needed').value;
+            
+            let errors = [];
+
+            if (!orgName || !orgName.toLowerCase().includes('gaming')) errors.push("Is that the correct organization name?");
+            if (!room) errors.push("You need to select a room.");
+            if (!purpose) errors.push("Please state the purpose of the meeting.");
+            if (!attendance) errors.push("Expected attendance is required.");
+            else if (attendance < 4) errors.push("Is it even a club meeting with so few people?");
+            else if (attendance > 99) errors.push("We don't have a room available that can hold that many people. Are you sure about that number?");
+            if (!dateNeeded) {
+                errors.push("You need to pick a date.");
+            } else {
+                const requestedDate = new Date(dateNeeded);
+                const year = requestedDate.getFullYear();
+                const currentYear = new Date().getFullYear();
+
+                // Get today's date at midnight to prevent issues with time of day
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                // --- BRANCH 1: Handle all dates in the past ---
+                if (requestedDate < today) {
+                    if (year < 1000) {
+                    errors.push("Our booking system doesn't support the Julian calendar. Please pick a date from a more... modern millennium.");
+                    } else if (year < 1600) {
+                    errors.push("Booking a room for the Middle Ages? I'm afraid all our castles are currently under siege.");
+                    } else if (year < 1800) {
+                    errors.push("Our horse-drawn carriages don't travel that far back. Please select a date in a more recent century.");
+                    } else if (year < 1900) {
+                    errors.push("I don't think we can book a room for the 19th century...");
+                    } else if (year < 1970) {
+                    errors.push("Booking for the Flower Power era might be tricky. Our records aren't on microfilm.");
+                    } else if (year < 1990) {
+                    errors.push("While the 80s were totally radical, our system can't handle that much neon. Please pick a more recent date.");
+                    } else {
+                    // This is the general catch-all for any other recent past date (e.g., yesterday)
+                    errors.push("Great Scott! Our DeLorean is in the shop. Please pick a date in the future.");
+                    }
+                }
+                // --- BRANCH 2: Handle all dates in the future (and today) ---
+                else {
+                    if (year > 3000) {
+                    errors.push("You're a time traveler! For inter-millennial bookings, please contact our temporal displacement department.");
+                    } else if (year > currentYear + 10) {
+                    errors.push("Planning a bit far ahead, aren't we? Let's keep it within the next decade.");
+                    }
+                    // If none of the above future conditions are met, the date is valid!
+                    // No error is pushed.
+                }
+                }
+
+            if (errors.length > 0) {
+                const feedbackDiv = document.getElementById('form-feedback');
+                let lindaDialogue = "Linda sighs. 'Looks like there are a few issues here: " + errors.join(' ') + "'";
+                feedbackDiv.innerHTML = `<div class="npc-dialogue" style="margin-top: 20px;"><div class="npc-name">Linda</div><div class="npc-text">${lindaDialogue}</div></div>`;
+                
+                const rand = Math.random();
+                if (rand < 0.33) {
+                    changeStat('morale', -5);
+                } else if (rand < 0.66) {
+                    changeStat('sanity', -5);
+                } else {
+                    changeStat('morale', -3);
+                    changeStat('sanity', -3);
+                }
+            } else {
+                gameState.requestedRoom = room;
+                advanceDay();
+                nextBlocker();
+            }
+        }
+
+        function handleRoomBooked() {
+            const content = document.getElementById('blocker-content');
+            let dialogueText = '';
+            let choicesHTML = '';
+
+            switch(gameState.requestedRoom) {
+                case '304':
+                    dialogueText = "Room 304 is booked solid on Thursdays by the Business Club. They reserve it for the entire semester for their 'Emerging Markets Power Luncheons.' Room 205 is... oh, that's under renovation. The only space I have is the basement storage room.";
+                    choicesHTML += `<button class="button button-secondary" onclick="talkToBusinessClub()">Go talk to the Business Club directly</button>`;
+                    break;
+                case '205':
+                    dialogueText = "Room 205... let's see. Ah, unfortunately, that entire wing is closed for renovations. They found asbestos. It won't be open for months. The only alternative I see is the basement storage room.";
+                    break;
+                case 'basement':
+                    dialogueText = "The basement storage room? Are you sure? Well, it's available... but I have to warn you, it hasn't been cleaned this semester and it's not on the official room roster. It's more of a... liability closet. But if you want it, it's yours.";
+                    break;
+            }
+
+            content.innerHTML = `
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda (Registration Desk)</div>
+                    <div class="npc-text">
+                        "${dialogueText}"
+                    </div>
+                </div>
+                <div class="story-text">
+                    You feel your morale dropping. The basement? Really?
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="acceptBasement()">Accept the basement room</button>
+                    ${choicesHTML}
+                    <button class="button button-danger" onclick="getAngry()">Express your frustration</button>
+                </div>
+            `;
+        }
+        
+        function talkToBusinessClub() {
+            advanceDay();
+            changeStat('sanity', -5);
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="story-text">
+                    You find the Business Club president, a guy named Chad, in the student lounge. He's wearing a blazer and talking loudly on his phone about "leveraging assets."
+                </div>
+                <div class="npc-dialogue">
+                    <div class="npc-name">Chad (Business Club)</div>
+                    <div class="npc-text">
+                        "Whoa, dude. Synergy. Networking. We're the Business Club. We book Room 304 for the *entire semester*. You can't just... ask for it. It's prime real estate."
+                    </div>
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="negotiateWithChad()">Try to negotiate logically</button>
+                    <button class="button button-secondary" onclick="challengeChad()">Challenge him to a game for the room</button>
+                    <button class="button button-danger" onclick="bluffChad()">Bluff about knowing the Dean</button>
+                </div>
+            `;
+        }
+
+        function negotiateWithChad() {
+            if (gameState.morale >= 80) {
+                showConfirmation("Your confidence is undeniable. Chad seems impressed. 'Alright, fine. Your gumption is a quantifiable asset. You can have the room for one week. But you owe me. My dad's on the board of trustees, you know.'", () => {
+                    gameState.currentBlocker = 6; // Skip to deposit blocker
+                    showScreen('blocker');
+                });
+            } else {
+                changeStat('morale', -10);
+                showConfirmation("You try to reason with him, but your voice wavers. Chad smirks. 'Nice try, but you're not projecting shareholder value.' He turns back to his phone.", handleRoomBooked);
+            }
+        }
+
+        function challengeChad() {
+            const roll = Math.random();
+            if (roll > 0.5) {
+                changeStat('morale', 15);
+                showConfirmation("You challenge him to a dice roll. He scoffs but accepts. You roll a 20! 'No way...' Chad says, stunned. 'A deal's a deal. The room is yours this week.'", () => {
+                    gameState.currentBlocker = 6;
+                    showScreen('blocker');
+                });
+            } else {
+                changeStat('morale', -15);
+                changeStat('funds', -10);
+                updateStats();
+                showConfirmation("You challenge him to a dice roll. He rolls a perfect 6. You roll a 1. 'Tough luck,' Chad says, pocketing your $10 buy-in. 'Maybe stick to spreadsheets.'", handleRoomBooked);
+            }
+        }
+        
+        function bluffChad() {
+             if (gameState.sanity >= 75) {
+                changeStat('sanity', -10);
+                showConfirmation("You look him dead in the eye and mention the Dean of Student Affairs' policy on 'equitable resource allocation.' Chad's confidence falters. The last thing he needs is a bureaucratic black mark. 'Ugh, fine. Whatever. It's yours. Don't make it a thing.'", () => {
+                    gameState.currentBlocker = 6;
+                    showScreen('blocker');
+                });
+            } else {
+                changeStat('sanity', -10);
+                changeStat('morale', -10);
+                showConfirmation("You try to bluff, but you stumble over your words. Chad laughs. 'The Dean? My uncle golfs with him. Good one. Now get out of my airspace.'", handleRoomBooked);
+            }
+        }
+
+        function acceptBasement() {
+            changeStat('morale', -15);
+            changeStat('sanity', -5);
+            gameState.choices.push('basement-accept');
+            advanceDay();
+            showConfirmation("You reluctantly accept the basement storage room. Your club members won't be happy...", nextBlocker);
+        }
+
+        function getAngry() {
+            changeStat('sanity', -10);
+            gameState.npcRelationships.linda -= 20;
+            showConfirmation("Linda's expression hardens. 'I'm just doing my job.' This may have been a mistake...", () => {
+                advanceDay();
+                nextBlocker();
+            });
+        }
+
+        function handleRegistration() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="story-text">
+                    Linda pulls up the registration system. "You'll need to answer these security questions to re-register your club."
+                </div>
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda</div>
+                    <div class="npc-text">
+                        "Let's see... I need you to match the club values with their registration codes. It's policy."
+                    </div>
+                </div>
+                <div class="puzzle-grid" id="registration-puzzle"></div>
+                <div id="puzzle-feedback"></div>
+                <button class="button" onclick="checkRegistrationPuzzle()" id="check-puzzle">Submit Answers</button>
+            `;
+            
+            renderRegistrationPuzzle();
+        }
+
+        function renderRegistrationPuzzle() {
+            const grid = document.getElementById('registration-puzzle');
+            const items = ['INC', 'COM', 'EDU', 'FUN', 'SOC', 'SRV', '001', '002', '003'];
+            grid.innerHTML = items.map((item, index) => 
+                `<div class="puzzle-tile" onclick="togglePuzzleTile(${index})" id="tile-${index}">${item}</div>`
+            ).join('');
+            
+            window.togglePuzzleTile = function(index) {
+                document.getElementById(`tile-${index}`).classList.toggle('selected');
+            };
+        }
+
+        function checkRegistrationPuzzle() {
+            const selected = Array.from(document.querySelectorAll('.puzzle-tile.selected')).map(t => t.textContent);
+            
+            if (selected.length === 3 && selected.includes('EDU') && selected.includes('FUN') && selected.includes('SOC')) {
+                changeStat('sanity', -5);
+                showConfirmation("Correct! Your club is now re-registered.", () => {
+                    advanceDay();
+                    nextBlocker();
+                });
+            } else {
+                document.getElementById('puzzle-feedback').innerHTML = `
+                    <div class="warning-box">
+                        <p>That doesn't seem right. Select 3 values that represent your club's purpose.</p>
+                    </div>
+                `;
+                changeStat('sanity', -3);
+            }
+        }
+
+        function handleAdvisorApproval() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="story-text">
+                    Dr. Harrington is your club's faculty advisor. He's a nice guy but perpetually distracted. You need to track him down and get his signature.
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="emailProfessor()">Send an email (Wait 2 days)</button>
+                    <button class="button button-secondary" onclick="findProfessor()">Track him down in person (Costs time)</button>
+                    <button class="button button-danger" onclick="forgeSignature()">Forge the signature (Risky!)</button>
+                </div>
+            `;
+        }
+
+        function emailProfessor() {
+            showConfirmation("You send an email to Dr. Harrington. Two days pass with no response...", () => {
+                advanceDay();
+                advanceDay();
+                changeStat('sanity', -5);
+                const content = document.getElementById('blocker-content');
+                content.innerHTML = `
+                    <div class="email-interface">
+                        <div class="email-header">
+                            <div class="email-from">From: Dr. Harrington</div>
+                            <div class="email-subject">Subject: Re: Signature Needed</div>
+                        </div>
+                        <div class="email-body">
+                            Hi Alex,<br><br>
+                            Sorry for the delay! Yes, happy to sign. I'm in my office now if you want to stop by. Otherwise I'll be at the conference center all next week.<br><br>
+                            - Dr. H
+                        </div>
+                    </div>
+                    <button class="button" onclick="gameState.hasAdvisorApproval = true; changeStat('morale', 5); advanceDay(); nextBlocker()">Visit his office</button>
+                `;
+            });
+        }
+
+        function findProfessor() {
+            advanceDay();
+            changeStat('sanity', -8);
+            showConfirmation("After checking three buildings, you finally find Dr. Harrington in the library!", () => {
+                const content = document.getElementById('blocker-content');
+                content.innerHTML = `
+                    <div class="npc-dialogue">
+                        <div class="npc-name">Dr. Harrington</div>
+                        <div class="npc-text">
+                            "Oh! Alex! Yes, of course I'll sign. You know, when I was a student, room reservations were done on paper forms in triplicate..." <em>*signs while reminiscing*</em>
+                        </div>
+                    </div>
+                    <button class="button" onclick="gameState.hasAdvisorApproval = true; changeStat('morale', 5); advanceDay(); nextBlocker()">Thank him and leave</button>
+                `;
+            });
+        }
+
+        function forgeSignature() {
+            gameState.choices.push('forged-signature');
+            gameState.hasAdvisorApproval = true;
+            changeStat('sanity', -15);
+            showConfirmation("You forge the signature. Your hands are shaking...", () => {
+                advanceDay();
+                nextBlocker();
+            });
+        }
+
+        function handleSystemDown() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda</div>
+                    <div class="npc-text">
+                        "This happens at least twice a week. IT says they're 'working on it.' You can wait, or maybe Marcus in IT can help you directly."
+                    </div>
+                </div>
+                <div class="story-text">
+                    The meeting is in ${11 - gameState.day} days. What do you do?
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="waitForSystem()">Wait for the system (2 days)</button>
+                    <button class="button button-secondary" onclick="visitIT()">Visit IT department</button>
+                    <button class="button button-danger" onclick="startRevolution()">Give up on official channels</button>
+                </div>
+            `;
+        }
+
+        function waitForSystem() {
+            advanceDay();
+            advanceDay();
+            changeStat('morale', -10);
+            changeStat('sanity', -10);
+            showConfirmation("Two days pass. The system is finally back online!", nextBlocker);
+        }
+
+        function visitIT() {
+            advanceDay();
+            changeStat('sanity', -5);
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="story-text">
+                    You descend to the basement IT office. Marcus, a tired-looking grad student, looks up from his screen.
+                </div>
+                <div class="npc-dialogue">
+                    <div class="npc-name">Marcus (IT Department)</div>
+                    <div class="npc-text">
+                        "System down again? Yeah, it's ancient infrastructure. I can manually input your reservation, but..." He glances around nervously. "It's technically against policy. Unless you help me with something first."
+                    </div>
+                </div>
+                <div class="story-text">
+                    He needs someone to test a new scheduling app he's developing. It'll take an hour.
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="helpMarcus()">Help Marcus with testing</button>
+                    <button class="button button-secondary" onclick="bribeMarcus()">Offer him club funds ($20)</button>
+                    <button class="button button-danger" onclick="refuseMarcus()">Refuse and go back to waiting</button>
+                </div>
+            `;
+        }
+
+        function helpMarcus() {
+            gameState.hasITHelp = true;
+            gameState.npcRelationships.marcus += 20;
+            changeStat('morale', 5);
+            showConfirmation("You spend an hour helping Marcus. He manually enters your reservation into the system!", nextBlocker);
+        }
+
+        function bribeMarcus() {
+            if (gameState.funds >= 20) {
+                gameState.funds -= 20;
+                gameState.hasITHelp = true;
+                changeStat('sanity', -5);
+                updateStats();
+                showConfirmation("Marcus accepts the 'donation' and processes your reservation.", nextBlocker);
+            } else {
+                alert("You don't have enough funds!");
+            }
+        }
+
+        function refuseMarcus() {
+            changeStat('morale', -10);
+            showConfirmation("Marcus shrugs. 'Suit yourself. Good luck with the system.'", waitForSystem);
+        }
+
+        function startRevolution() {
+            gameState.revolutionPath = true;
+            gameState.choices.push('revolution');
+            changeStat('sanity', -20);
+            showConfirmation("You've had enough of this bureaucratic nightmare. There has to be another way...", () => showScreen('ending-revolution'));
+        }
+
+        function handleDeposit() {
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda</div>
+                    <div class="npc-text">
+                        "It's policy. Everyone pays the cleaning deposit. You'll get it back after your meeting if the room is in good condition."
+                    </div>
+                </div>
+                <div class="story-text">
+                    You currently have $${gameState.funds}. The deposit is $50.
+                </div>
+                <div class="choices">
+                    <button class="button" onclick="payDeposit()" ${gameState.funds >= 50 ? '' : 'disabled'}>Pay the deposit ($50)</button>
+                    <button class="button button-secondary" onclick="fundraise()">Organize a quick fundraiser (2 days)</button>
+                    <button class="button button-danger" onclick="negotiateDeposit()">Try to negotiate</button>
+                </div>
+            `;
+        }
+
+        function payDeposit() {
+            gameState.funds -= 50;
+            gameState.hasCleaningFunds = true;
+            changeStat('morale', -5);
+            updateStats();
+            showConfirmation("Deposit paid. You're almost there...", () => {
+                advanceDay();
+                nextBlocker();
+            });
+        }
+
+        function fundraise() {
+            advanceDay();
+            advanceDay();
+            gameState.funds += 60;
+            changeStat('morale', 10);
+            changeStat('sanity', -5);
+            updateStats();
+            showConfirmation("Your club members pitch in! You raised $60 through a bake sale.", () => {
+                const content = document.getElementById('blocker-content');
+                content.innerHTML = `
+                    <div class="story-text">
+                        You return to Linda with the deposit money.
+                    </div>
+                    <button class="button" onclick="payDeposit()">Pay the $50 deposit</button>
+                `;
+            });
+        }
+
+        function negotiateDeposit() {
+            if (gameState.npcRelationships.linda >= 10) {
+                gameState.npcRelationships.linda += 5;
+                changeStat('morale', 15);
+                showConfirmation("Linda sighs. 'Look, I like you. I'll waive the deposit this ONE time. Don't make me regret it.'", () => {
+                    advanceDay();
+                    nextBlocker();
+                });
+            } else {
+                showConfirmation("Linda shakes her head. 'Sorry, but policy is policy. I can't make exceptions.'", () => {
+                    const content = document.getElementById('blocker-content');
+                    content.innerHTML = `
+                        <div class="choices">
+                            <button class="button" onclick="payDeposit()" ${gameState.funds >= 50 ? '' : 'disabled'}>Pay the deposit ($50)</button>
+                            <button class="button button-secondary" onclick="fundraise()">Organize a fundraiser (2 days)</button>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function handleFinalObstacle() {
+            if (gameState.choices.includes('forged-signature')) {
+                const content = document.getElementById('blocker-content');
+                content.innerHTML = `
+                    <div class="npc-dialogue">
+                        <div class="npc-name">Linda's Supervisor</div>
+                        <div class="npc-text">
+                            "Everything seems to be in order... wait a minute." She picks up your form. "This signature from Dr. Harrington... it looks a bit shaky. University policy requires verbal confirmation for last-minute bookings. Let me just call his office."
+                        </div>
+                    </div>
+                `;
+                showConfirmation("You feel a cold dread creep up your spine. After a moment that feels like an eternity, the supervisor returns, her face grim. <br><br> \"That's funny. I've just spoken with Dr. Harrington's secretary. He's been at an academic conference in another state all week and hasn't signed a single form...\"", () => showScreen('ending-expelled'));
+                return;
+            }
+
+            const content = document.getElementById('blocker-content');
+            content.innerHTML = `
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda's Supervisor</div>
+                    <div class="npc-text">
+                        "The basement storage? That room hasn't been inspected yet this semester. We can't let students use uninspected spaces. Liability."
+                    </div>
+                </div>
+                <div class="npc-dialogue">
+                    <div class="npc-name">Linda</div>
+                    <div class="npc-text">
+                        <em>*She looks at you apologetically*</em> "I... I didn't know about the inspection requirement. I'm sorry."
+                    </div>
+                </div>
+                <div class="story-text">
+                    It's Day ${gameState.day}. Your meeting is in ${11 - gameState.day} days. This is your final chance.
+                </div>
+                <div id="final-choices"></div>
+            `;
+            
+            renderFinalChoices();
+        }
+
+        function renderFinalChoices() {
+            const choicesDiv = document.getElementById('final-choices');
+            let choices = `<div class="choices">`;
+            
+            if (gameState.npcRelationships.linda >= 10 && gameState.hasAdvisorApproval) {
+                choices += `<button class="button button-secondary" onclick="lindaHelps()">Ask Linda for help one more time</button>`;
+            }
+            if (gameState.hasITHelp) {
+                choices += `<button class="button button-secondary" onclick="marcusHacks()">Call Marcus for a favor</button>`;
+            }
+            choices += `<button class="button" onclick="acceptDefeat()">Accept defeat and cancel the meeting</button>`;
+            choices += `<button class="button button-danger" onclick="goRogue()">Use the room anyway without permission</button>`;
+            
+            choices += `</div>`;
+            choicesDiv.innerHTML = choices;
+        }
+
+        function lindaHelps() {
+            changeStat('morale', 20);
+            gameState.choices.push('linda-success');
+            showConfirmation("Linda whispers: 'Room 205 just finished renovation early. I can squeeze you in. Don't tell my supervisor.'", () => showScreen('ending-success'));
+        }
+
+        function marcusHacks() {
+            changeStat('sanity', -10);
+            gameState.choices.push('marcus-success');
+            showConfirmation("Marcus bypasses the system and marks the basement as 'inspected'. You're in!", () => showScreen('ending-workaround'));
+        }
+
+        function acceptDefeat() {
+            gameState.choices.push('gave-up');
+            showScreen('ending-defeat');
+        }
+
+        function goRogue() {
+            gameState.choices.push('went-rogue');
+            changeStat('sanity', -20);
+            showScreen('ending-revolution');
+        }
+
+        // Ending screens
+        function renderEnding(screen, endingType) {
+            let title, text, achievement;
+            
+            switch(endingType) {
+                case 'ending-success':
+                    title = "Victory! (Sort of...)";
+                    text = `After ${gameState.day} grueling days, you finally have a room reservation. Linda processed it just under the deadline. When Thursday arrives, you meet in Room 205—freshly renovated, spacious, and perfect. Your club members are thrilled. They don't know (and don't need to know) about the bureaucratic nightmare you endured. As you set up the gaming table, you catch Linda's eye through the window. She gives you a small nod. Sometimes the system works... when you find the right people within it.`;
+                    achievement = "Achievement Unlocked: By The Book (Mostly)";
+                    break;
+                    
+                case 'ending-workaround':
+                    title = "The Workaround";
+                    text = `Marcus's hack worked. The system shows the basement as inspected and approved. You successfully hold your meeting in the basement storage room (after moving some boxes). Is it ethical? Questionable. But after ${gameState.day} days of bureaucratic hell, you've learned that sometimes you need to work around broken systems. Marcus texts you later: "Delete this conversation. Also, you owe me coffee."`;
+                    achievement = "Achievement Unlocked: Bureaucracy Hacker";
+                    break;
+                    
+                case 'ending-defeat':
+                    title = "The Surrender";
+                    text = `You cancel the meeting. You've spent ${gameState.day} days fighting the system, and you just... can't anymore. Your club members are understanding, but disappointed. Next week, you see the Business Club using Room 304, laughing and having fun. How do they make it look so easy? You submit the club dissolution paperwork. It's approved in 15 minutes. Figures.`;
+                    achievement = "Achievement Unlocked: Freedom... of a Sort";
+                    break;
+                    
+                case 'ending-revolution':
+                    if (gameState.morale >= 50 && gameState.sanity >= 50) {
+                        title = "The Revolution";
+                        text = `You've had enough. You post on the student forum about your experience. Dozens of other club leaders share similar stories. By the end of the week, there's a petition with 500 signatures demanding reform. You hold your meeting on the lawn outside. Fifty students show up in solidarity. It becomes a protest party. The administration notices. They're not happy... but two weeks later, they announce a "streamlined room reservation system." You changed something.`;
+                        achievement = "Achievement Unlocked: Effective Agitator";
+                    } else if (gameState.morale >= 50 && gameState.sanity < 50) {
+                        title = "The Rant";
+                        text = `Your sanity frayed, you post a wild, rambling manifesto to the student forum. It's barely coherent, but it's passionate. Your energized club members rally, holding a protest that's more chaotic than organized, involving weird chants and confusing signs. The administration, unnerved by the display, quickly announces a 'review' of the reservation system just to make you go away. It worked, but everyone thinks you're a little crazy now.`;
+                        achievement = "Achievement Unlocked: Unhinged but Effective";
+                    } else if (gameState.morale < 50 && gameState.sanity >= 50) {
+                        title = "The Grand Plan";
+                        text = `You meticulously plan a protest, drafting a clear and logical list of grievances. You post it online... but your club's morale is shot. Only three people show up. You stand on the lawn for an hour, awkwardly, before everyone quietly agrees to just go get pizza. The administration never even noticed. A perfect plan is useless without the will to execute it.`;
+                        achievement = "Achievement Unlocked: All Talk, No Torque";
+                    } else { // Low Morale, Low Sanity
+                        title = "The Fizzle";
+                        text = `You decide to start a revolution. You open your laptop to write a fiery post... and just stare at the screen. What's the point? No one will listen. Your club members have already stopped responding to messages. You close the laptop and go back to bed. The system didn't just beat you; it erased your will to fight back.`;
+                        achievement = "Achievement Unlocked: Utterly Crushed";
+                    }
+                    break;
+
+                case 'ending-expelled':
+                    title = "The Ultimate Price";
+                    text = `The supervisor's words hang in the air. "Academic integrity is our highest priority." You are escorted to the Dean of Student Affairs' office. Your club is immediately dissolved, and you are suspended for the rest of the semester pending an expulsion hearing. You tried to beat the system by breaking the rules, and the system broke you instead. There are no shortcuts in bureaucracy... only traps.`;
+                    achievement = "Achievement Unlocked: Early Graduation";
+                    break;
+            }
+            
+            screen.innerHTML = `
+                <div class="ending-screen">
+                    <h2>${title}</h2>
+                    <div class="ending-text">${text}</div>
+                    <div class="achievement">
+                        <h3>🏆 ${achievement}</h3>
+                    </div>
+                    <div style="margin-top: 30px;">
+                        <strong>Final Stats:</strong><br>
+                        Days Survived: ${gameState.day}<br>
+                        Funds Remaining: $${gameState.funds}<br>
+                        Morale: ${gameState.morale}%<br>
+                        Sanity: ${gameState.sanity}%
+                    </div>
+                    <div class="menu-buttons" style="margin-top: 30px;">
+                        <button class="button" onclick="location.reload()">Play Again</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper functions
+        function nextBlocker() {
+            if (gameState.gameOver) return;
+            gameState.currentBlocker++;
+            if (gameState.currentBlocker >= blockers.length) {
+                showScreen('ending-success');
+            } else {
+                showScreen('blocker');
+            }
+        }
+
+        function advanceDay() {
+            if (gameState.gameOver) return;
+            gameState.day++;
+            updateStats();
+            
+            if (gameState.day > 11) {
+                gameState.gameOver = true;
+                const content = document.getElementById('main-content');
+                content.innerHTML = ''; // Clear the screen for the final message
+                showConfirmation("It's Thursday, the day of your planned meeting. With no room secured, the deadline has passed and the meeting is missed. You failed...", () => showScreen('ending-defeat'));
+            }
+        }
+
+        function changeStat(stat, amount) {
+            if (gameState.gameOver) return;
+            gameState[stat] = Math.max(0, Math.min(100, gameState[stat] + amount));
+            updateStats();
+            
+            if (gameState.morale <= 0) {
+                gameState.gameOver = true;
+                const content = document.getElementById('main-content');
+                content.innerHTML = '';
+                showConfirmation("Your club members have lost all faith. They've disbanded the club...", () => showScreen('ending-defeat'));
+            }
+        }
+
+        function showConfirmation(message, callback) {
+            const content = document.getElementById('blocker-content') || document.getElementById('main-content');
+            content.innerHTML = `
+                <div class="story-text">${message}</div>
+                <div class="choices">
+                    <button class="button" id="confirm-button">Continue</button>
+                </div>
+            `;
+            document.getElementById('confirm-button').onclick = callback;
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
