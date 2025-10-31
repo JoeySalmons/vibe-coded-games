@@ -11,31 +11,31 @@ A collection of small, single-file games and applications created using AI-assis
 Click any link to play or use the app instantly in your browser.
 
 ### Earthflax (v4.3)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Earthflax%20v4.3.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Earthflax%20v4.3.html)
 *   **Description:** An abstract, atmospheric puzzle game. Use indirect controls to adjust focus, tempo, and hue to stabilize a chaotic particle system and match hidden target values.
 
 ### Ephemeral Echoes (v3.1)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Ephemeral%20Echoes%20v3.1.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Ephemeral%20Echoes%20v3.1.html)
 *   **Description:** An atmospheric idle game where you generate currency by clicking and tracing patterns. Use it to buy structures, equip schematics, and "Sublimate" (prestige) for permanent upgrades.
 
 ### Generally Incompetent (v2.2)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Generally%20Incompetent%20v2.2.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Generally%20Incompetent%20v2.2.html)
 *   **Description:** A turn-based, push-your-luck game with a satirical office theme. Manage your tasks to score points, but don't let your manager's patience run out.
 
 ### Kymograph (v4)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Kymograph%20v4.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Kymograph%20v4.html)
 *   **Description:** A complex, procedurally generated logic and deduction puzzle with a retro sci-fi aesthetic. Observe signal patterns to decipher hidden transformation rules before your error meter fills.
 
 ### Mayors Orbit (v2)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Mayors%20Orbit%20v2.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Mayors%20Orbit%20v2.html)
 *   **Description:** A resource management game inspired by *Reigns*. Swipe cards left or right to make binary choices as mayor, balancing your approval, budget, and scandal meters to survive.
 
 ### Pirate Fleet Commander (v7.4)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Pirate%20Fleet%20Commander%20v7.4.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pirate%20Fleet%20Commander%20v7.4.html)
 *   **Description:** A top-down fleet management and exploration game. Control your flagship to explore a procedurally generated sea, engage in real-time combat, and use loot to upgrade your armada.
 
 ### Room Reservation Hell (v3.3)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/Room%20Reservation%20Hell%20v3.3.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Room%20Reservation%20Hell%20v3.3.html)
 *   **Description:** A choice-based narrative game simulating the frustration of university bureaucracy. Make decisions to manage your stats and navigate absurd challenges to book a room for your club.
 
 ### Solarized Clicker: Singularity (v3.2)
@@ -43,11 +43,11 @@ Click any link to play or use the app instantly in your browser.
 *   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get temporary boosts and purchase upgrades to increase your output.
 
 ### The Infinite Content Machine (v4.2)
-*   **Play Now!** -> [**Click here to play**](https://your-username.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
 *   **Description:** A narrative idle game where you play as an AI. Automate content generation to progress through story phases, unlocking new upgrades and advancing the dark sci-fi plot.
 
 ### Todo App Demo (v3.1)
-*   **Use Now!** -> [**Click here to use**](https://your-username.github.io/vibe-coded-games/Todo%20App%20Demo%20v3.1.html)
+*   **Use Now!** -> [**Click here to use**](https://joeysalmons.github.io/vibe-coded-games/Todo%20App%20Demo%20v3.1.html)
 *   **Description:** A personal interactive dashboard featuring a to-do list, a weekly habit tracker, and a customizable flashcards quiz to test your knowledge.
 
 ---
