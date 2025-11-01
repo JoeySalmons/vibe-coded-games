@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MSE 308 - Thermodynamics Concept Map</title>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    
+    <style type="text/css">
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #fdfdfd;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        p {
+            text-align: center;
+            max-width: 800px;
+            margin: 1em auto;
+        }
+        #conceptMap {
+            width: 95%;
+            height: 80vh;
+            border: 1px solid #ddd;
+            margin: 1em auto;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>MSE 308 - Thermodynamics Concept Map</h1>
+    <p>This map visualizes the key concepts from my course notes. Click and drag the bubbles (nodes) to explore their connections. The layout will rearrange itself as you move things around.</p>
+
+    <div id="conceptMap"></div>
+
+    <script type="text/javascript">
+        // 1. Define the Nodes (the concepts/bubbles)
+        const nodes = new vis.DataSet([
+            // Core Node
+            { id: 'center', label: 'Thermodynamics of Materials', group: 'center', title: 'The central theme of the course' },
+
+            // Level 1: Main Topics
+            { id: 'fundamentals', label: 'Fundamentals', group: 'level1' },
+            { id: 'laws', label: 'Laws of Thermodynamics', group: 'level1' },
+            { id: 'potentials', label: 'Thermodynamic Potentials\n& Equilibrium', group: 'level1' },
+            { id: 'phases', label: 'Phase Equilibria', group: 'level1' },
+            { id: 'mixing', label: 'Mixing', group: 'level1' },
+
+            // Level 2: Sub-concepts for Fundamentals
+            { id: 'system', label: 'System & Surroundings', group: 'level2', title: 'Defining what is being studied and its environment.' },
+            { id: 'classification', label: 'System Classification', group: 'level2', title: 'Open, Closed, Isolated, Unary, Multicomponent, etc.' },
+            { id: 'extensive_properties', label: 'Extensive Properties\n(U, H, S, G, V, n)', group: 'level2', title: 'Scale with system size (additive). A type of state function.' },
+            { id: 'intensive_properties', label: 'Intensive Properties\n(T, P, μ)', group: 'level2', title: 'Independent of system size. A type of state function.' },
+            { id: 'process_variables', label: 'Process Variables', group: 'level2', title: 'Path Functions (q, w). Depend on the process path, not just initial/final states.' },
+            { id: 'heat_capacity', label: 'Heat Capacity (Cp, Cv)', group: 'level2', title: 'Heat capacity at constant pressure and volume. Related by γ = Cp/Cv' },
+
+            // Level 2: Sub-concepts for Laws
+            { id: 'zeroth_law', label: 'Zeroth Law', group: 'level2', title: 'Defines thermal equilibrium and Temperature (T).' },
+            { id: 'first_law', label: 'First Law', group: 'level2', title: 'Conservation of Energy (ΔU = Q + W).' },
+            { id: 'second_law', label: 'Second Law', group: 'level2', title: 'Defines direction of spontaneous processes via Entropy (S).' },
+            { id: 'third_law', label: 'Third Law', group: 'level2', title: 'Entropy approaches zero as T→0 K. Defines absolute entropy.' },
+            { id: 'ideal_gas_law', label: 'Ideal Gas Law\n(PV=nRT)', group: 'level2', title: 'PV=nRT and related equations. Degrees of freedom affect Cv and Cp.' },
+            { id: 'ideal_gas', label: 'Ideal Gas Processes', group: 'level2', title: 'Applications: Isobaric, Isothermal, Adiabatic, etc.' },
+            { id: 'reversibility', label: 'Reversibility', group: 'level2', title: 'Idealized process where entropy generation is zero.' },
+            { id: 'carnot', label: 'Carnot Cycle', group: 'level2', title: 'Idealized thermodynamic cycle. Defines maximum efficiency.' },
+
+            // Level 3: Sub-concepts for Ideal Gas
+            { id: 'isobaric', label: 'Isobaric (const P)', group: 'level3' },
+            { id: 'isothermal', label: 'Isothermal (const T)', group: 'level3' },
+            { id: 'isochoric', label: 'Isochoric (const V)', group: 'level3' },
+            { id: 'adiabatic', label: 'Adiabatic (Q=0)', group: 'level3' },
+            
+            // Level 2: Sub-concepts for Potentials
+            { id: 'enthalpy', label: 'Enthalpy (H)', group: 'level2', title: 'H = U + PV. Useful for constant pressure processes.' },
+            { id: 'gibbs', label: 'Gibbs Free Energy (G)', group: 'level2', title: 'G = H - TS. The ultimate criterion for spontaneity.' },
+            { id: 'chemical_potential', label: 'Chemical Potential (μ)', group: 'level2', title: 'Chemical potential (μ). Driving force for mass transfer and reactions.' },
+            { id: 'spontaneity_criterion', label: 'Spontaneity: ΔG < 0', group: 'level2' },
+            { id: 'equilibrium_criterion', label: 'Equilibrium: ΔG = 0', group: 'level2', title: 'System has no further capacity for change.' },
+            { id: 'maxwell', label: "Maxwell's Relations", group: 'level2', title: 'Relates partial derivatives of thermodynamic properties.' },
+
+            // Level 2: Sub-concepts for Phases
+            { id: 'phase_diagrams', label: 'Phase Diagrams', group: 'level2', title: 'Visual maps of equilibrium states.' },
+            { id: 'phase_rule', label: 'Gibbs Phase Rule', group: 'level2', title: 'F = C - P + 2. Relates degrees of freedom to components and phases.' },
+            { id: 'clapeyron', label: 'Clapeyron Equation', group: 'level2', title: 'dP/dT = ΔH / (TΔV). Describes the slope of phase boundaries.' },
+            { id: 'equil_conditions', label: 'Equilibrium Conditions', group: 'level2', title: 'For two phases: Tα=Tβ, Pα=Pβ, μα=μβ.' },
+            { id: 'metastability', label: 'Metastable vs. Equilibrium', group: 'level2', title: 'Open vs Isolated system.' },
+            
+            // Level 2: Sub-concepts for Mixing
+            { id: 'multicomponent', label: 'Multicomponent Systems', group: 'level2', title: 'Systems with multiple chemical components. Require composition variables.' },
+            { id: 'thermo_of_mixing', label: 'Thermodynamics of Mixing', group: 'level2', title: 'ΔG_mix, ΔH_mix, ΔS_mix. Changes in properties upon mixing components.' },
+            { id: 'partial_molar', label: 'Partial Molar Quantities', group: 'level2', title: 'Partial molar properties. How properties change with composition. μ is the partial molar G.' }
+        ]);
+
+        // 2. Define the Edges (the connecting lines)
+        const edges = new vis.DataSet([
+            // Connections from Center to Level 1
+            { from: 'center', to: 'fundamentals' }, { from: 'center', to: 'laws' },
+            { from: 'center', to: 'potentials' }, { from: 'center', to: 'phases' },
+            { from: 'center', to: 'mixing' },
+
+            // Connections for Fundamentals
+            { from: 'fundamentals', to: 'system' }, { from: 'fundamentals', to: 'classification' },
+            { from: 'fundamentals', to: 'extensive_properties' }, { from: 'fundamentals', to: 'intensive_properties' },
+            { from: 'fundamentals', to: 'process_variables' }, { from: 'fundamentals', to: 'heat_capacity' },
+            { from: 'extensive_properties', to: 'intensive_properties', label: 'Related by size', font: {align: 'middle'}, dashes: true},
+
+            // Connections for Laws
+            { from: 'laws', to: 'zeroth_law' }, { from: 'laws', to: 'first_law' },
+            { from: 'laws', to: 'second_law' }, { from: 'laws', to: 'third_law' },
+            { from: 'laws', to: 'ideal_gas_law' }, { from: 'ideal_gas_law', to: 'ideal_gas' },
+            { from: 'first_law', to: 'ideal_gas' }, { from: 'second_law', to: 'reversibility' },
+            { from: 'second_law', to: 'carnot' }, { from: 'reversibility', to: 'carnot' },
+
+            // Ideal Gas Process Breakdown
+            { from: 'ideal_gas', to: 'isobaric' }, { from: 'ideal_gas', to: 'isothermal' },
+            { from: 'ideal_gas', to: 'isochoric' }, { from: 'ideal_gas', to: 'adiabatic' },
+            
+            // Connections for Potentials
+            { from: 'potentials', to: 'enthalpy' }, { from: 'potentials', to: 'gibbs' },
+            { from: 'potentials', to: 'chemical_potential' }, { from: 'potentials', to: 'maxwell' },
+            { from: 'gibbs', to: 'spontaneity_criterion' }, { from: 'gibbs', to: 'equilibrium_criterion' },
+            
+            // Connections for Phase Equilibria
+            { from: 'phases', to: 'phase_diagrams' }, { from: 'phases', to: 'phase_rule' },
+            { from: 'phases', to: 'clapeyron' }, { from: 'phases', to: 'equil_conditions' },
+            { from: 'phases', to: 'metastability' }, { from: 'phase_diagrams', to: 'clapeyron' },
+            { from: 'equilibrium_criterion', to: 'metastability', dashes: true },
+
+            // Connections for Mixing
+            { from: 'mixing', to: 'multicomponent' }, { from: 'mixing', to: 'thermo_of_mixing' },
+            { from: 'mixing', to: 'partial_molar' },
+            { from: 'chemical_potential', to: 'partial_molar', label: 'μ is partial molar G', font: {align: 'middle'}, dashes: true},
+            
+            // Cross-topic connections
+            { from: 'extensive_properties', to: 'first_law', label: 'Defines U', font: {align: 'middle'}, dashes:true},
+            { from: 'extensive_properties', to: 'second_law', label: 'Defines S', font: {align: 'middle'}, dashes:true},
+            { from: 'extensive_properties', to: 'potentials', label: 'H, G', font: {align: 'middle'}, dashes:true},
+            { from: 'equilibrium_criterion', to: 'equil_conditions', dashes:true},
+            { from: 'chemical_potential', to: 'equil_conditions', label: 'part of conditions', font: {align: 'middle'}, dashes: true},
+            { from: 'heat_capacity', to: 'ideal_gas' },
+            { from: 'heat_capacity', to: 'enthalpy', label: 'Cp = (dH/dT)p', font: {align: 'middle'}, dashes: true},
+            { from: 'heat_capacity', to: 'first_law', label: 'Cv = (dU/dT)v', font: {align: 'middle'}, dashes: true},
+            { from: 'second_law', to: 'spontaneity_criterion', label: 'S and G both\ndetermine spontaneity', font: {align: 'middle'}, dashes: true},
+            { from: 'second_law', to: 'thermo_of_mixing', label: 'ΔS_mix relates to disorder', font: {align: 'middle'}, dashes: true}
+        ]);
+
+        // 3. Get the container element from the HTML
+        const container = document.getElementById('conceptMap');
+
+        // 4. Combine nodes and edges into a data object
+        const data = { nodes: nodes, edges: edges };
+
+        // 5. Define options for the network's appearance and behavior
+        const options = {
+            nodes: {
+                shape: 'dot', size: 20,
+                font: { size: 14, color: '#333' },
+                borderWidth: 2, shadow: true
+            },
+            edges: {
+                width: 2, shadow: true,
+                color: { color: '#848484', highlight: '#505050' },
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+            },
+            physics: {
+                solver: 'barnesHut',
+                barnesHut: {
+                    gravitationalConstant: -5000,
+                    centralGravity: 0.3,
+                    springLength: 100,
+                    springConstant: 0.05,
+                }
+            },
+            interaction: { hover: true, tooltipDelay: 200 },
+            groups: {
+                center: { color: { background: '#e74c3c', border: '#c0392b' }, size: 40, font: { size: 18, color: 'white' } },
+                level1: { color: { background: '#3498db', border: '#2980b9' }, size: 30 },
+                level2: { color: { background: '#95a5a6', border: '#7f8c8d' }, shape: 'ellipse' },
+                level3: { color: { background: '#ecf0f1', border: '#bdc3c7' }, size: 15, shape: 'box', font: { size: 12 } }
+            }
+        };
+
+        // 6. Create the Network
+        const network = new vis.Network(container, data, options);
+    </script>
+
+</body>
+</html>
