@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Phone Setup Guide</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --container-bg: #2c2c2c;
+            --header-bg: #333;
+            --accent-color: #007bff;
+            --accent-color-hover: #0056b3;
+            --progress-bar-bg: #444;
+            --strikethrough-color: #888;
+            --phase-header-bg: #3a3a3a;
+            --phase-header-hover: #4a4a4a;
+            --modal-bg: rgba(0, 0, 0, 0.7);
+            --modal-content-bg: #333;
+            --complete-color: #28a745;
+        }
+
+        body.light-mode {
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --container-bg: #ffffff;
+            --header-bg: #e9ecef;
+            --accent-color: #007bff;
+            --accent-color-hover: #0056b3;
+            --progress-bar-bg: #e9ecef;
+            --strikethrough-color: #aaa;
+            --phase-header-bg: #f8f9fa;
+            --phase-header-hover: #e2e6ea;
+            --modal-bg: rgba(0, 0, 0, 0.5);
+            --modal-content-bg: #fff;
+            --complete-color: #28a745;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: var(--container-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--header-bg);
+            padding: 20px;
+            border-bottom: 1px solid var(--progress-bar-bg);
+        }
+
+        header h1 {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+        
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .theme-switcher {
+            font-size: 1em;
+            padding: 8px 12px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: var(--accent-color);
+            color: white;
+            transition: background-color 0.2s;
+        }
+        
+        .theme-switcher:hover {
+            background-color: var(--accent-color-hover);
+        }
+
+        .progress-container {
+            width: 100%;
+            background-color: var(--progress-bar-bg);
+            border-radius: 25px;
+            margin-bottom: 5px;
+        }
+
+        .progress-bar {
+            height: 20px;
+            width: 0%;
+            background-color: var(--accent-color);
+            border-radius: 25px;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            line-height: 20px;
+            font-size: 12px;
+            transition: width 0.4s ease, background-color 0.4s ease;
+        }
+        
+        .progress-bar.complete {
+            background-color: var(--complete-color);
+        }
+
+        #progress-text {
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        main {
+            padding: 20px;
+        }
+        
+        details {
+            margin-bottom: 15px;
+            border: 1px solid var(--progress-bar-bg);
+            border-radius: 8px;
+        }
+        
+        details summary {
+            padding: 15px;
+            background-color: var(--phase-header-bg);
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.2em;
+            list-style: none;
+            transition: background-color 0.2s;
+        }
+
+        details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details summary:before {
+            content: '►';
+            margin-right: 10px;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        
+        details[open] summary:before {
+            transform: rotate(90deg);
+        }
+
+        details summary:hover {
+            background-color: var(--phase-header-hover);
+        }
+        
+        .phase-content {
+            padding: 15px;
+        }
+        
+        .todo-item, .sub-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .todo-item {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .sub-item {
+            margin-left: 25px;
+            font-weight: normal;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 12px;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+        }
+        
+        label span {
+            transition: color 0.3s, text-decoration 0.3s;
+        }
+        
+        input[type="checkbox"]:checked + span {
+            text-decoration: line-through;
+            color: var(--strikethrough-color);
+        }
+
+        .info-icon {
+            color: var(--accent-color);
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 8px;
+            font-style: normal;
+            display: inline-block;
+            border: 1px solid var(--accent-color);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            line-height: 18px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: var(--modal-bg);
+        }
+
+        .modal-content {
+            background-color: var(--modal-content-bg);
+            margin: 15% auto;
+            padding: 25px;
+            border: 1px solid var(--progress-bar-bg);
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            position: relative;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Phone Media Player Setup</h1>
+            <div class="header-controls">
+                <span id="progress-text">0/24 Tasks Complete</span>
+                <button class="theme-switcher" id="theme-switcher">Toggle Theme</button>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Phase 0 -->
+            <details open>
+                <summary>Phase 0: Pre-Flight Checklist</summary>
+                <div class="phase-content">
+                    <div class="todo-item">
+                        <label><input type="checkbox" id="task0-1"><span>Charge phone to 100%.</span></label>
+                    </div>
+                    <div class="todo-item">
+                        <label><input type="checkbox" id="task0-2"><span>Have 256GB microSD card ready.</span></label>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Phase 1 -->
+            <details>
+                <summary>Phase 1: The Essential Foundation</summary>
+                <div class="phase-content">
+                    <div class="todo-item" style="display:block; margin-bottom: 10px;">
+                        <label><input type="checkbox" id="step1-master"><span>Step 1: First Boot and Initial Setup</span></label>
+                    </div>
+                    <div class="sub-item"><label><input type="checkbox" class="sub-task" data-parent="step1-master"><span>Power on & proceed through language/region.</span></label></div>
+                    <div class="sub-item"><label><input type="checkbox" class="sub-task" data-parent="step1-master"><span>SKIP SIM/mobile network setup.</span></label></div>
+                    <div class="sub-item"><label><input type="checkbox" class="sub-task" data-parent="step1-master"><span>Connect to home Wi-Fi.</span></label></div>
+                    <div class="sub-item"><label><input type="checkbox" class="sub-task" data-parent="step1-master"><span>Sign in with primary Google Account.</span></label></div>
+                    <div class="sub-item"><label><input type="checkbox" class="sub-task" data-parent="step1-master"><span>Decline recommended apps and programs.</span></label></div>
+                    
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+                    
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task1-2">
+                            <span>Step 2: Install and Format MicroSD Card as "Portable Storage".</span>
+                        </label>
+                        <i class="info-icon" data-info="Formatting as 'Portable' allows you to easily eject the card and read its contents on your laptop. If you chose 'Internal,' the card would be encrypted and locked to this phone only, defeating its flexibility.">i</i>
+                    </div>
+
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task1-3">
+                            <span>Step 3: Perform Basic Debloat (Uninstall/Disable carrier apps).</span>
+                        </label>
+                    </div>
+                </div>
+            </details>
+            
+            <!-- Phase 2 -->
+            <details>
+                <summary>Phase 2: Hardening and Optimization</summary>
+                <div class="phase-content">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-1">
+                            <span>Step 4: Set Play Store to "Don't auto-update apps".</span>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-2">
+                            <span>Step 4: Install initial System Update, then ignore future ones.</span>
+                             <i class="info-icon" data-info="The goal is long-term stability. The first update often contains important bug fixes. Future updates might introduce unwanted changes or bugs.">i</i>
+                        </label>
+                    </div>
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-3">
+                            <span>Step 5: Set Camera storage location to "SD Card".</span>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-4">
+                            <span>Step 5: Install Music Player (e.g., VLC for Android).</span>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-5">
+                            <span>Step 5: Install Audio Recorder (e.g., Dolby On).</span>
+                        </label>
+                    </div>
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-6">
+                            <span>Step 6: Perform Permissions Lockdown (Revoke unneeded permissions).</span>
+                            <i class="info-icon" data-info="Go to Settings > Apps. For each app, select 'Permissions' and revoke anything that doesn't make sense. Does the Clock app need your location? No. This enhances privacy and saves battery.">i</i>
+                        </label>
+                    </div>
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+                     <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task2-7">
+                            <span>Step 7: Turn off Bluetooth, NFC, and Location to maximize battery.</span>
+                        </label>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Phase 3 -->
+            <details>
+                <summary>Phase 3: The Fun Projects (Optional)</summary>
+                <div class="phase-content">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task3-1">
+                            <span>Project A: Load music on SD card for Car Companion mode.</span>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task3-2">
+                            <span>Project B: Install AlfredCamera for Home Security Cam.</span>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task3-3">
+                            <span>Project C: Install RetroArch for Retro Gaming.</span>
+                        </label>
+                    </div>
+                </div>
+            </details>
+            
+            <!-- Phase 4 -->
+            <details>
+                <summary>Phase 4: The Advanced "Enthusiast" Track (Optional)</summary>
+                <div class="phase-content">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task4-1">
+                            <span>Step 8: Enable Developer Options & USB Debugging.</span>
+                            <i class="info-icon" data-info="Go to Settings > About phone and tap 'Build number' seven times. Then find Developer options in Settings > System.">i</i>
+                        </label>
+                    </div>
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task4-2">
+                            <span>Step 8: Use ADB on PC to perform true system debloating.</span>
+                        </label>
+                    </div>
+                    <hr style="margin: 20px 0; border-color: var(--progress-bar-bg);">
+                    <div class="todo-item">
+                        <label>
+                            <input type="checkbox" id="task4-3">
+                            <span>Step 9: Install the F-Droid App Store for open-source apps.</span>
+                        </label>
+                    </div>
+                </div>
+            </details>
+
+        </main>
+    </div>
+
+    <!-- Modal Structure -->
+    <div id="info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <p id="modal-text"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const totalTasks = checkboxes.length;
+
+            // Modal elements
+            const modal = document.getElementById('info-modal');
+            const modalText = document.getElementById('modal-text');
+            const closeButton = document.querySelector('.close-button');
+            const infoIcons = document.querySelectorAll('.info-icon');
+            
+            // Theme switcher
+            const themeSwitcher = document.getElementById('theme-switcher');
+
+            const updateProgress = () => {
+                const checkedTasks = document.querySelectorAll('input[type="checkbox"]:checked').length;
+                const percentage = totalTasks > 0 ? (checkedTasks / totalTasks) * 100 : 0;
+                
+                progressBar.style.width = percentage + '%';
+                progressText.textContent = `${checkedTasks}/${totalTasks} Tasks Complete`;
+
+                if (checkedTasks === totalTasks) {
+                    progressText.textContent = "🎉 Setup Complete! 🎉";
+                    progressBar.classList.add('complete');
+                } else {
+                    progressBar.classList.remove('complete');
+                }
+            };
+
+            const saveState = () => {
+                const state = [];
+                checkboxes.forEach(cb => {
+                    state.push(cb.checked);
+                });
+                localStorage.setItem('phoneSetupProgress', JSON.stringify(state));
+            };
+
+            const loadState = () => {
+                const savedState = JSON.parse(localStorage.getItem('phoneSetupProgress'));
+                if (savedState && savedState.length === totalTasks) {
+                    checkboxes.forEach((cb, index) => {
+                        cb.checked = savedState[index];
+                    });
+                }
+            };
+            
+            const saveTheme = (theme) => {
+                localStorage.setItem('phoneSetupTheme', theme);
+            };
+
+            const loadTheme = () => {
+                const savedTheme = localStorage.getItem('phoneSetupTheme');
+                if (savedTheme === 'light') {
+                    document.body.classList.add('light-mode');
+                }
+            };
+
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    // Master checkbox logic
+                    if (checkbox.id.endsWith('-master')) {
+                        const isChecked = checkbox.checked;
+                        const subTasks = document.querySelectorAll(`.sub-task[data-parent="${checkbox.id}"]`);
+                        subTasks.forEach(sub => sub.checked = isChecked);
+                    }
+                    // Sub-task logic
+                    if (checkbox.classList.contains('sub-task')) {
+                        const parentId = checkbox.dataset.parent;
+                        const parentCheckbox = document.getElementById(parentId);
+                        const allSubTasks = document.querySelectorAll(`.sub-task[data-parent="${parentId}"]`);
+                        const allChecked = Array.from(allSubTasks).every(sub => sub.checked);
+                        parentCheckbox.checked = allChecked;
+                    }
+
+                    updateProgress();
+                    saveState();
+                });
+            });
+
+            // Theme switcher logic
+            themeSwitcher.addEventListener('click', () => {
+                document.body.classList.toggle('light-mode');
+                const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+                saveTheme(theme);
+            });
+
+            // Modal logic
+            infoIcons.forEach(icon => {
+                icon.addEventListener('click', () => {
+                    const infoText = icon.getAttribute('data-info');
+                    modalText.textContent = infoText;
+                    modal.style.display = 'block';
+                });
+            });
+
+            closeButton.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (event) => {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                }
+            });
+
+            // Initial Load
+            loadTheme();
+            loadState();
+            updateProgress();
+        });
+    </script>
+</body>
+</html>

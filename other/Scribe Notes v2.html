@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Scribe - Mobile Notes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { transform: translateX(0); }
+            to { transform: translateX(-100%); }
+        }
+        .slide-in { animation: slideIn 0.3s forwards ease-out; }
+        .slide-out { animation: slideOut 0.3s forwards ease-out; }
+        .editor-content:focus { outline: none; }
+        .editor-content::-webkit-scrollbar { width: 6px; }
+        .editor-content::-webkit-scrollbar-track { background: transparent; }
+        .editor-content::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        .editor-content::-webkit-scrollbar-thumb:hover { background: #718096; }
+        .note-list::-webkit-scrollbar { width: 6px; }
+        .note-list::-webkit-scrollbar-track { background: transparent; }
+        .note-list::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        .note-list::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        body { overscroll-behavior: none; }
+    </style>
+</head>
+<body class="bg-gray-800 text-gray-100 font-sans antialiased overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // --- TYPE DEFINITIONS ---
+        // interface Note {
+        //   id: string;
+        //   title: string;
+        //   content: string;
+        //   createdAt: number;
+        //   updatedAt: number;
+        // }
+
+        // --- ICONS ---
+        const MenuIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        );
+
+        const PlusIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+        );
+
+        const TrashIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        );
+
+        const CloseIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const UndoIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 15l-3-3m0 0l3-3m-3 3h8a5 5 0 000-10H9" />
+            </svg>
+        );
+
+        const RedoIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 15l3-3m0 0l-3-3m3 3H5a5 5 0 000 10h1" />
+            </svg>
+        );
+
+        const SearchIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        );
+
+        // --- HELPER FUNCTIONS ---
+        const formatDate = (timestamp) => {
+            return new Date(timestamp).toLocaleString(undefined, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+            });
+        };
+
+        // --- COMPONENTS ---
+        const DeleteConfirmationModal = ({ onConfirm, onCancel }) => (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+                <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+                    <h3 id="delete-modal-title" className="text-xl font-semibold mb-4">Delete Note?</h3>
+                    <p className="text-gray-400 mb-6">This action cannot be undone. Are you sure you want to permanently delete this note?</p>
+                    <div className="flex justify-end space-x-4">
+                        <button onClick={onCancel} className="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400">
+                            Cancel
+                        </button>
+                        <button onClick={onConfirm} className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-red-400">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+        
+        const FormattingToolbar = ({ onFormat, activeFormats }) => {
+            const formatButtons = [
+                { command: 'bold', label: 'B', className: 'font-bold' },
+                { command: 'italic', label: 'I', className: 'italic' },
+                { command: 'underline', label: 'U', className: 'underline' },
+                { command: 'insertUnorderedList', label: '•', className: 'text-xl' },
+                { command: 'insertOrderedList', label: '1.', className: 'text-lg' },
+            ];
+
+            const historyButtons = [
+                { command: 'undo', label: <UndoIcon />, aria: 'Undo' },
+                { command: 'redo', label: <RedoIcon />, aria: 'Redo' },
+            ];
+            
+            return (
+                <div className="bg-gray-700 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex items-center justify-center space-x-2 border-t border-gray-600 z-10 relative">
+                    {formatButtons.map(({ command, label, className }) => (
+                         <button
+                            key={command}
+                            onClick={() => onFormat(command)}
+                            className={`w-10 h-10 flex items-center justify-center rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${className} ${activeFormats.has(command) ? 'bg-blue-600 text-white' : ''}`}
+                            aria-label={`Format ${command}`}
+                            aria-pressed={activeFormats.has(command)}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                    <div className="border-l border-gray-600 h-8 mx-2"></div>
+                    {historyButtons.map(({ command, label, aria }) => (
+                         <button
+                            key={command}
+                            onClick={() => onFormat(command)}
+                            className="w-10 h-10 flex items-center justify-center rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            aria-label={aria}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            );
+        };
+
+        const Editor = ({ activeNote, onUpdateNote }) => {
+            const contentRef = useRef(null);
+            const [activeFormats, setActiveFormats] = useState(new Set());
+            const formatCommands = ['bold', 'italic', 'underline', 'insertUnorderedList', 'insertOrderedList'];
+
+            const updateActiveFormats = useCallback(() => {
+                const newActiveFormats = new Set();
+                formatCommands.forEach(cmd => {
+                    if (document.queryCommandState(cmd)) {
+                        newActiveFormats.add(cmd);
+                    }
+                });
+                setActiveFormats(prev => {
+                    if (prev.size === newActiveFormats.size && [...prev].every(value => newActiveFormats.has(value))) {
+                        return prev; 
+                    }
+                    return newActiveFormats;
+                });
+            }, []);
+
+            useEffect(() => {
+                const handleSelectionChange = () => {
+                    if (document.activeElement === contentRef.current) {
+                        updateActiveFormats();
+                    }
+                };
+                document.addEventListener('selectionchange', handleSelectionChange);
+                return () => {
+                    document.removeEventListener('selectionchange', handleSelectionChange);
+                };
+            }, [updateActiveFormats]);
+
+            useEffect(() => {
+                if (activeNote && contentRef.current && contentRef.current.innerHTML !== activeNote.content) {
+                    contentRef.current.innerHTML = activeNote.content;
+                }
+            }, [activeNote]);
+
+            if (!activeNote) {
+                return (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-900 h-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <h2 className="text-xl">Select a note to get started</h2>
+                        <p>Or create a new one!</p>
+                    </div>
+                );
+            }
+
+            const handleContentChange = (e) => {
+                onUpdateNote(activeNote.id, { content: e.currentTarget.innerHTML });
+            };
+
+            const handleTitleChange = (e) => {
+                onUpdateNote(activeNote.id, { title: e.target.value });
+            };
+            
+            const handleFormat = (command) => {
+                document.execCommand(command, false, null);
+                if (contentRef.current) {
+                   onUpdateNote(activeNote.id, { content: contentRef.current.innerHTML });
+                   contentRef.current.focus(); 
+                   updateActiveFormats();
+                }
+            };
+            
+            return (
+                <div className="flex-1 flex flex-col bg-gray-900 h-full">
+                    <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] pl-16 md:pl-4 border-b border-gray-700">
+                        <input
+                            type="text"
+                            value={activeNote.title}
+                            onChange={handleTitleChange}
+                            placeholder="Note Title"
+                            className="w-full bg-transparent text-2xl font-bold focus:outline-none"
+                        />
+                        <div className="text-xs text-gray-400 mt-1">
+                            Last updated: {formatDate(activeNote.updatedAt)}
+                        </div>
+                    </div>
+                    <div
+                        ref={contentRef}
+                        contentEditable
+                        onInput={handleContentChange}
+                        onKeyUp={updateActiveFormats}
+                        onMouseUp={updateActiveFormats}
+                        onFocus={updateActiveFormats}
+                        className="flex-1 p-4 overflow-y-auto editor-content"
+                    />
+                    <FormattingToolbar onFormat={handleFormat} activeFormats={activeFormats}/>
+                </div>
+            );
+        };
+        
+        const NoteList = ({ notes, activeNoteId, onSelectNote, onNewNote, onDeleteNote, isMenuOpen, onCloseMenu, searchQuery, onSearchChange }) => {
+            return (
+                <div
+                  className={`absolute md:relative top-0 left-0 w-full max-w-xs md:w-80 h-full bg-gray-800 border-r border-gray-700 flex flex-col transition-transform duration-300 ease-in-out z-20 ${
+                    isMenuOpen ? 'translate-x-0' : '-translate-x-full'
+                  } md:translate-x-0`}
+                >
+                    <div className="flex items-center justify-between p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-gray-700">
+                        <h1 className="text-2xl font-bold text-white">Scribe</h1>
+                        <div className="flex items-center space-x-2">
+                           <button onClick={onNewNote} className="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <PlusIcon />
+                            </button>
+                            <button onClick={onCloseMenu} className="p-2 rounded-full hover:bg-gray-700 md:hidden">
+                                <CloseIcon />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-2 border-b border-gray-700">
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                <SearchIcon />
+                            </span>
+                            <input
+                                type="search"
+                                value={searchQuery}
+                                onChange={(e) => onSearchChange(e.target.value)}
+                                placeholder="Search notes..."
+                                className="w-full bg-gray-700/80 text-white rounded-md py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                                aria-label="Search notes"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto note-list pb-[env(safe-area-inset-bottom)]">
+                        {notes.length > 0 ? (
+                            notes.map(note => (
+                                <div
+                                    key={note.id}
+                                    onClick={() => onSelectNote(note.id)}
+                                    className={`p-4 cursor-pointer border-b border-gray-700/50 transition-colors ${
+                                        activeNoteId === note.id ? 'bg-gray-700' : 'hover:bg-gray-700/50'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="font-semibold truncate pr-2">{note.title || 'Untitled Note'}</h3>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteNote(note.id);
+                                            }}
+                                            className="p-1 rounded-full text-gray-400 hover:bg-red-500/20 hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            aria-label="Delete note"
+                                        >
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+                                    <p className="text-sm text-gray-400 mt-1 truncate">
+                                        {(note.content || '').replace(/<[^>]+>/g, '').substring(0, 80) || 'No content'}
+                                    </p>
+                                    <span className="text-xs text-gray-500 block mt-2">{formatDate(note.updatedAt)}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-4 text-center text-gray-500">
+                                <p>{searchQuery ? 'No matching notes found.' : 'No notes yet.'}</p>
+                                {!searchQuery && <p>Click the '+' icon to create one.</p>}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [notes, setNotes] = useState([]);
+            const [activeNoteId, setActiveNoteId] = useState(null);
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [noteToDelete, setNoteToDelete] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+
+            useEffect(() => {
+                try {
+                    const savedNotes = JSON.parse(localStorage.getItem('scribe-notes'));
+                    if (savedNotes && Array.isArray(savedNotes)) {
+                        const sortedNotes = savedNotes.sort((a, b) => b.updatedAt - a.updatedAt);
+                        setNotes(sortedNotes);
+                        if (sortedNotes.length > 0) {
+                            setActiveNoteId(sortedNotes[0].id);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Failed to load notes from localStorage", error);
+                }
+            }, []);
+
+            useEffect(() => {
+                try {
+                    localStorage.setItem('scribe-notes', JSON.stringify(notes));
+                } catch (error) {
+                    console.error("Failed to save notes to localStorage", error);
+                }
+            }, [notes]);
+
+            const handleNewNote = () => {
+                const newNote = {
+                    id: crypto.randomUUID(),
+                    title: 'Untitled Note',
+                    content: '',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                };
+                setNotes(prevNotes => [newNote, ...prevNotes]);
+                setActiveNoteId(newNote.id);
+                setIsMenuOpen(false);
+            };
+
+            const handleSelectNote = (id) => {
+                setActiveNoteId(id);
+                setIsMenuOpen(false);
+            };
+
+            const handleDeleteNoteRequest = (id) => {
+                setNoteToDelete(id);
+            };
+            
+            const handleConfirmDelete = () => {
+                if (!noteToDelete) return;
+                
+                const noteIndex = notes.findIndex(n => n.id === noteToDelete);
+                const updatedNotes = notes.filter(note => note.id !== noteToDelete);
+
+                if (activeNoteId === noteToDelete) {
+                    let newActiveNoteId = null;
+                    if (updatedNotes.length > 0) {
+                        newActiveNoteId = updatedNotes[noteIndex]?.id || updatedNotes[noteIndex - 1]?.id || updatedNotes[0].id;
+                    }
+                    setActiveNoteId(newActiveNoteId);
+                }
+
+                setNotes(updatedNotes);
+                setNoteToDelete(null);
+            };
+            
+            const handleCancelDelete = () => {
+                setNoteToDelete(null);
+            };
+
+            const handleUpdateNote = useCallback((id, updatedFields) => {
+                setNotes(prevNotes => {
+                    const noteToUpdate = prevNotes.find(note => note.id === id);
+                    if (!noteToUpdate) return prevNotes;
+
+                    const updatedNote = { ...noteToUpdate, ...updatedFields, updatedAt: Date.now() };
+                    const otherNotes = prevNotes.filter(note => note.id !== id);
+                    return [updatedNote, ...otherNotes];
+                });
+            }, []);
+
+            const activeNote = notes.find(note => note.id === activeNoteId);
+            
+            const filteredAndSortedNotes = notes.filter(note => {
+                const titleMatch = note.title.toLowerCase().includes(searchQuery.toLowerCase());
+                const contentText = (note.content || '').replace(/<[^>]+>/g, ''); // Strip HTML
+                const contentMatch = contentText.toLowerCase().includes(searchQuery.toLowerCase());
+                return titleMatch || contentMatch;
+            }).sort((a, b) => b.updatedAt - a.updatedAt);
+
+            return (
+                <div className="h-[100dvh] w-screen flex relative bg-gray-900 overflow-hidden">
+                    {noteToDelete && <DeleteConfirmationModal onConfirm={handleConfirmDelete} onCancel={handleCancelDelete} />}
+                    
+                    <NoteList
+                        notes={filteredAndSortedNotes}
+                        activeNoteId={activeNoteId}
+                        onSelectNote={handleSelectNote}
+                        onNewNote={handleNewNote}
+                        onDeleteNote={handleDeleteNoteRequest}
+                        isMenuOpen={isMenuOpen}
+                        onCloseMenu={() => setIsMenuOpen(false)}
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
+                    />
+                    <main 
+                        className="flex-1 flex flex-col h-full relative"
+                        onClick={() => {
+                            if (isMenuOpen) {
+                                setIsMenuOpen(false);
+                            }
+                        }}
+                    >
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMenuOpen(true)
+                            }}
+                            className="md:hidden absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 z-10 p-2 bg-gray-700 rounded-full"
+                            aria-label="Open notes list"
+                        >
+                            <MenuIcon />
+                        </button>
+                        <Editor activeNote={activeNote} onUpdateNote={handleUpdateNote} />
+                    </main>
+                </div>
+            );
+        };
+        
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
