@@ -10,6 +10,14 @@ A collection of small, single-file games and applications created using AI-assis
 ## The Games & Apps
 Click any link to play or use the app instantly in your browser.
 
+### Ambient Engine (v2.3)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Ambient%20Engine%20v2.3.html)
+*   **Description:** A relaxing game where you interact with particles under different effects. Made for mobile or desktop.
+
+### Bird Sim (v4)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Bird%20Sim%20v4.html)
+*   **Description:** A simulation with birds that fight each other, flock, and slowly adapt over time.
+
 ### Earthflax (v4.3)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Earthflax%20v4.3.html)
 *   **Description:** An abstract, atmospheric puzzle game. Use indirect controls to adjust focus, tempo, and hue to stabilize a chaotic particle system and match hidden target values.
@@ -28,7 +36,11 @@ Click any link to play or use the app instantly in your browser.
 
 ### Mayors Orbit (v2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Mayors%20Orbit%20v2.html)
-*   **Description:** A resource management game inspired by *Reigns*. Swipe cards left or right to make binary choices as mayor, balancing your approval, budget, and scandal meters to survive.
+*   **Description:** A resource management game inspired by *Reigns*. Swipe cards left or right to make binary choices as mayor, balancing your approval, budget, and scandal meters to survive. Intended for mobile and desktop.
+
+### Pumpkin Hunt Horror Game (v2)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pumpkin%20Hunt%20Horror%20Game%20v3.html)
+*   **Description:** A 3D game inspired by *Slender Man*.
 
 ### Pirate Fleet Commander (v7.4)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pirate%20Fleet%20Commander%20v7.4.html)
@@ -40,7 +52,7 @@ Click any link to play or use the app instantly in your browser.
 
 ### Solarized Clicker: Singularity (v3.2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Solarized%20Cookie%20Clicker%20Singularity%20v3.2.html)
-*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get temporary boosts and purchase upgrades to increase your output.
+*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get temporary boosts and purchase upgrades to increase your output. Works on mobile and desktop.
 
 ### The Infinite Content Machine (v4.2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
@@ -58,7 +70,7 @@ Click any link to play or use the app instantly in your browser.
 3.  Double-click any `.html` game file to open it in your browser.
 
 ## Compatibility
-These games are built with standard HTML, CSS, and JavaScript and should run on any modern browser (like Chrome, Firefox, Safari, or Edge). The games are not intended for mobile or small screens, so they may not display properly.
+These games are built with standard HTML, CSS, and JavaScript and should run on any modern browser (like Chrome, Firefox, Safari, or Edge). Most of these games are not intended for mobile or small screens unless stateed otherwise.
 
 ## Vibe Coding Process
-These games were made with a combination of Gemini 2.5 Pro and Claude Sonnet 4.5. I alternated between them for brainstorming ideas and generating/updating the games. The only parts of code I manually added or changed were for minor balance adjustments.
+These games were made with a combination of Gemini 2.5 Pro on Google's AI Studio and Claude Sonnet 4.5 on Anthropic's Claude.ai. I alternated between them for brainstorming ideas and generating/updating the games. The only parts of code I manually added or changed were for minor balance adjustments.
