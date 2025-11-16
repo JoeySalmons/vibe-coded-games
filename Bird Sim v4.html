@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carnivorous Birds – Evolution Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    html, body { height: 100%; margin:0; overflow:hidden; background: #0b1020; }
+    canvas{ display:block; cursor: crosshair; }
+    
+    .panel {
+      position: absolute; color:white; background: rgba(0,0,0,0.75); border-radius: 12px; padding: 10px;
+      backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.1); max-height: 80vh; overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move;
+      user-select: none; padding: 4px 0;
+    }
+    .panel-title { font-weight: 700; font-size: 14px; }
+    .panel-controls { display: flex; gap: 6px; }
+    .panel-btn {
+      width: 20px; height: 20px; border-radius: 4px; background: rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 11px;
+      transition: background 0.2s;
+    }
+    .panel-btn:hover { background: rgba(255,255,255,0.2); }
+    .panel-content { font-size: 12px; line-height: 1.5; }
+    .panel.minimized .panel-content { display: none; }
+    
+    .stat-row { display: flex; justify-content: space-between; gap: 12px; margin: 2px 0; }
+    .stat-label { color: #aaa; }
+    .stat-value { color: #fff; font-weight: 600; }
+    
+    .gene-bar {
+      height: 16px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 4px 0; position: relative;
+      overflow: hidden;
+    }
+    .gene-bar-fill {
+      height: 100%; background: linear-gradient(90deg, #4dabf7, #51cf66); border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .gene-bar-label {
+      position: absolute; left: 6px; top: 0; line-height: 16px; font-size: 10px; color: white;
+      text-shadow: 0 0 3px black;
+    }
+    
+    .chart { width: 100%; height: 120px; margin-top: 8px; }
+    
+    .controls { 
+      position:absolute; left:10px; bottom:10px; display:flex; gap:8px; align-items:center; 
+      flex-wrap: wrap; max-width: 600px;
+    }
+    .btn {
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+      border: none; color: white; font-weight: 600; transition: all 0.2s;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .btn-red { background: #e03131; }
+    .btn-red:hover { background: #c92a2a; }
+    .btn-blue { background: #228be6; }
+    .btn-blue:hover { background: #1c7ed6; }
+    .btn-green { background: #37b24d; }
+    .btn-green:hover { background: #2f9e44; }
+    .btn-slate { background: #495057; }
+    .btn-slate:hover { background: #343a40; }
+    .btn-purple { background: #9c36b5; }
+    .btn-purple:hover { background: #862e9c; }
+    
+    .badge { background: rgba(255,255,255,0.15); padding: 3px 8px; border-radius: 6px; font-size: 11px; }
+    
+    .color-dot { 
+      display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; 
+      vertical-align: -1px; 
+    }
+    
+    .group-title { font-weight: 700; margin-top: 10px; margin-bottom: 4px; font-size: 11px; color: #ffd43b; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+    .row input[type=range] { width: 120px; }
+    .row input[type=number] { 
+      width: 60px; background: rgba(255,255,255,0.1); color: white; border: none; 
+      border-radius: 4px; padding: 2px 6px; font-size: 11px;
+    }
+    
+    .bird-indicator {
+      position: absolute; pointer-events: none; font-size: 9px; color: white;
+      text-shadow: 0 0 3px black, 0 0 2px black;
+    }
+    .health-bar {
+      width: 30px; height: 3px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden;
+    }
+    .health-fill { height: 100%; background: #51cf66; }
+    .hunger-fill { height: 100%; background: #ffd43b; }
+    .stamina-fill { height: 100%; background: #4dabf7; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- Stats Panel -->
+  <div id="statsPanel" class="panel" style="left: 10px; top: 10px; width: 220px;">
+    <div class="panel-header">
+      <div class="panel-title">📊 Statistics</div>
+      <div class="panel-controls">
+        <div class="panel-btn" onclick="minimizePanel('statsPanel')">−</div>
+      </div>
+    </div>
+    <div class="panel-content">
+      <div class="stat-row"><span class="stat-label">Total Birds:</span><span class="stat-value" id="birdCount">0</span></div>
+      <div class="stat-row"><span class="stat-label">Births:</span><span class="stat-value" id="birthCount">0</span></div>
+      <div class="stat-row"><span class="stat-label">Deaths:</span><span class="stat-value" id="deathCount">0</span></div>
+      <div class="stat-row"><span class="stat-label">Spawn Points:</span><span class="stat-value" id="spawnCount">0</span></div>
+      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <div class="stat-row"><span class="stat-label"><span class="color-dot" style="background:#FF6B6B"></span>Red:</span><span class="stat-value" id="redCount">0</span></div>
+        <div class="stat-row"><span class="stat-label"><span class="color-dot" style="background:#4DABF7"></span>Blue:</span><span class="stat-value" id="blueCount">0</span></div>
+        <div class="stat-row"><span class="stat-label"><span class="color-dot" style="background:#51CF66"></span>Green:</span><span class="stat-value" id="greenCount">0</span></div>
+        <div class="stat-row"><span class="stat-label"><span class="color-dot" style="background:#FFD43B"></span>Yellow:</span><span class="stat-value" id="yellowCount">0</span></div>
+      </div>
+      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <div class="stat-row"><span class="stat-label">Fruits:</span><span class="stat-value" id="fruitCount">0</span></div>
+        <div class="stat-row"><span class="stat-label">Corpses:</span><span class="stat-value" id="corpseCount">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Genetics Panel -->
+  <div id="geneticsPanel" class="panel" style="left: 10px; top: 260px; width: 220px;">
+    <div class="panel-header">
+      <div class="panel-title">🧬 Genetics</div>
+      <div class="panel-controls">
+        <div class="panel-btn" onclick="minimizePanel('geneticsPanel')">−</div>
+      </div>
+    </div>
+    <div class="panel-content">
+      <div style="font-size: 10px; color: #aaa; margin-bottom: 6px;">Average Genes (All Birds)</div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="sizeGeneBar"></div>
+        <div class="gene-bar-label">Size: <span id="sizeGeneVal">1.00</span></div>
+      </div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="visionGeneBar"></div>
+        <div class="gene-bar-label">Vision: <span id="visionGeneVal">1.00</span></div>
+      </div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="speedGeneBar"></div>
+        <div class="gene-bar-label">Speed: <span id="speedGeneVal">1.00</span></div>
+      </div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="aggressionGeneBar"></div>
+        <div class="gene-bar-label">Aggression: <span id="aggressionGeneVal">1.00</span></div>
+      </div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="socialGeneBar"></div>
+        <div class="gene-bar-label">Social: <span id="socialGeneVal">1.00</span></div>
+      </div>
+      <div class="gene-bar">
+        <div class="gene-bar-fill" id="metabolismGeneBar"></div>
+        <div class="gene-bar-label">Metabolism: <span id="metabolismGeneVal">1.00</span></div>
+      </div>
+      <div style="margin-top: 8px; font-size: 10px; color: #aaa;">
+        <div class="stat-row"><span>Genetic Diversity:</span><span id="geneticDiversity">0%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Population Chart -->
+  <div id="chartPanel" class="panel" style="right: 10px; top: 10px; width: 280px;">
+    <div class="panel-header">
+      <div class="panel-title">📈 Population History</div>
+      <div class="panel-controls">
+        <div class="panel-btn" onclick="minimizePanel('chartPanel')">−</div>
+      </div>
+    </div>
+    <div class="panel-content">
+      <canvas id="popChart" class="chart" width="260" height="120"></canvas>
+      <div style="font-size: 10px; color: #aaa; margin-top: 6px;">
+        <span class="color-dot" style="background:#FF6B6B"></span>Red
+        <span class="color-dot" style="background:#4DABF7; margin-left:8px;"></span>Blue
+        <span class="color-dot" style="background:#51CF66; margin-left:8px;"></span>Green
+        <span class="color-dot" style="background:#FFD43B; margin-left:8px;"></span>Yellow
+      </div>
+    </div>
+  </div>
+
+  <!-- Bird Inspector -->
+  <div id="inspectorPanel" class="panel" style="right: 10px; top: 220px; width: 280px; display: none;">
+    <div class="panel-header">
+      <div class="panel-title">🔍 Bird Inspector</div>
+      <div class="panel-controls">
+        <div class="panel-btn" onclick="closeInspector()">✕</div>
+        <div class="panel-btn" onclick="minimizePanel('inspectorPanel')">−</div>
+      </div>
+    </div>
+    <div class="panel-content" id="inspectorContent"></div>
+  </div>
+
+  <!-- Tuning Panel -->
+  <div id="tuningPanel" class="panel" style="right: 10px; bottom: 10px; width: 260px; display: none;">
+    <div class="panel-header">
+      <div class="panel-title">⚙️ Tuning</div>
+      <div class="panel-controls">
+        <div class="panel-btn" onclick="minimizePanel('tuningPanel')">−</div>
+      </div>
+    </div>
+    <div class="panel-content">
+      <div class="group-title">Physics</div>
+      <div class="row"><label>Gravity</label><input id="gravity" type="range" min="0" max="0.6" step="0.01"><input id="gravity_num" type="number" step="0.01"></div>
+      <div class="row"><label>Air Drag</label><input id="airDrag" type="range" min="0.95" max="1" step="0.0005"><input id="airDrag_num" type="number" step="0.0005"></div>
+      <div class="row"><label>Lift Power</label><input id="liftPower" type="range" min="0" max="1.2" step="0.01"><input id="liftPower_num" type="number" step="0.01"></div>
+      
+      <div class="group-title">Food</div>
+      <div class="row"><label>Fruit Grow (ms)</label><input id="fruitGrowInterval" type="range" min="1000" max="20000" step="500"><input id="fruitGrowInterval_num" type="number" step="100"></div>
+      <div class="row"><label>Fruit Nutrition</label><input id="fruitNutrition" type="range" min="5" max="100" step="1"><input id="fruitNutrition_num" type="number" step="1"></div>
+      
+      <div class="group-title">Behavior</div>
+      <div class="row"><label>Cohesion</label><input id="cohere" type="range" min="0" max="4" step="0.1"><input id="cohere_num" type="number" step="0.1"></div>
+      <div class="row"><label>Hunt</label><input id="hunt" type="range" min="0" max="5" step="0.1"><input id="hunt_num" type="number" step="0.1"></div>
+      <div class="row"><label>Flee</label><input id="flee" type="range" min="0" max="5" step="0.1"><input id="flee_num" type="number" step="0.1"></div>
+      
+      <div class="group-title">Reproduction</div>
+      <div class="row"><label>Hunger Min</label><input id="reproHungerMin" type="range" min="50" max="100" step="1"><input id="reproHungerMin_num" type="number" step="1"></div>
+      <div class="row"><label>Health Min</label><input id="reproHealthMin" type="range" min="30" max="100" step="1"><input id="reproHealthMin_num" type="number" step="1"></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-red" onclick="init()">Reset</button>
+    <button class="btn btn-blue" onclick="paused = !paused">Pause/Resume</button>
+    <button id="toggleAutoBtn" class="btn btn-green" onclick="toggleAutoSpawn()">Auto-Spawn: On</button>
+    <button class="btn btn-slate" onclick="togglePanel('tuningPanel')">Tuning</button>
+    <button class="btn btn-purple" onclick="toggleShowBars()">Health Bars: <span id="barsStatus">Off</span></button>
+    <div class="badge" style="font-size: 10px;">Click: spawn | Shift+Click: add spawn point | Alt+Click: remove spawn | Click bird: inspect</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    resize(); window.addEventListener('resize', resize);
+
+    // Configuration
+    const CONFIG = {
+      physics: { gravity: 0.12, airDrag: 0.994, liftPower: 0.42, flapCost: 0.28, staminaRegen: 0.08, groundBounce: 0.08, groundFriction: 0.9 },
+      world: { groundBase: 0.85, groundAmp: 48, groundFreq: 0.0022, treeCount: 16, bushCount: 26 },
+      food: { fruitGrowInterval: 9000, fruitNutrition: 28, corpseNutrition: 60, maxFruitsPerTree: 6, maxFruitsPerBush: 4 },
+      behavior: { align: 1.2, cohere: 2.1, separate: 1.7, hunt: 2.3, flee: 3.0, seekFood: 2.2, perceptionBase: 90 },
+      reproduction: { hungerMin: 85, healthMin: 70, cooldown: 320 }
+    };
+
+    const BIRD_COLORS = [
+      { name:'red', color:'#FF6B6B', rgb:[255,107,107], speedMult:1.2, sizeMult:1.15, aggressionBonus:0.35, socialTendency:0.6, reproductionRate:0.8, metabolism:1.3, packHunting:true, territorial:true },
+      { name:'blue', color:'#4DABF7', rgb:[77,171,247], speedMult:1.0, sizeMult:1.0, aggressionBonus:0.0, socialTendency:1.3, reproductionRate:1.25, metabolism:0.95, packHunting:true, territorial:false },
+      { name:'green', color:'#51CF66', rgb:[81,207,102], speedMult:1.35, sizeMult:0.75, aggressionBonus:-0.15, socialTendency:1.0, reproductionRate:1.5, metabolism:0.75, packHunting:false, territorial:false },
+      { name:'yellow', color:'#FFD43B', rgb:[255,212,59], speedMult:0.85, sizeMult:1.2, aggressionBonus:0.1, socialTendency:0.85, reproductionRate:0.9, metabolism:0.65, packHunting:false, territorial:true }
+    ];
+
+    // State
+    let birds = [], particles = [], corpses = [], fruits = [], trees = [], bushes = [], clouds = [];
+    let paused = false, autoSpawn = true, showHealthBars = false;
+    let spawnPoints = [], nextSpawnPointId = 1;
+    let selectedBird = null;
+    let totalBirths = 0, totalDeaths = 0;
+    
+    // Time series data
+    let populationHistory = [];
+    const MAX_HISTORY = 200;
+
+    // Spatial grid
+    const cellSize = 70;
+    let spatialGrid = new Map();
+    function gridKey(i,j){ return i+','+j; }
+    function cellIndex(x,y){ return [Math.floor(x/cellSize), Math.floor(y/cellSize)]; }
+    function buildSpatialGrid(){ spatialGrid.clear(); for (let b of birds){ const [i,j]=cellIndex(b.x,b.y); const k=gridKey(i,j); if(!spatialGrid.has(k)) spatialGrid.set(k,[]); spatialGrid.get(k).push(b);} }
+    function queryNeighbors(x,y,r){ const [ci,cj]=cellIndex(x,y); const rg=Math.ceil(r/cellSize); const res=[]; for(let i=ci-rg;i<=ci+rg;i++){ for(let j=cj-rg;j<=cj+rg;j++){ const cell=spatialGrid.get(gridKey(i,j)); if(cell) res.push(...cell);} } return res; }
+
+    // UI Functions
+    const id = s => document.getElementById(s);
+    function togglePanel(panelId){ id(panelId).style.display = id(panelId).style.display === 'none' ? 'block' : 'none'; }
+    function minimizePanel(panelId){ id(panelId).classList.toggle('minimized'); }
+    function toggleAutoSpawn(){ autoSpawn = !autoSpawn; id('toggleAutoBtn').innerHTML = 'Auto-Spawn: ' + (autoSpawn ? 'On' : 'Off'); }
+    function toggleShowBars(){ showHealthBars = !showHealthBars; id('barsStatus').textContent = showHealthBars ? 'On' : 'Off'; }
+    function closeInspector(){ id('inspectorPanel').style.display = 'none'; selectedBird = null; }
+
+    // Panel dragging
+    let draggedPanel = null, dragOffsetX = 0, dragOffsetY = 0;
+    document.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.panel-header')) {
+        draggedPanel = e.target.closest('.panel');
+        const rect = draggedPanel.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+      }
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (draggedPanel) {
+        draggedPanel.style.left = (e.clientX - dragOffsetX) + 'px';
+        draggedPanel.style.top = (e.clientY - dragOffsetY) + 'px';
+        draggedPanel.style.right = 'auto';
+        draggedPanel.style.bottom = 'auto';
+      }
+    });
+    document.addEventListener('mouseup', () => { draggedPanel = null; });
+
+    // Bind tuning controls
+    function bindRange(name, path){
+      const range = id(name), num = id(name+"_num");
+      const [obj, key] = path;
+      range.value = obj[key]; num.value = obj[key];
+      function apply(v){ obj[key] = +v; range.value = obj[key]; num.value = obj[key]; }
+      range.addEventListener('input', e=>apply(e.target.value));
+      num.addEventListener('input', e=>apply(e.target.value));
+    }
+    function setupPanel(){
+      bindRange('gravity', [CONFIG.physics, 'gravity']);
+      bindRange('airDrag', [CONFIG.physics, 'airDrag']);
+      bindRange('liftPower', [CONFIG.physics, 'liftPower']);
+      bindRange('fruitGrowInterval', [CONFIG.food, 'fruitGrowInterval']);
+      bindRange('fruitNutrition', [CONFIG.food, 'fruitNutrition']);
+      bindRange('cohere', [CONFIG.behavior, 'cohere']);
+      bindRange('hunt', [CONFIG.behavior, 'hunt']);
+      bindRange('flee', [CONFIG.behavior, 'flee']);
+      bindRange('reproHungerMin', [CONFIG.reproduction, 'hungerMin']);
+      bindRange('reproHealthMin', [CONFIG.reproduction, 'healthMin']);
+    }
+
+    // World
+    function groundY(x){
+      const base = canvas.height * CONFIG.world.groundBase;
+      const y = base + Math.sin(x*CONFIG.world.groundFreq)*CONFIG.world.groundAmp + Math.sin(x*CONFIG.world.groundFreq*0.37+100)*CONFIG.world.groundAmp*0.42;
+      return Math.min(canvas.height-10, y);
+    }
+
+    function createClouds(){
+      clouds = [];
+      const count = Math.max(6, Math.floor(canvas.width/200));
+      for(let i=0;i<count;i++){
+        clouds.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height*0.35, w: 80+Math.random()*180, h: 20+Math.random()*30, speed: 0.1+Math.random()*0.3, alpha: 0.4+Math.random()*0.3 });
+      }
+    }
+
+    function createForest(){
+      trees = []; bushes=[]; fruits=[];
+      for(let i=0;i<CONFIG.world.treeCount;i++){
+        const x = Math.random()*canvas.width;
+        trees.push({x, h: 80+Math.random()*140, trunk: 10+Math.random()*8, nextGrow: performance.now()+Math.random()*CONFIG.food.fruitGrowInterval});
+      }
+      for(let i=0;i<CONFIG.world.bushCount;i++){
+        bushes.push({x: Math.random()*canvas.width, size: 16+Math.random()*10, nextGrow: performance.now()+Math.random()*CONFIG.food.fruitGrowInterval});
+      }
+    }
+
+    function tryGrowFruits(now){
+      for(let t of trees){
+        if (fruits.filter(f=>f.host===t).length >= CONFIG.food.maxFruitsPerTree) continue;
+        if (now >= t.nextGrow){
+          const gy = groundY(t.x), topY = gy - t.h - 20, angle = Math.random()*Math.PI, r = 20 + Math.random()*30;
+          fruits.push({ x: t.x + Math.cos(angle)*r, y: topY + Math.sin(angle)*10, type:'tree', host:t, nutrition: CONFIG.food.fruitNutrition, ripe:true });
+          t.nextGrow = now + CONFIG.food.fruitGrowInterval * (0.5 + Math.random());
+        }
+      }
+      for(let b of bushes){
+        if (fruits.filter(f=>f.host===b).length >= CONFIG.food.maxFruitsPerBush) continue;
+        if (now >= b.nextGrow){
+          const gy = groundY(b.x), angle = Math.random()*Math.PI, r = 6 + Math.random()*12;
+          fruits.push({ x: b.x + Math.cos(angle)*r, y: gy - 20 + Math.sin(angle)*6, type:'bush', host:b, nutrition: CONFIG.food.fruitNutrition, ripe:true });
+          b.nextGrow = now + CONFIG.food.fruitGrowInterval * (0.6 + Math.random());
+        }
+      }
+    }
+
+    function drawSkyAndGround(){
+      const skyGrad = ctx.createLinearGradient(0,0,0,canvas.height);
+      skyGrad.addColorStop(0,'#96d8ff');
+      skyGrad.addColorStop(0.5,'#cceeff');
+      skyGrad.addColorStop(1,'#eaf7ff');
+      ctx.fillStyle = skyGrad; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      for(let c of clouds){
+        ctx.globalAlpha = c.alpha;
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, c.w/2, c.h/2, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = '#2d6a4f';
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      ctx.lineTo(0, groundY(0));
+      for(let x=0; x<=canvas.width; x+=6){ ctx.lineTo(x, groundY(x)); }
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+
+      for(let t of trees){
+        const gy = groundY(t.x);
+        ctx.fillStyle = '#6b4f4f';
+        ctx.fillRect(t.x - t.trunk/2, gy - t.h, t.trunk, t.h);
+        ctx.fillStyle = '#3a7d44';
+        ctx.beginPath(); ctx.arc(t.x, gy - t.h - 10, 28, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(t.x-20, gy - t.h + 5, 22, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(t.x+20, gy - t.h + 4, 20, 0, Math.PI*2); ctx.fill();
+      }
+
+      for(let b of bushes){
+        const gy = groundY(b.x);
+        ctx.fillStyle = '#2b6f3e';
+        ctx.beginPath(); ctx.arc(b.x, gy-10, b.size, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x-14, gy-8, b.size*0.7, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x+14, gy-7, b.size*0.7, 0, Math.PI*2); ctx.fill();
+      }
+
+      for(let f of fruits){
+        ctx.fillStyle = f.type==='tree' ? '#ff5d8f' : '#ff9f1c';
+        ctx.beginPath(); ctx.arc(f.x, f.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#2f9e44'; ctx.fillRect(f.x-1, f.y-6, 2, 3);
+      }
+    }
+
+    function updateClouds(dt){
+      for(let c of clouds){ c.x += c.speed * dt * 0.06; if(c.x - c.w/2 > canvas.width) c.x = -c.w; }
+    }
+
+    function addCorpse(x,y,color,size){
+      corpses.push({ x, y, vx:(Math.random()-0.5)*1.5, vy:-1, nutrition: CONFIG.food.corpseNutrition * (size/6), color, life: 1.0, grounded:false });
+    }
+    
+    function updateCorpses(){
+      for(let i=corpses.length-1;i>=0;i--){ 
+        const c = corpses[i];
+        if(!c.grounded){
+          c.vy += CONFIG.physics.gravity;
+          c.vx *= CONFIG.physics.airDrag; c.vy *= CONFIG.physics.airDrag;
+          c.x += c.vx; c.y += c.vy;
+          const gy = groundY(c.x)-1;
+          if(c.y > gy){ c.y = gy; c.vy *= -CONFIG.physics.groundBounce; c.vx *= CONFIG.physics.groundFriction; if(Math.abs(c.vy)<0.2) { c.vy=0; c.grounded=true; } }
+        } else {
+          c.vx *= CONFIG.physics.groundFriction; c.x += c.vx;
+        }
+        c.life -= 0.0009; 
+        if(c.nutrition<=0 || c.life<=0) corpses.splice(i,1);
+      }
+    }
+    
+    function drawCorpses(){
+      for(let c of corpses){ 
+        ctx.fillStyle = c.color + 'cc'; 
+        ctx.beginPath(); 
+        ctx.arc(c.x, c.y, 5, 0, Math.PI*2); 
+        ctx.fill(); 
+      }
+    }
+
+    function createParticle(x, y, color) { particles.push({ x, y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, color, life: 1.0 }); }
+    function updateParticles(){ for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.1; p.life-=0.02; if(p.life<=0) particles.splice(i,1);} }
+    function drawParticles(){ particles.forEach(p=>{ ctx.fillStyle = p.color + Math.floor(p.life * 255).toString(16).padStart(2, '0'); ctx.fillRect(p.x-2, p.y-2, 4, 4); }); }
+
+    class SpawnPoint{
+      constructor(x,y,colorIndex=Math.floor(Math.random()*BIRD_COLORS.length), intervalMs=2200, burstSize=4){
+        this.id = nextSpawnPointId++; this.x=x; this.y=y; this.colorIndex=colorIndex; this.intervalMs=intervalMs; this.burstSize=burstSize; this.lastSpawnAt=0; this.active=true;
+      }
+      trySpawn(now){ 
+        if(!autoSpawn||!this.active) return; 
+        if(now - this.lastSpawnAt >= this.intervalMs){ 
+          this.lastSpawnAt = now; 
+          for(let i=0;i<this.burstSize;i++){ 
+            const a=Math.random()*Math.PI*2, r=15+Math.random()*20, bx=this.x+Math.cos(a)*r, by=this.y+Math.sin(a)*r; 
+            const b=new Bird(bx,by,this.colorIndex); 
+            b.spawnGroupId=this.id; b.spawnGrace=180; b.homeX=this.x; b.homeY=this.y; 
+            birds.push(b);
+            totalBirths++;
+          } 
+        } 
+      }
+    }
+    
+    function addSpawnPoint(x,y){ spawnPoints.push(new SpawnPoint(x,y,Math.floor(Math.random()*BIRD_COLORS.length), 2000+Math.random()*1500, 4+Math.floor(Math.random()*3))); }
+    function removeNearestSpawnPoint(x,y){ if(spawnPoints.length===0) return; let bestIdx=-1, bestDist=Infinity; for(let i=0;i<spawnPoints.length;i++){ const sp=spawnPoints[i]; const d=Math.hypot(sp.x-x, sp.y-y); if(d<bestDist){ bestDist=d; bestIdx=i; } } if(bestDist<50 && bestIdx>=0) spawnPoints.splice(bestIdx,1); }
+    function drawSpawnPoints(now){ for(let sp of spawnPoints){ const pulse=(Math.sin(now/300+sp.id)+1)*0.5; const radius=14+pulse*8; ctx.beginPath(); ctx.arc(sp.x, sp.y, radius, 0, Math.PI*2); ctx.strokeStyle=BIRD_COLORS[sp.colorIndex].color+'aa'; ctx.lineWidth=2; ctx.stroke(); ctx.beginPath(); ctx.arc(sp.x, sp.y, 3, 0, Math.PI*2); ctx.fillStyle=BIRD_COLORS[sp.colorIndex].color; ctx.fill(); } }
+
+    class Bird{
+      constructor(x,y,colorIndex=Math.floor(Math.random()*BIRD_COLORS.length), genes=null, parentIds=[]){
+        this.id = Math.random().toString(36).substr(2, 9);
+        this.x=x; this.y=y; this.vx=(Math.random()-0.5)*1.6; this.vy=(Math.random()-0.5)*1.6; this.ax=0; this.ay=0;
+        this.colorIndex=colorIndex; this.color=BIRD_COLORS[colorIndex];
+        this.parentIds = parentIds;
+        this.childrenIds = [];
+        
+        if(!genes){
+          this.genes = {
+            sizeGene: 0.8 + Math.random()*0.4,
+            visionGene: 0.85 + Math.random()*0.3,
+            speedGene: 0.9 + Math.random()*0.2,
+            aggressionGene: 0.7 + Math.random()*0.6,
+            socialGene: 0.7 + Math.random()*0.6,
+            metabolismGene: 0.85 + Math.random()*0.3,
+            mutationRateGene: 0.05 + Math.random()*0.05
+          };
+        } else {
+          this.genes = genes;
+        }
+        
+        const baseSize = (4+Math.random()*3)*this.color.sizeMult;
+        this.size = baseSize * this.genes.sizeGene;
+        this.maxSize = 12 * this.genes.sizeGene;
+        this.maxSpeed = (2+Math.random()*0.6)*this.color.speedMult * this.genes.speedGene;
+        this.maxForce = 0.03;
+        this.perceptionRadius = (CONFIG.behavior.perceptionBase + Math.random()*30) * this.genes.visionGene;
+        
+        const sizeScale = this.size / 6;
+        this.maxHunger = 100 * (0.8 + sizeScale * 0.4);
+        this.maxHealth = 100 * (0.7 + sizeScale * 0.6);
+        this.maxStamina = 100 * (0.8 + sizeScale * 0.4);
+        this.hunger = this.maxHunger;
+        this.health = this.maxHealth;
+        this.stamina = this.maxStamina;
+        
+        this.age=0; this.trail=[]; this.maxTrailLength=10; this.reproductionCooldown=0; this.aggression=0;
+        this.territoryX=null; this.territoryY=null; this.territoryRadius=150; this.territoryEstablished=false;
+        this.spawnGroupId=0; this.spawnGrace=0; this.homeX=null; this.homeY=null;
+        this.isFlapping=false; this.grounded=false;
+      }
+
+      canInteract(other){ return (this.spawnGroupId && other.spawnGroupId && this.spawnGroupId===other.spawnGroupId) || (this.spawnGrace<=0 && other.spawnGrace<=0); }
+
+      edges(){
+        if(this.x>canvas.width) this.x=0; if(this.x<0) this.x=canvas.width;
+        if(this.y<0){ this.y=0; if(this.vy<0) this.vy=0; }
+        const gy = groundY(this.x) - this.size*0.6;
+        if(this.y>gy){ this.y=gy; if(this.vy>0) this.vy*=-CONFIG.physics.groundBounce; this.vx*=CONFIG.physics.groundFriction; this.grounded=true; } else { this.grounded=false; }
+      }
+
+      align(neighbors){ let steering={x:0,y:0}, total=0; for(let other of neighbors){ if(other===this) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<this.perceptionRadius && other.colorIndex===this.colorIndex && this.canInteract(other)){ steering.x+=other.vx; steering.y+=other.vy; total++; } } if(total>0){ steering.x/=total; steering.y/=total; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed; steering.y=(steering.y/mag)*this.maxSpeed; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); if(sm>this.maxForce){ steering.x=(steering.x/sm)*this.maxForce; steering.y=(steering.y/sm)*this.maxForce; } } return steering; }
+      cohesion(neighbors){ let steering={x:0,y:0}, total=0; for(let other of neighbors){ if(other===this) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<this.perceptionRadius && other.colorIndex===this.colorIndex && this.canInteract(other)){ steering.x+=other.x; steering.y+=other.y; total++; } } if(total>0){ steering.x/=total; steering.y/=total; steering.x-=this.x; steering.y-=this.y; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed; steering.y=(steering.y/mag)*this.maxSpeed; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); if(sm>this.maxForce){ steering.x=(steering.x/sm)*this.maxForce; steering.y=(steering.y/sm)*this.maxForce; } } return steering; }
+      separation(neighbors){ const pr=25; let steering={x:0,y:0}, total=0; for(let other of neighbors){ if(other===this) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<pr){ let diff={x:this.x-other.x, y:this.y-other.y}; if(d>0){ diff.x/=d; diff.y/=d; } steering.x+=diff.x; steering.y+=diff.y; total++; } } if(total>0){ steering.x/=total; steering.y/=total; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed; steering.y=(steering.y/mag)*this.maxSpeed; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); if(sm>this.maxForce){ steering.x=(steering.x/sm)*this.maxForce; steering.y=(steering.y/sm)*this.maxForce; } } return steering; }
+
+      nearestFruit(){ let closest=null, best=Infinity; for(let f of fruits){ const d=Math.hypot(f.x-this.x, f.y-this.y); if(d<best){ best=d; closest=f; } } return closest; }
+      nearestCorpse(){ let closest=null, best=Infinity; for(let c of corpses){ const d=Math.hypot(c.x-this.x, c.y-this.y); if(d<best){ best=d; closest=c; } } return closest; }
+
+      seekFood(){ 
+        if(this.hunger>75) return {x:0,y:0};
+        let target=null, tf=null;
+        const fruit=this.nearestFruit(), corpse=this.nearestCorpse();
+        const df=fruit?Math.hypot(fruit.x-this.x, fruit.y-this.y):Infinity;
+        const dc=corpse?Math.hypot(corpse.x-this.x, corpse.y-this.y):Infinity;
+        if(df<dc) { target=fruit; tf='fruit'; } else { target=corpse; tf='corpse'; }
+        if(!target) return {x:0,y:0};
+        if(Math.min(df,dc) > this.perceptionRadius*1.8) return {x:0,y:0};
+        const reach = this.size + 6;
+        if(tf==='fruit' && df<reach){ this.hunger=Math.min(this.maxHunger, this.hunger + target.nutrition); this.size=Math.min(this.size+0.05, this.maxSize); fruits.splice(fruits.indexOf(target),1); for(let i=0;i<4;i++) createParticle(target.x,target.y,'#2f9e44'); return {x:0,y:0}; }
+        if(tf==='corpse' && dc<reach){ const eat = Math.min(target.nutrition, 10); target.nutrition -= eat; this.hunger=Math.min(this.maxHunger, this.hunger + eat); this.health=Math.min(this.maxHealth, this.health + eat*0.2); for(let i=0;i<4;i++) createParticle(target.x,target.y,'#8d5524'); return {x:0,y:0}; }
+        let steering={x: target.x-this.x, y: target.y-this.y}; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed; steering.y=(steering.y/mag)*this.maxSpeed; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); const mf=this.maxForce*1.8; if(sm>mf){ steering.x=(steering.x/sm)*mf; steering.y=(steering.y/sm)*mf; } return steering;
+      }
+
+      hunt(neighbors){ const pr=this.perceptionRadius*1.5; let closest=null, best=Infinity; for(let other of neighbors){ if(other===this) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<pr && other.colorIndex!==this.colorIndex && other.size<this.size && this.hunger<70 && this.canInteract(other)){ if(d<best){ best=d; closest=other; } } } if(closest){ let steering={x:closest.x-this.x, y:closest.y-this.y}; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed*1.5; steering.y=(steering.y/mag)*this.maxSpeed*1.5; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); const mf=this.maxForce*2; if(sm>mf){ steering.x=(steering.x/sm)*mf; steering.y=(steering.y/sm)*mf; } if(best < this.size + closest.size){ this.eat(closest); } return steering; } return {x:0,y:0}; }
+      flee(neighbors){ const pr=this.perceptionRadius; let steering={x:0,y:0}, threats=0; for(let other of neighbors){ if(other===this) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<pr && other.colorIndex!==this.colorIndex && other.size>this.size && this.canInteract(other)){ let diff={x:this.x-other.x, y:this.y-other.y}; if(d>0){ diff.x/=d; diff.y/=d; } steering.x+=diff.x; steering.y+=diff.y; threats++; } } if(threats>0){ steering.x/=threats; steering.y/=threats; const mag=Math.hypot(steering.x, steering.y); if(mag>0){ steering.x=(steering.x/mag)*this.maxSpeed*2; steering.y=(steering.y/mag)*this.maxSpeed*2; } steering.x-=this.vx; steering.y-=this.vy; const sm=Math.hypot(steering.x, steering.y); const mf=this.maxForce*3; if(sm>mf){ steering.x=(steering.x/sm)*mf; steering.y=(steering.y/sm)*mf; } } return steering; }
+
+      eat(prey){ this.hunger=Math.min(this.maxHunger, this.hunger + prey.size*10); this.size=Math.min(this.size + 0.2, this.maxSize); prey.health-=50; for(let i=0;i<5;i++) createParticle(prey.x,prey.y,prey.color.color); }
+
+      tryReproduce(neighbors){ 
+        if(this.reproductionCooldown>0 || this.hunger<CONFIG.reproduction.hungerMin || this.health<CONFIG.reproduction.healthMin) return; 
+        let mate=null, best=Infinity; 
+        for(let other of neighbors){ 
+          if(other===this) continue; 
+          const d=Math.hypot(other.x-this.x, other.y-this.y); 
+          if(d<this.perceptionRadius && other.colorIndex===this.colorIndex && other.hunger>=CONFIG.reproduction.hungerMin && other.health>=CONFIG.reproduction.healthMin && this.canInteract(other)){ 
+            if(d<best){ best=d; mate=other; } 
+          } 
+        } 
+        if(mate && best<30){ 
+          const mutationRate = (this.genes.mutationRateGene + mate.genes.mutationRateGene) / 2;
+          const inheritedGenes = {
+            sizeGene: ((this.genes.sizeGene + mate.genes.sizeGene) / 2) + (Math.random()-0.5) * mutationRate * 2,
+            visionGene: ((this.genes.visionGene + mate.genes.visionGene) / 2) + (Math.random()-0.5) * mutationRate * 1.5,
+            speedGene: ((this.genes.speedGene + mate.genes.speedGene) / 2) + (Math.random()-0.5) * mutationRate * 1.5,
+            aggressionGene: ((this.genes.aggressionGene + mate.genes.aggressionGene) / 2) + (Math.random()-0.5) * mutationRate * 2,
+            socialGene: ((this.genes.socialGene + mate.genes.socialGene) / 2) + (Math.random()-0.5) * mutationRate * 2,
+            metabolismGene: ((this.genes.metabolismGene + mate.genes.metabolismGene) / 2) + (Math.random()-0.5) * mutationRate * 1.5,
+            mutationRateGene: ((this.genes.mutationRateGene + mate.genes.mutationRateGene) / 2) + (Math.random()-0.5) * mutationRate * 0.5
+          };
+          inheritedGenes.sizeGene = Math.max(0.6, Math.min(1.4, inheritedGenes.sizeGene));
+          inheritedGenes.visionGene = Math.max(0.7, Math.min(1.3, inheritedGenes.visionGene));
+          inheritedGenes.speedGene = Math.max(0.8, Math.min(1.2, inheritedGenes.speedGene));
+          inheritedGenes.aggressionGene = Math.max(0.5, Math.min(1.5, inheritedGenes.aggressionGene));
+          inheritedGenes.socialGene = Math.max(0.5, Math.min(1.5, inheritedGenes.socialGene));
+          inheritedGenes.metabolismGene = Math.max(0.7, Math.min(1.3, inheritedGenes.metabolismGene));
+          inheritedGenes.mutationRateGene = Math.max(0.02, Math.min(0.15, inheritedGenes.mutationRateGene));
+          
+          const newX=(this.x+mate.x)/2, newY=(this.y+mate.y)/2; 
+          const baby=new Bird(newX,newY,this.colorIndex, inheritedGenes, [this.id, mate.id]); 
+          baby.hunger = baby.maxHunger * 0.6; 
+          baby.spawnGroupId=this.spawnGroupId||mate.spawnGroupId; baby.spawnGrace=60; 
+          if(baby.spawnGroupId){baby.homeX=newX; baby.homeY=newY;} 
+          birds.push(baby); 
+          this.childrenIds.push(baby.id);
+          mate.childrenIds.push(baby.id);
+          this.reproductionCooldown=CONFIG.reproduction.cooldown; 
+          mate.reproductionCooldown=CONFIG.reproduction.cooldown; 
+          for(let i=0;i<8;i++) createParticle(newX,newY,this.color.color); 
+          this.hunger-=20; mate.hunger-=20;
+          totalBirths++;
+        } 
+      }
+
+      packHunt(neighbors){ if(!this.color.packHunting || this.hunger>50) return {x:0,y:0}; let allies=neighbors.filter(b=> b!==this && b.colorIndex===this.colorIndex && b.hunger<60 && this.canInteract(b)); if(allies.length<1) return {x:0,y:0}; let bestPrey=null, bestScore=0; for(let other of neighbors){ if(other===this || other.colorIndex===this.colorIndex) continue; const d=Math.hypot(other.x-this.x, other.y-this.y); if(d<this.perceptionRadius*2 && other.size<=this.size*1.3 && this.canInteract(other)){ let allyCount=allies.filter(a=>Math.hypot(a.x-other.x,a.y-other.y)<a.perceptionRadius*1.5).length; let score=allyCount*other.size - d*0.1; if(score>bestScore){ bestScore=score; bestPrey=other; } } } if(bestPrey){ let s={x:bestPrey.x-this.x, y:bestPrey.y-this.y}; const mag=Math.hypot(s.x,s.y); if(mag>0){ s.x=(s.x/mag)*this.maxSpeed*1.8; s.y=(s.y/mag)*this.maxSpeed*1.8; } s.x-=this.vx; s.y-=this.vy; const sm=Math.hypot(s.x,s.y); const mf=this.maxForce*2.5; if(sm>mf){ s.x=(s.x/sm)*mf; s.y=(s.y/sm)*mf; } return s; } return {x:0,y:0}; }
+
+      defendTerritory(neighbors){ if(!this.color.territorial) return {x:0,y:0}; if(!this.territoryEstablished && this.spawnGrace<=0 && this.age>5){ this.territoryX=this.x; this.territoryY=this.y; this.territoryEstablished=true; } if(!this.territoryEstablished) return {x:0,y:0}; let intruders=neighbors.filter(b=> b!==this && b.colorIndex!==this.colorIndex && Math.hypot(b.x-this.territoryX,b.y-this.territoryY)<this.territoryRadius && this.canInteract(b)); if(intruders.length>0){ let closest=intruders.reduce((a,b)=>{ let da=Math.hypot(a.x-this.x,a.y-this.y); let db=Math.hypot(b.x-this.x,b.y-this.y); return da<db?a:b; }); let s={x:closest.x-this.x, y:closest.y-this.y}; const mag=Math.hypot(s.x,s.y); if(mag>0){ s.x=(s.x/mag)*this.maxSpeed*1.6; s.y=(s.y/mag)*this.maxSpeed*1.6; } s.x-=this.vx; s.y-=this.vy; const sm=Math.hypot(s.x,s.y); const mf=this.maxForce*2.2; if(sm>mf){ s.x=(s.x/sm)*mf; s.y=(s.y/sm)*mf; } return s; }
+        const dtt=Math.hypot(this.x-this.territoryX, this.y-this.territoryY); if(dtt>this.territoryRadius*0.7){ let s={x:this.territoryX-this.x, y:this.territoryY-this.y}; const mag=Math.hypot(s.x,s.y); if(mag>0){ s.x=(s.x/mag)*this.maxSpeed*0.8; s.y=(s.y/mag)*this.maxSpeed*0.8; } s.x-=this.vx; s.y-=this.vy; const sm=Math.hypot(s.x,s.y); const mf=this.maxForce*0.8; if(sm>mf){ s.x=(s.x/sm)*mf; s.y=(s.y/sm)*mf; } return s; }
+        return {x:0,y:0};
+      }
+
+      flock(neighbors){
+        const alignment=this.align(neighbors), cohesion=this.cohesion(neighbors), separation=this.separation(neighbors);
+        const hunting=this.hunt(neighbors), fleeing=this.flee(neighbors), packHunting=this.packHunt(neighbors), territorial=this.defendTerritory(neighbors), seekingFood=this.seekFood();
+        this.aggression=Math.max(0, Math.min(1, ((70 - this.hunger)/70 + this.color.aggressionBonus) * this.genes.aggressionGene));
+        const social = this.color.socialTendency * this.genes.socialGene;
+        this.ax += alignment.x * 1.2 * social * CONFIG.behavior.align; this.ay += alignment.y * 1.2 * social * CONFIG.behavior.align;
+        this.ax += cohesion.x * 1.7 * social * CONFIG.behavior.cohere; this.ay += cohesion.y * 1.7 * social * CONFIG.behavior.cohere;
+        this.ax += separation.x * 1.5 * CONFIG.behavior.separate; this.ay += separation.y * 1.5 * CONFIG.behavior.separate;
+        this.ax += hunting.x * (2.0 + this.aggression * 2.0) * CONFIG.behavior.hunt; this.ay += hunting.y * (2.0 + this.aggression * 2.0) * CONFIG.behavior.hunt;
+        this.ax += packHunting.x * 2.5; this.ay += packHunting.y * 2.5;
+        this.ax += fleeing.x * 3.0 * CONFIG.behavior.flee; this.ay += fleeing.y * 3.0 * CONFIG.behavior.flee;
+        this.ax += territorial.x * 1.8 * this.genes.aggressionGene; this.ay += territorial.y * 1.8 * this.genes.aggressionGene;
+        this.ax += seekingFood.x * CONFIG.behavior.seekFood; this.ay += seekingFood.y * CONFIG.behavior.seekFood;
+        if(this.spawnGrace>0 && this.homeX!==null){ let hx=this.homeX-this.x, hy=this.homeY-this.y; const d=Math.hypot(hx,hy); if(d>1){ hx=(hx/d)*this.maxSpeed; hy=(hy/d)*this.maxSpeed; } hx-=this.vx; hy-=this.vy; const sm=Math.hypot(hx,hy); const mf=this.maxForce*1.2; if(sm>mf){ hx=(hx/sm)*mf; hy=(hy/sm)*mf; } this.ax += hx*1.2; this.ay += hy*1.2; }
+        if(this.reproductionCooldown<=0 && this.hunger>CONFIG.reproduction.hungerMin && this.health>CONFIG.reproduction.healthMin){ this.tryReproduce(neighbors); }
+      }
+
+      physicsAndEnergy(){
+        this.vy += CONFIG.physics.gravity;
+        this.vx *= CONFIG.physics.airDrag; this.vy *= CONFIG.physics.airDrag;
+        const gy = groundY(this.x);
+        const desiredAlt = 60 + this.perceptionRadius*0.2;
+        const distToGround = Math.max(0, gy - this.y);
+        const shouldFlap = (distToGround < desiredAlt) || (this.ay < -0.02) || (this.hunger<60) || this.grounded;
+        this.isFlapping = false;
+        const sizeScale = this.size / 6;
+        const flapCostScaled = CONFIG.physics.flapCost * (0.7 + sizeScale * 0.6);
+        const hungerCostScaled = 0.02 * this.color.metabolism * this.genes.metabolismGene * (0.8 + sizeScale * 0.4);
+        if(shouldFlap && this.stamina>1){ this.vy -= CONFIG.physics.liftPower; this.stamina -= flapCostScaled; this.hunger -= hungerCostScaled; this.isFlapping = true; }
+        else { this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.physics.staminaRegen); }
+      }
+
+      update(){
+        this.vx += this.ax; this.vy += this.ay;
+        const spd=Math.hypot(this.vx,this.vy); if(spd>this.maxSpeed){ this.vx=(this.vx/spd)*this.maxSpeed; this.vy=(this.vy/spd)*this.maxSpeed; }
+        this.physicsAndEnergy();
+        this.x += this.vx; this.y += this.vy; this.ax=0; this.ay=0;
+        this.hunger -= 0.06 * this.color.metabolism * this.genes.metabolismGene; 
+        this.age += 0.01; 
+        if(this.reproductionCooldown>0) this.reproductionCooldown--; 
+        if(this.hunger<=0) this.health -= 0.4; 
+        if(this.hunger>80 && this.size>1) this.size -= 0.01; 
+        if(this.spawnGrace>0) this.spawnGrace--;
+        for(let t of trees){ const gy=groundY(t.x), tx=t.x, ty=gy - t.h/2, tr=(t.trunk/2)+6, dx=this.x-tx, dy=this.y-ty, d=Math.hypot(dx,dy); if(d<tr){ const nx=dx/d, ny=dy/d, overlap=tr-d; this.x += nx*overlap; this.y += ny*overlap; this.vx *= 0.7; this.vy *= -0.3; } }
+        this.edges();
+        this.trail.push({x:this.x,y:this.y}); if(this.trail.length>this.maxTrailLength) this.trail.shift();
+      }
+
+      draw(){
+        const isSelected = selectedBird === this;
+        if(isSelected){
+          ctx.strokeStyle = 'yellow';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size + 5, 0, Math.PI*2);
+          ctx.stroke();
+        }
+        
+        ctx.strokeStyle = this.color.color + '40'; ctx.lineWidth = this.size/2; ctx.beginPath(); for(let i=0;i<this.trail.length;i++){ if(i===0) ctx.moveTo(this.trail[i].x,this.trail[i].y); else ctx.lineTo(this.trail[i].x,this.trail[i].y);} ctx.stroke();
+        ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(Math.atan2(this.vy,this.vx)); ctx.fillStyle=this.color.color; ctx.beginPath(); ctx.moveTo(this.size,0); ctx.lineTo(-this.size,-this.size/2); ctx.lineTo(-this.size/2,0); ctx.lineTo(-this.size,this.size/2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = this.health>50 ? 'white' : 'red'; ctx.beginPath(); ctx.arc(this.size/2, 0, this.size/4, 0, Math.PI*2); ctx.fill();
+        if(this.isFlapping){ ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(-this.size*0.8, 0, this.size*0.3, this.size*0.6, 0, 0, Math.PI*2); ctx.fill(); }
+        ctx.restore();
+        
+        if(showHealthBars){
+          const barY = this.y - this.size - 12;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(this.x - 15, barY, 30, 3);
+          ctx.fillStyle = '#51cf66';
+          ctx.fillRect(this.x - 15, barY, 30 * (this.health/this.maxHealth), 3);
+          
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(this.x - 15, barY + 4, 30, 3);
+          ctx.fillStyle = '#ffd43b';
+          ctx.fillRect(this.x - 15, barY + 4, 30 * (this.hunger/this.maxHunger), 3);
+        }
+      }
+
+      isDead(){ return this.health<=0; }
+    }
+
+    // Event handlers
+    canvas.addEventListener('click', (e)=>{
+      const rect=canvas.getBoundingClientRect(); 
+      const x=e.clientX-rect.left, y=e.clientY-rect.top;
+      if(e.shiftKey){ addSpawnPoint(x,y); return; }
+      if(e.altKey){ removeNearestSpawnPoint(x,y); return; }
+      
+      // Check if clicking on a bird
+      let clickedBird = null;
+      let minDist = 15;
+      for(let b of birds){
+        const d = Math.hypot(b.x - x, b.y - y);
+        if(d < minDist){
+          minDist = d;
+          clickedBird = b;
+        }
+      }
+      
+      if(clickedBird){
+        selectedBird = clickedBird;
+        showBirdInspector(clickedBird);
+        return;
+      }
+      
+      // Spawn birds
+      for(let i=0;i<5;i++){ 
+        const angle=(Math.PI*2/5)*i; 
+        const b=new Bird(x+Math.cos(angle)*20, y+Math.sin(angle)*20); 
+        birds.push(b); 
+      }
+    });
+
+    function showBirdInspector(bird){
+      id('inspectorPanel').style.display = 'block';
+      const content = id('inspectorContent');
+      content.innerHTML = `
+        <div style="font-size: 11px;">
+          <div class="stat-row"><span class="stat-label">ID:</span><span class="stat-value" style="font-size:9px;">${bird.id.substr(0,6)}</span></div>
+          <div class="stat-row"><span class="stat-label">Color:</span><span class="stat-value">${bird.color.name}</span></div>
+          <div class="stat-row"><span class="stat-label">Age:</span><span class="stat-value">${bird.age.toFixed(1)}</span></div>
+          <div class="stat-row"><span class="stat-label">Size:</span><span class="stat-value">${bird.size.toFixed(2)}</span></div>
+          <div style="margin-top:8px; padding-top:8px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div class="stat-row"><span class="stat-label">Health:</span><span class="stat-value">${bird.health.toFixed(0)}/${bird.maxHealth.toFixed(0)}</span></div>
+            <div class="stat-row"><span class="stat-label">Hunger:</span><span class="stat-value">${bird.hunger.toFixed(0)}/${bird.maxHunger.toFixed(0)}</span></div>
+            <div class="stat-row"><span class="stat-label">Stamina:</span><span class="stat-value">${bird.stamina.toFixed(0)}/${bird.maxStamina.toFixed(0)}</span></div>
+          </div>
+          <div style="margin-top:8px; padding-top:8px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div style="font-weight:700; margin-bottom:4px;">Genes</div>
+            <div class="stat-row"><span class="stat-label">Size:</span><span class="stat-value">${bird.genes.sizeGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Vision:</span><span class="stat-value">${bird.genes.visionGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Speed:</span><span class="stat-value">${bird.genes.speedGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Aggression:</span><span class="stat-value">${bird.genes.aggressionGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Social:</span><span class="stat-value">${bird.genes.socialGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Metabolism:</span><span class="stat-value">${bird.genes.metabolismGene.toFixed(2)}</span></div>
+            <div class="stat-row"><span class="stat-label">Mutation:</span><span class="stat-value">${bird.genes.mutationRateGene.toFixed(3)}</span></div>
+          </div>
+          <div style="margin-top:8px; padding-top:8px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div class="stat-row"><span class="stat-label">Children:</span><span class="stat-value">${bird.childrenIds.length}</span></div>
+            <div class="stat-row"><span class="stat-label">Parents:</span><span class="stat-value">${bird.parentIds.length}</span></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateStats(){
+      id('birdCount').textContent = birds.length;
+      id('birthCount').textContent = totalBirths;
+      id('deathCount').textContent = totalDeaths;
+      id('spawnCount').textContent = spawnPoints.length;
+      const counts={red:0,blue:0,green:0,yellow:0};
+      birds.forEach(b=>counts[b.color.name]++);
+      id('redCount').textContent=counts.red;
+      id('blueCount').textContent=counts.blue;
+      id('greenCount').textContent=counts.green;
+      id('yellowCount').textContent=counts.yellow;
+      id('fruitCount').textContent = fruits.length;
+      id('corpseCount').textContent = corpses.length;
+      
+      // Update genetics panel
+      if(birds.length > 0){
+        let avgGenes = {sizeGene:0, visionGene:0, speedGene:0, aggressionGene:0, socialGene:0, metabolismGene:0};
+        let varGenes = {sizeGene:0, visionGene:0, speedGene:0, aggressionGene:0, socialGene:0, metabolismGene:0};
+        
+        for(let b of birds){
+          for(let key in avgGenes) avgGenes[key] += b.genes[key];
+        }
+        for(let key in avgGenes) avgGenes[key] /= birds.length;
+        
+        for(let b of birds){
+          for(let key in varGenes) varGenes[key] += Math.pow(b.genes[key] - avgGenes[key], 2);
+        }
+        for(let key in varGenes) varGenes[key] = Math.sqrt(varGenes[key] / birds.length);
+        
+        const diversity = Object.values(varGenes).reduce((a,b)=>a+b,0) / Object.keys(varGenes).length;
+        
+        id('sizeGeneVal').textContent = avgGenes.sizeGene.toFixed(2);
+        id('sizeGeneBar').style.width = (avgGenes.sizeGene * 70) + '%';
+        id('visionGeneVal').textContent = avgGenes.visionGene.toFixed(2);
+        id('visionGeneBar').style.width = (avgGenes.visionGene * 80) + '%';
+        id('speedGeneVal').textContent = avgGenes.speedGene.toFixed(2);
+        id('speedGeneBar').style.width = (avgGenes.speedGene * 90) + '%';
+        id('aggressionGeneVal').textContent = avgGenes.aggressionGene.toFixed(2);
+        id('aggressionGeneBar').style.width = (avgGenes.aggressionGene * 70) + '%';
+        id('socialGeneVal').textContent = avgGenes.socialGene.toFixed(2);
+        id('socialGeneBar').style.width = (avgGenes.socialGene * 70) + '%';
+        id('metabolismGeneVal').textContent = avgGenes.metabolismGene.toFixed(2);
+        id('metabolismGeneBar').style.width = (avgGenes.metabolismGene * 85) + '%';
+        id('geneticDiversity').textContent = (diversity * 100).toFixed(1) + '%';
+      }
+      
+      // Update inspector if bird still exists
+      if(selectedBird && birds.includes(selectedBird)){
+        showBirdInspector(selectedBird);
+      } else if(selectedBird){
+        closeInspector();
+      }
+    }
+
+    function updatePopulationChart(){
+      const counts={red:0,blue:0,green:0,yellow:0, total:0};
+      birds.forEach(b=>{ counts[b.color.name]++; counts.total++; });
+      populationHistory.push(counts);
+      if(populationHistory.length > MAX_HISTORY) populationHistory.shift();
+      
+      const chartCanvas = id('popChart');
+      const chartCtx = chartCanvas.getContext('2d');
+      chartCtx.clearRect(0,0,chartCanvas.width, chartCanvas.height);
+      
+      if(populationHistory.length < 2) return;
+      
+      const maxPop = Math.max(1, ...populationHistory.map(p=>p.total));
+      const step = chartCanvas.width / MAX_HISTORY;
+      
+      function drawLine(key, color){
+        chartCtx.strokeStyle = color;
+        chartCtx.lineWidth = 2;
+        chartCtx.beginPath();
+        for(let i=0; i<populationHistory.length; i++){
+          const x = i * step;
+          const y = chartCanvas.height - (populationHistory[i][key] / maxPop * chartCanvas.height);
+          if(i === 0) chartCtx.moveTo(x, y);
+          else chartCtx.lineTo(x, y);
+        }
+        chartCtx.stroke();
+      }
+      
+      drawLine('red', '#FF6B6B');
+      drawLine('blue', '#4DABF7');
+      drawLine('green', '#51CF66');
+      drawLine('yellow', '#FFD43B');
+    }
+
+    function adaptTrailLength(){ 
+      const n=birds.length; 
+      const target = n>800?3 : n>500?5 : 10; 
+      for(let b of birds) b.maxTrailLength=target; 
+    }
+
+    function init(){
+      birds=[]; particles=[]; corpses=[]; fruits=[]; trees=[]; bushes=[]; spawnPoints=[]; 
+      nextSpawnPointId=1; totalBirths=0; totalDeaths=0; populationHistory=[];
+      createClouds(); createForest();
+      addSpawnPoint(canvas.width*0.3, groundY(canvas.width*0.3)-140);
+      addSpawnPoint(canvas.width*0.7, groundY(canvas.width*0.7)-140);
+      for(let i=0;i<40;i++){ 
+        const x=Math.random()*canvas.width; 
+        const y=groundY(x)- (60+Math.random()*220); 
+        birds.push(new Bird(x, Math.max(10,y))); 
+      }
+      setupPanel();
+    }
+
+    let lastTs=0, frameCount=0;
+    function animate(ts=0){ 
+      if(!lastTs) lastTs=ts; 
+      const dt=ts-lastTs; 
+      lastTs=ts; 
+      
+      if(!paused){
+        drawSkyAndGround(); 
+        updateClouds(dt);
+        tryGrowFruits(ts);
+        for(let sp of spawnPoints) sp.trySpawn(ts);
+        buildSpatialGrid();
+        for(let b of birds){ const neighbors=queryNeighbors(b.x,b.y,b.perceptionRadius*1.6); b.flock(neighbors); }
+        for(let i=birds.length-1;i>=0;i--){ 
+          const b=birds[i]; 
+          b.update(); 
+          if(b.isDead()){ 
+            addCorpse(b.x,b.y,b.color.color,b.size); 
+            for(let j=0;j<10;j++) createParticle(b.x,b.y,b.color.color); 
+            if(selectedBird === b) closeInspector();
+            birds.splice(i,1); 
+            totalDeaths++;
+          } else { 
+            b.draw(); 
+          } 
+        }
+        updateCorpses(); drawCorpses(); updateParticles(); drawParticles();
+        drawSpawnPoints(ts);
+        adaptTrailLength(); 
+        
+        frameCount++;
+        if(frameCount % 30 === 0){
+          updateStats();
+          updatePopulationChart();
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    init(); animate();
+  </script>
+</body>
+</html>
