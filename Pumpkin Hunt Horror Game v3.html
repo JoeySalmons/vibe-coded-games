@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Midnight Pumpkin Hunt (Slender Edition v2)</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; color: #fff; font-family: 'Courier New', Courier, monospace; }
+        #game-container { width: 100vw; height: 100vh; display: block; }
+        .ui-element { position: absolute; user-select: none; -webkit-user-select: none; text-shadow: 2px 2px 4px #000000; }
+        #crosshair { top: 50%; left: 50%; width: 4px; height: 4px; background-color: rgba(255, 255, 255, 0.7); border-radius: 50%; transform: translate(-50%, -50%); }
+        #info-panel { top: 20px; left: 20px; font-size: 1.2em; line-height: 1.5; }
+        #hud-panel { position: absolute; bottom: 20px; left: 20px; font-size: 1.2em; line-height: 1.5; }
+        #interaction-prompt { bottom: 20%; left: 50%; transform: translateX(-50%); font-size: 1.5em; display: none; background-color: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 5px; }
+        .fullscreen-overlay { top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 10; }
+        #win-screen { font-size: 3em; }
+        #win-screen p { font-size: 0.5em; }
+        #game-over-screen { font-size: 3em; color: #b30000; }
+        #game-over-screen p { font-size: 0.5em; color: #fff; }
+        #intro-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; z-index: 20; cursor: pointer; }
+        #intro-screen h1 { font-size: 3em; margin-bottom: 0; }
+        #intro-screen p { font-size: 1.2em; line-height: 1.6; max-width: 500px; }
+        #intro-screen .click-to-start { margin-top: 40px; font-size: 1.5em; font-weight: bold; animation: pulse 1.5s infinite; }
+        #vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 50%, black 150%); opacity: 0.4; pointer-events: none; z-index: 5; }
+        #static-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 99; opacity: 0; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="vignette"></div>
+    <canvas id="static-overlay"></canvas>
+
+    <div id="intro-screen">
+        <h1>Midnight Pumpkin Hunt</h1>
+        <p>You are not alone in these woods. Find and light the 5 magical Jack-o'-Lanterns before it finds you.</p>
+        <p><strong>Controls:</strong><br> WASD to Move | Shift to Sprint | Mouse to Look | F to Toggle Flashlight | E to Interact</p>
+        <div class="click-to-start">[ Click anywhere to begin ]</div>
+    </div>
+    <div id="crosshair" class="ui-element"></div>
+    <div id="info-panel" class="ui-element">
+        <div>Pumpkins Lit: <span id="pumpkin-counter">0</span> / 5</div>
+    </div>
+    <div id="hud-panel" class="ui-element">
+        <div>Flashlight: <span id="battery-level">100</span>%</div>
+        <div>Stamina: <span id="stamina-level">100</span>%</div>
+    </div>
+    <div id="interaction-prompt" class="ui-element">[E] to Light Pumpkin</div>
+    <div id="win-screen" class="ui-element fullscreen-overlay">
+        <h2>You Did It!</h2>
+        <p>All pumpkins are lit. The forest is safe... for now.</p>
+        <p>(Refresh the page to play again)</p>
+    </div>
+    <div id="game-over-screen" class="ui-element fullscreen-overlay">
+        <h2>YOU WERE CAUGHT</h2>
+        <p>The darkness consumes you.</p>
+        <p>(Refresh the page to try again)</p>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- GAME STATE & UI ---
+        let pumpkinsLit=0, TOTAL_PUMPKINS=5, pumpkins=[], interactableObject=null;
+        let isPointerLocked=false, gameOver=false;
+        const pumpkinCounterUI=document.getElementById('pumpkin-counter'),interactionPromptUI=document.getElementById('interaction-prompt'),winScreenUI=document.getElementById('win-screen'),introScreenUI=document.getElementById('intro-screen'), gameOverScreenUI = document.getElementById('game-over-screen');
+        const batteryUI=document.getElementById('battery-level'), staminaUI=document.getElementById('stamina-level');
+
+        // --- CORE THREE.JS SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050515);
+        scene.fog = new THREE.Fog(0x050515, 1, 50);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.7, 5);
+        camera.rotation.order = 'YXZ';
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('game-container').appendChild(renderer.domElement);
+
+        // --- NEW: COLLISION & SPAWNING SETUP ---
+        const colliders = []; // For player hit detection
+        const placedObjects = []; // For preventing overlap during world generation
+
+        // --- LIGHTING ---
+        scene.add(new THREE.AmbientLight(0x404080,0.2));
+        const moonLight=new THREE.DirectionalLight(0xaabbff, 0.8);
+        moonLight.position.set(15,30,-20); moonLight.castShadow=true; moonLight.shadow.mapSize.set(2048,2048);
+        Object.assign(moonLight.shadow.camera,{near:0.5,far:100,left:-50,right:50,top:50,bottom:-50}); scene.add(moonLight);
+        const moon=new THREE.Mesh(new THREE.SphereGeometry(12,32,32), new THREE.MeshBasicMaterial({color:0xfefcd7,fog:false}));
+        moon.position.copy(moonLight.position.clone().normalize().multiplyScalar(150)); scene.add(moon);
+        
+        // --- FLASHLIGHT ---
+        const flashlight = new THREE.SpotLight(0xffffee, 0, 40, Math.PI / 7, 0.3, 1.5);
+        flashlight.castShadow = true;
+        flashlight.position.y = 0.1; // FIX: Raise flashlight origin slightly
+        camera.add(flashlight); camera.add(flashlight.target);
+        flashlight.target.position.set(0, 0, -1);
+        scene.add(camera);
+        let flashlightOn = false, batteryLife = 100; // FIX: Flashlight starts OFF
+        
+        // --- NEW: WORLD GENERATION HELPERS ---
+        function isPositionValid(position, radius) {
+            for (const obj of placedObjects) {
+                const dist = Math.sqrt((obj.position.x - position.x)**2 + (obj.position.z - position.z)**2);
+                if (dist < obj.radius + radius) {
+                    return false; // Overlap detected
+                }
+            }
+            return true;
+        }
+
+        // --- ENVIRONMENT GENERATION ---
+        const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),new THREE.MeshStandardMaterial({color:0x1a2a1a,roughness:0.9})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+        function applyVertexColorGradient(g,t,b){const p=g.attributes.position,c=[],x=new THREE.Box3().setFromBufferAttribute(p),s=new THREE.Vector3();x.getSize(s);for(let i=0;i<p.count;i++){const a=(p.getY(i)-x.min.y)/s.y,o=new THREE.Color().copy(b).lerp(t,a);c.push(o.r,o.g,o.b)}g.setAttribute('color',new THREE.Float32BufferAttribute(c,3))}
+        
+        function createPineTree(x,z){const tH=Math.random()*4+4,tW=Math.random()*0.2+0.3,tG=new THREE.CylinderGeometry(tW,tW*1.2,tH,8);applyVertexColorGradient(tG,new THREE.Color(0x6b4f34),new THREE.Color(0x4a2e20));const t=new THREE.Mesh(tG,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.8}));t.position.set(x,tH/2,z);t.castShadow=true; const lH=Math.random()*4+3,lG=new THREE.ConeGeometry(2,lH,8);applyVertexColorGradient(lG,new THREE.Color(0x1a6a30),new THREE.Color(0x105510));const l=new THREE.Mesh(lG,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.8}));l.position.set(x,tH+lH/2-0.8,z);l.castShadow=true;scene.add(t,l); const colliderBox = new THREE.Box3().setFromObject(t); colliders.push(colliderBox); }
+        function createBroadleafTree(x,z){const tH=Math.random()*3+3,tW=Math.random()*0.3+0.4,tG=new THREE.CylinderGeometry(tW,tW*1.1,tH,8);applyVertexColorGradient(tG,new THREE.Color(0x8a7f70),new THREE.Color(0x5a4f40));const t=new THREE.Mesh(tG,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.8}));t.position.set(x,tH/2,z);t.castShadow=true;const c=new THREE.Group(),lC=[new THREE.Color(0x1f7a2c),new THREE.Color(0x2a8c3a),new THREE.Color(0x3a9a4a)];for(let i=0;i<5;i++){const lSG=new THREE.SphereGeometry(Math.random()*1+1.5,8,6),cs=[];for(let v=0;v<lSG.attributes.position.count;v++){const cl=lC[Math.floor(Math.random()*lC.length)];cs.push(cl.r,cl.g,cl.b)}lSG.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));const lS=new THREE.Mesh(lSG,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.9}));lS.position.set((Math.random()-0.5)*2,(Math.random()-0.2)*2,(Math.random()-0.5)*2);lS.castShadow=true;c.add(lS)}c.position.set(x,tH+1,z);scene.add(t,c); const colliderBox = new THREE.Box3().setFromObject(t); colliders.push(colliderBox);}
+        
+        // FIX: ROCKS
+        function createRock(x, z) { const size=Math.random()*1.5+1; const rockGeo = new THREE.IcosahedronGeometry(size, 1); const p = rockGeo.attributes.position; for(let i=0;i<p.count;i++){ const displacement = 0.8 + Math.random() * 0.4; p.setX(i,p.getX(i)*displacement);p.setY(i,p.getY(i)*displacement);p.setZ(i,p.getZ(i)*displacement); } rockGeo.computeVertexNormals(); const rockMat = new THREE.MeshStandardMaterial({color:0x3a3a3a,roughness:0.95}); const rock = new THREE.Mesh(rockGeo,rockMat); rock.position.set(x,size*0.4,z); rock.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI); rock.castShadow=true; rock.receiveShadow=true; scene.add(rock); colliders.push(new THREE.Box3().setFromObject(rock)); }
+        function createCabin(x, z, rotY) { const c=new THREE.Group(); const wG=new THREE.BoxGeometry(6,3,6),wM=new THREE.MeshStandardMaterial({color:0x4a3520,roughness:0.9}); const w=new THREE.Mesh(wG,wM); w.position.y=1.5; w.castShadow=true; w.receiveShadow=true; const rG=new THREE.ConeGeometry(4.5,2,4),rM=new THREE.MeshStandardMaterial({color:0x2a1a10,roughness:0.9}); const r=new THREE.Mesh(rG,rM); r.position.y=3.5; r.rotation.y=Math.PI/4; r.castShadow=true; c.add(w,r); c.position.set(x,0,z); c.rotation.y=rotY; scene.add(c); colliders.push(new THREE.Box3().setFromObject(c)); }
+        function createTruck(x,z,rotY) { const t=new THREE.Group(); const bG=new THREE.BoxGeometry(3,2,6),bM=new THREE.MeshStandardMaterial({color:0x8b0000,roughness:0.7,metalness:0.3}); const b=new THREE.Mesh(bG,bM);b.position.y=1.5;b.castShadow=true; const cG=new THREE.BoxGeometry(3,1.5,2),c=new THREE.Mesh(cG,bM);c.position.set(0,2.25,2);c.castShadow=true; const wG=new THREE.CylinderGeometry(0.5,0.5,0.3,12),wM=new THREE.MeshStandardMaterial({color:0x1a1a1a}); wG.rotateZ(Math.PI/2); const p=[[-1.6,0.5,2],[1.6,0.5,2],[-1.6,0.5,-2],[1.6,0.5,-2]]; p.forEach(pos=>{const wh=new THREE.Mesh(wG,wM);wh.position.set(...pos);wh.castShadow=true;t.add(wh);}); t.add(b,c);t.position.set(x,0,z);t.rotation.y=rotY;scene.add(t); colliders.push(new THREE.Box3().setFromObject(t));}
+
+        // --- WORLD POPULATION WITH SPACING ---
+        const structures = [ {type: 'cabin', pos: {x:-30, z:-20}, rot: 0.5, radius: 5}, {type: 'cabin', pos: {x:25, z:35}, rot: -1.2, radius: 5}, {type: 'truck', pos: {x:-15, z:40}, rot: 2.1, radius: 4} ];
+        structures.forEach(s => { placedObjects.push({position: s.pos, radius: s.radius}); if(s.type==='cabin')createCabin(s.pos.x, s.pos.z, s.rot); else createTruck(s.pos.x, s.pos.z, s.rot); });
+        
+        for(let i=0;i<150;i++){ let valid=false, x, z; for(let j=0; j<20 && !valid; j++){ x=(Math.random()-0.5)*110; z=(Math.random()-0.5)*110; if(Math.sqrt(x*x+z*z)>8 && isPositionValid({x,z}, 2.5)){ valid=true; placedObjects.push({position:{x,z}, radius: 2.5}); if(Math.random()>0.5)createPineTree(x,z); else createBroadleafTree(x,z); }} }
+        for(let i=0;i<25;i++){ let valid=false, x, z; for(let j=0; j<20 && !valid; j++){ x=(Math.random()-0.5)*100; z=(Math.random()-0.5)*100; if(Math.sqrt(x*x+z*z)>8 && isPositionValid({x,z}, 2)){ valid=true; placedObjects.push({position:{x,z}, radius: 2}); createRock(x,z); }} }
+        
+        // --- PUMPKIN SETUP ---
+        const faceTextures = []; const facePatterns = [{ eyes: [[-0.25, 0.2], [0.25, 0.2]], nose: 'triangle', mouth: 'jagged' }, { eyes: [[-0.2, 0.25], [0.2, 0.25]], nose: 'triangle', mouth: 'o' }, { eyes: 'angry', nose: 'small_triangle', mouth: 'line' }, { eyes: 'wink', nose: 'none', mouth: 'smile' }, { eyes: [[-0.3, 0.2], [0.3, 0.2]], nose: 'small_triangle', mouth: 'jagged_wide' },];
+        function createFaceTexture(p){const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');x.fillStyle='black';x.fillRect(0,0,256,256);x.fillStyle='white';x.strokeStyle='white';x.lineWidth=4;const w=128,h=128,m=140,v=200;if(Array.isArray(p.eyes)){p.eyes.forEach(([e,y])=>{x.beginPath();x.moveTo(w+e*m-20,h-y*v-15);x.lineTo(w+e*m+20,h-y*v-15);x.lineTo(w+e*m,h-y*v+15);x.fill()})}else if(p.eyes==='angry'){x.beginPath();x.moveTo(w-55,h-45);x.lineTo(w-15,h-35);x.lineTo(w-55,h-25);x.fill();x.beginPath();x.moveTo(w+55,h-45);x.lineTo(w+15,h-35);x.lineTo(w+55,h-25);x.fill()}else if(p.eyes==='wink'){x.beginPath();x.moveTo(w-45,h-30);x.lineTo(w-15,h-30);x.stroke();x.beginPath();x.moveTo(w+15,h-45);x.lineTo(w+55,h-35);x.lineTo(w+15,h-25);x.fill()}if(p.nose==='triangle'){x.beginPath();x.moveTo(w,h-10);x.lineTo(w+15,h+15);x.lineTo(w-15,h+15);x.fill()}else if(p.nose==='small_triangle'){x.beginPath();x.moveTo(w,h);x.lineTo(w+10,h+15);x.lineTo(w-10,h+15);x.fill()}x.beginPath();if(p.mouth==='jagged'){x.moveTo(w-50,h+30);x.lineTo(w-25,h+50);x.lineTo(w,h+30);x.lineTo(w+25,h+50);x.lineTo(w+50,h+30);x.lineTo(w,h+40)}else if(p.mouth==='o'){x.arc(w,h+40,18,0,Math.PI*2)}else if(p.mouth==='line'){x.moveTo(w-50,h+45);x.lineTo(w+50,h+40)}else if(p.mouth==='smile'){x.arc(w,h+25,40,0.1*Math.PI,0.9*Math.PI)}else if(p.mouth==='jagged_wide'){x.moveTo(w-70,h+25);x.lineTo(w-35,h+55);x.lineTo(w,h+25);x.lineTo(w+35,h+55);x.lineTo(w+70,h+25);x.lineTo(w,h+40)}x.fill();const t=new THREE.CanvasTexture(c);t.needsUpdate=true;return t}
+        facePatterns.forEach(p=>faceTextures.push(createFaceTexture(p)));
+        class Pumpkin { constructor(x,y,z,faceIndex){this.group=new THREE.Group();this.group.position.set(x,y,z);const s=Math.random()*0.4+0.8;this.group.scale.set(s,s,s);this.group.rotation.y=Math.random()*Math.PI*2;this.isLit=false;this.lightUpAnimation=0;this.faceTexture=faceTextures[faceIndex];this.flickerOffset=Math.random()*100;const C=[0xff6600,0xff7722,0xee5500,0xff8833],c=C[Math.floor(Math.random()*C.length)];const bG=new THREE.SphereGeometry(0.5,32,24);bG.scale(1,0.8,1);const bM=new THREE.MeshStandardMaterial({color:c,roughness:0.8,emissive:0x000000,emissiveIntensity:0});this.body=new THREE.Mesh(bG,bM);this.body.castShadow=true;const sG=new THREE.CylinderGeometry(0.08,0.05,0.4,6),sM=new THREE.MeshStandardMaterial({color:0x3a1d04,roughness:0.9});this.stem=new THREE.Mesh(sG,sM);this.stem.position.y=0.35;this.stem.rotation.set((Math.random()-0.5)*0.5,0,(Math.random()-0.5)*0.5);this.lightSource=new THREE.PointLight(0xffaa33,0,10,2);this.lightSource.position.y=0.1;this.group.add(this.body,this.stem,this.lightSource);scene.add(this.group);this.group.userData.parent=this} lightUp(){if(this.isLit)return;this.isLit=true;this.body.material.emissiveMap=this.faceTexture;this.body.material.emissive.setHex(0xff6600);this.body.material.needsUpdate=true} update(d,t){if(this.isLit&&this.lightUpAnimation<1){this.lightUpAnimation=Math.min(1,this.lightUpAnimation+d*2);this.lightSource.intensity=this.lightUpAnimation*5;this.body.material.emissiveIntensity=this.lightUpAnimation*2.5}if(this.lightUpAnimation>=1){const T=t+this.flickerOffset,f=Math.sin(T*2.8)*0.6+Math.sin(T*5.1)*0.4;this.lightSource.intensity=4+f*1.5;this.body.material.emissiveIntensity=2+f*0.5}}}
+        const pumpkinLocations = [ {x: 0, z: -10}, {x: -28, z: -18}, {x: 22, z: 33}, {x: -13, z: 38}, {x: 40, z: -25}, {x: -45, z: 45}, {x: 40, z: 5}, {x: -35, z: -35} ];
+        function shuffleArray(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+        const selectedLocations = shuffleArray(pumpkinLocations).slice(0, TOTAL_PUMPKINS);
+        selectedLocations.forEach((loc, index) => { placedObjects.push({position: {x:loc.x, z:loc.z}, radius: 2}); pumpkins.push(new Pumpkin(loc.x, 0.4, loc.z, index)); });
+        
+        // --- SHADOW STALKER ENEMY ---
+        class ShadowStalker { constructor() { this.group=new THREE.Group(); const mat=new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:0.3,metalness:0.1,transparent:true,opacity:0.9}); const bodyGeo=new THREE.CylinderGeometry(0.3,0.4,3.5,8); this.body=new THREE.Mesh(bodyGeo,mat); this.body.position.y=1.75; const headGeo=new THREE.SphereGeometry(0.4,8,8); headGeo.scale(1,1.5,1); const head=new THREE.Mesh(headGeo,mat); head.position.y=3.7; this.group.add(this.body,head); this.group.position.set(20,0,-20); scene.add(this.group); this.isActive=false; }}
+        const AI_STATES = { DORMANT: 'dormant', STALKING: 'stalking', HUNTING: 'hunting' };
+        class StalkerAI { constructor(stalker, player){ this.stalker=stalker; this.player=player; this.state=AI_STATES.DORMANT; this.aggression=0; this.teleportCooldown=10; } update(deltaTime, pumpkinsLit) { if (!this.stalker.isActive) return; this.aggression=pumpkinsLit; const distanceToPlayer=this.stalker.group.position.distanceTo(this.player.position); const isLooking=this.isPlayerLookingAtStalker(); if(!isLooking){this.moveTowardsPlayer(deltaTime);} this.teleportCooldown-=deltaTime; if(!isLooking&&distanceToPlayer>30&&this.teleportCooldown<=0){this.teleportNearPlayer();this.teleportCooldown=15-this.aggression*2;} if(distanceToPlayer<2){this.catchPlayer();} } isPlayerLookingAtStalker() { const dirToStalker=new THREE.Vector3().subVectors(this.stalker.group.position,this.player.position).normalize(); const camDir=new THREE.Vector3(); this.player.getWorldDirection(camDir); const dot=camDir.dot(dirToStalker); return dot > 0.7 && this.stalker.group.position.distanceTo(this.player.position) < 40; } moveTowardsPlayer(deltaTime) { const dir=new THREE.Vector3().subVectors(this.player.position,this.stalker.group.position).normalize(); const speed=1.5+this.aggression*0.6; this.stalker.group.position.x+=dir.x*speed*deltaTime; this.stalker.group.position.z+=dir.z*speed*deltaTime; const lookAtPos = this.player.position.clone(); lookAtPos.y = this.stalker.group.position.y; this.stalker.group.lookAt(lookAtPos); } teleportNearPlayer() { const angle=Math.random()*Math.PI*2; const dist=20+Math.random()*10; const offset=new THREE.Vector3(Math.cos(angle)*dist,0,Math.sin(angle)*dist); this.stalker.group.position.copy(this.player.position).add(offset); } teleportBehindPlayer() { const camDir=new THREE.Vector3(); this.player.getWorldDirection(camDir); camDir.y=0; camDir.normalize(); const pos=this.player.position.clone().sub(camDir.multiplyScalar(25)); this.stalker.group.position.copy(pos); } catchPlayer() { triggerGameOver(); }}
+        const stalker = new ShadowStalker(); const stalkerAI = new StalkerAI(stalker, camera);
+
+        // --- CONTROLS & PLAYER MOVEMENT ---
+        const keys={},playerSpeed=4,moveDirection=new THREE.Vector3();
+        let isSprinting=false, stamina=100;
+        introScreenUI.addEventListener('click',()=>{document.body.requestPointerLock();introScreenUI.style.display='none';});
+        document.addEventListener('pointerlockchange',()=>{isPointerLocked=document.pointerLockElement===document.body;});
+        document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true; if(k==='e'&&interactableObject&&!interactableObject.isLit)lightPumpkin(interactableObject); if(k==='f')toggleFlashlight(); if(k==='shift'&&stamina>0)isSprinting=true;});
+        document.addEventListener('keyup',e=>{const k=e.key.toLowerCase();keys[k]=false; if(k==='shift')isSprinting=false;});
+        document.addEventListener('mousemove',e=>{if(!isPointerLocked||gameOver)return;const s=0.002;camera.rotation.y-=e.movementX*s;camera.rotation.x-=e.movementY*s;camera.rotation.x=Math.max(-Math.PI/2,Math.min(Math.PI/2,camera.rotation.x))});
+        
+        // --- REWORKED: Player movement with collision detection ---
+        function checkCollision() {
+            const playerPos = camera.position;
+            for (const box of colliders) {
+                // Inflate the box slightly to give the player some width
+                if (box.clone().expandByScalar(0.3).containsPoint(playerPos)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function updatePlayerMovement(d){
+            moveDirection.z=Number(keys.w||!1)-Number(keys.s||!1); moveDirection.x=Number(keys.d||!1)-Number(keys.a||!1);
+            if(moveDirection.lengthSq()===0){isSprinting=false; return;} 
+            moveDirection.normalize(); 
+            let speed=playerSpeed; 
+            if(isSprinting&&stamina>0){speed*=2;stamina-=d*35; if(stamina<=0)isSprinting=false;} else if(stamina<100){stamina=Math.min(100,stamina+d*15);} 
+            staminaUI.textContent=Math.floor(stamina); 
+            
+            const forward=new THREE.Vector3(); camera.getWorldDirection(forward); forward.y=0; forward.normalize();
+            const right=new THREE.Vector3().crossVectors(forward,camera.up);
+            const speedDelta=speed*d;
+            const moveX = right.multiplyScalar(moveDirection.x * speedDelta);
+            const moveZ = forward.multiplyScalar(moveDirection.z * speedDelta);
+
+            const originalPosition = camera.position.clone();
+
+            // Move on X axis and check for collision
+            camera.position.add(moveX);
+            if (checkCollision()) {
+                camera.position.x = originalPosition.x;
+            }
+            
+            // Move on Z axis and check for collision
+            camera.position.add(moveZ);
+            if (checkCollision()) {
+                camera.position.z = originalPosition.z;
+            }
+        }
+        
+        // --- GAME LOGIC ---
+        function lightPumpkin(pumpkinInstance){ pumpkinInstance.lightUp(); pumpkinCounterUI.textContent=++pumpkinsLit; if(pumpkinsLit===1&&!stalker.isActive){stalker.isActive=true;stalkerAI.state=AI_STATES.STALKING;stalkerAI.teleportBehindPlayer();} if(pumpkinsLit===TOTAL_PUMPKINS){winScreenUI.style.display='flex';document.exitPointerLock();gameOver=true;} }
+        const raycaster=new THREE.Raycaster();
+        function checkInteractions(){raycaster.setFromCamera({x:0,y:0},camera);const pM=pumpkins.map(p=>p.body);const i=raycaster.intersectObjects(pM);interactableObject=null;interactionPromptUI.style.display='none';if(i.length>0&&i[0].distance<3){const pI=i[0].object.parent.userData.parent;if(!pI.isLit){interactionPromptUI.style.display='block';interactableObject=pI}}}
+        function toggleFlashlight() { flashlightOn=!flashlightOn; if(batteryLife<=0)flashlightOn=false; }
+        function updateFlashlight(d){ if(flashlightOn&&batteryLife>0){batteryLife-=d*1.5;} else {flashlightOn=false;} flashlight.intensity = flashlightOn ? (batteryLife<20?1.5+Math.random():2.5) : 0; batteryUI.textContent=Math.floor(batteryLife); }
+        function triggerGameOver(){ if(gameOver)return; gameOver=true; gameOverScreenUI.style.display='flex'; document.exitPointerLock(); }
+        
+        // --- PROXIMITY EFFECTS ---
+        const staticCanvas = document.getElementById('static-overlay'), staticCtx = staticCanvas.getContext('2d');
+        staticCanvas.width = window.innerWidth; staticCanvas.height = window.innerHeight;
+        function updateProximityEffects() { if(!stalker.isActive)return; const dist=stalker.group.position.distanceTo(camera.position); const intensity=Math.max(0,1-dist/25); staticCanvas.style.opacity=intensity*0.4; const imageData=staticCtx.createImageData(staticCanvas.width,staticCanvas.height); for(let i=0;i<imageData.data.length;i+=4){const c=Math.random()*255;imageData.data[i]=c;imageData.data[i+1]=c;imageData.data[i+2]=c;imageData.data[i+3]=Math.random()<intensity*0.8?255:0;} staticCtx.putImageData(imageData,0,0); }
+        
+        // --- RENDER LOOP ---
+        const clock = new THREE.Clock();
+        function animate() {
+            if (gameOver) return;
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            const time = clock.getElapsedTime();
+            if (isPointerLocked) {
+                updatePlayerMovement(deltaTime);
+                checkInteractions();
+                stalkerAI.update(deltaTime, pumpkinsLit);
+                updateFlashlight(deltaTime);
+                updateProximityEffects();
+            }
+            pumpkins.forEach(p => p.update(deltaTime, time));
+            renderer.render(scene, camera);
+        }
+        window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight); staticCanvas.width=window.innerWidth; staticCanvas.height=window.innerHeight;});
+        animate();
+    </script>
+</body>
+</html>
