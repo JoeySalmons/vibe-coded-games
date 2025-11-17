@@ -10,8 +10,8 @@ A collection of small, single-file games and applications created using AI-assis
 ## The Games & Apps
 Click any link to play or use the app instantly in your browser.
 
-### Ambient Engine (v2.3)
-*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Ambient%20Engine%20v2.3.html)
+### Ambient Engine (v3.2)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Ambient%20Engine%20v3.2.html)
 *   **Description:** A relaxing game where you interact with particles under different effects. Made for mobile or desktop.
 
 ### Bird Sim (v4)
