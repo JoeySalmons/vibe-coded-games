@@ -32,7 +32,7 @@ Click any link to play or use the app instantly in your browser.
 
 ### Kymograph (v4)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Kymograph%20v4.html)
-*   **Description:** A complex, procedurally generated logic and deduction puzzle with a retro sci-fi aesthetic. Observe signal patterns to decipher hidden transformation rules before your error meter fills.
+*   **Description:** A logic and deduction puzzle with a retro sci-fi aesthetic. Observe signal patterns to decipher hidden transformation rules before your error meter fills.
 
 ### Mayors Orbit (v2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Mayors%20Orbit%20v2.html)
@@ -50,9 +50,9 @@ Click any link to play or use the app instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Room%20Reservation%20Hell%20v3.3.html)
 *   **Description:** A choice-based narrative game simulating the frustration of university bureaucracy. Make decisions to manage your stats and navigate absurd challenges to book a room for your club.
 
-### Solarized Clicker: Singularity (v3.2)
-*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Solarized%20Cookie%20Clicker%20Singularity%20v3.2.html)
-*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get temporary boosts and purchase upgrades to increase your output. Works on mobile and desktop.
+### Solarized Clicker: Singularity (v3.3)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Solarized%20Cookie%20Clicker%20Singularity%20v3.3.html)
+*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get more cookies and purchase upgrades to increase your output. Works on mobile but works best on desktop.
 
 ### The Infinite Content Machine (v4.2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
