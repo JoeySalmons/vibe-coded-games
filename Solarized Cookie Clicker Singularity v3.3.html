@@ -354,9 +354,9 @@
                 if (id === 'gc_timeless') gc.cpsDuration = 300;
                 if (id === 'gc_magnet') gc.magnet = true;
                 if (id === 'gc1') { gc.minDelay /= 2; gc.maxDelay /= 2; }
-                if (id === 'gc2') { gc.duration *= 1.5; gc.variedRewards = true; }
+                if (id === 'gc2') { gc.duration *= 1.5; gc.variedRewards = true; } // 'variedRewards' is now used in applyGoldenCookieEffect
                 if (id === 'gc3') { gc.minDelay /= 1.5; gc.maxDelay /= 1.5; gc.duration *= 2; }
-                if (id === 'gc4') gc.buildingReward = 3;
+                if (id === 'gc4') gc.buildingReward = 3; // 'buildingReward' is now used in applyGoldenCookieEffect
                 if (id === 'gc5') gc.autoCollect = true;
             }
             if (type === 'blackHoleStatic') {
@@ -598,6 +598,41 @@
             const reward = (this.game.cookies * baseMultiplier) + (this.game.cps * cpsDuration * cpsMultiplier);
             this.game.cookies += reward;
             this.showNotification(`Golden Cookie! +${this.formatNumber(reward)} cookies!`);
+
+            // --- Serendipity and Golden Hoard Logic ---
+            // Check if the player has the 'Serendipity' upgrade ('gc2')
+            if (this.game.upgrades['gc2']) {
+                let buildingChance = 0.15; // 15% base chance from Serendipity
+                let buildingsToAward = 1;
+
+                // Check if the player also has the 'Golden Hoard' upgrade ('gc4')
+                if (this.game.upgrades['gc4']) {
+                    buildingChance = 0.20; // Chance increases to 20%
+                    buildingsToAward = this.game.goldenCookie.buildingReward; // Uses the value set by the upgrade (3)
+                }
+
+                // Roll the dice to see if a building is awarded
+                if (Math.random() < buildingChance) {
+                    // Find all buildings the player owns at least one of
+                    const ownedBuildings = Object.values(this.game.buildings).filter(b => b.count > 0);
+
+                    if (ownedBuildings.length > 0) {
+                        // Pick a random building from the owned list
+                        const randomIndex = Math.floor(Math.random() * ownedBuildings.length);
+                        const chosenBuilding = ownedBuildings[randomIndex];
+
+                        // Award the building(s)
+                        this.game.buildings[chosenBuilding.id].count += buildingsToAward;
+                        
+                        // Notify the player
+                        const buildingName = chosenBuilding.name;
+                        this.showNotification(`Bonus! You found ${buildingsToAward} free ${buildingName}${buildingsToAward > 1 ? 's' : ''}!`);
+                        
+                        // Recalculate stats immediately since CPS has changed
+                        this.recalculateStats();
+                    }
+                }
+            }
         }
 
         updateBagUI() {
