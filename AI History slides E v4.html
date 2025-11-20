@@ -422,61 +422,107 @@
             </div>
         </div>
 
-        <!-- SLIDE 5: Transformers (REVISED - SCALING FOCUS) -->
-        <div class="slide">
+        <!-- SLIDE 5: Transformers (REVISED - VISUAL FIXED) -->
+        <div class="slide" style="display: flex; flex-direction: column;">
             <div class="slide-counter">5 / 14</div>
-            <h2>3. The Transformer Era <span class="year-badge">2017</span></h2>
-            <p>The architecture that replaced the RNN and powers nearly <strong>everything</strong> today.</p>
+            
+            <!-- Header Section (Fixed Height) -->
+            <div>
+                <h2>3. The Transformer Era <span class="year-badge">2017</span></h2>
+                <p>The architecture that replaced the RNN and powers nearly <strong>everything</strong> today.</p>
+            </div>
 
-            <div class="grid-2 main-layout">
-                <!-- Left: The Problem -->
-                <div style="opacity: 0.8;">
-                    <h3 style="color: var(--text-secondary);">Before: RNNs</h3>
-                    <!-- Increased font-size from 0.9em to 1.25em -->
-                    <div class="flow-box" style="border-color: var(--text-secondary); margin-bottom: 10px; font-size: 1.25em; padding: 15px;">
-                        Word 1 → Word 2 → Word 3...
-                    </div>
-                    <!-- Increased font-size from 1em to 1.35em -->
-                    <p style="font-size: 1.35em;">
-                        <strong>Sequential.</strong>
-                        <br><span style="color: var(--accent-alert);">Cannot scale on GPUs.</span>
-                    </p>
-                </div>
+            <!-- DIAGRAMS (Flexible Height) -->
+            <div class="visual-diagram" style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; background: rgba(0,0,0,0.3); padding: 20px;">
+                
+                <div class="grid-2" style="align-items: center; height: 100%;">
+                    
+                    <!-- LEFT: RNN (Horizontal Space Fixed) -->
+                    <div style="opacity: 0.8; border-right: 1px dashed rgba(255,255,255,0.2); padding-right: 20px;">
+                        <h3 style="color: var(--text-secondary); margin-bottom: 10px;">Before: RNN</h3>
+                        
+                        <!-- SVG: Widen viewBox to 450 to allow gaps -->
+                        <svg width="100%" height="120" viewBox="0 0 450 100" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <marker id="arrow-grey" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
+                                </marker>
+                            </defs>
+                            
+                            <!-- Step 1 -->
+                            <rect x="0" y="25" width="90" height="50" rx="10" fill="transparent" stroke="#cbd5e1" stroke-width="2"/>
+                            <text x="45" y="55" fill="#cbd5e1" font-size="14" text-anchor="middle" font-family="sans-serif">Word 1</text>
+                            
+                            <!-- Arrow 1 (Longer Gap) -->
+                            <line x1="95" y1="50" x2="135" y2="50" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-grey)" />
+                            
+                            <!-- Step 2 -->
+                            <rect x="140" y="25" width="90" height="50" rx="10" fill="transparent" stroke="#cbd5e1" stroke-width="2"/>
+                            <text x="185" y="55" fill="#cbd5e1" font-size="14" text-anchor="middle" font-family="sans-serif">Word 2</text>
 
-                <!-- Right: The Solution -->
-                <div>
-                    <h3 style="color: var(--accent-cyan);">After: Transformers</h3>
-                    <!-- Increased font-size from 0.9em to 1.25em -->
-                    <div class="flow-box" style="border-color: var(--accent-cyan); margin-bottom: 10px; font-size: 1.25em; padding: 15px;">
-                        [Word 1, Word 2, Word 3] (All at once)
+                            <!-- Arrow 2 (Longer Gap) -->
+                            <line x1="235" y1="50" x2="275" y2="50" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-grey)" />
+
+                            <!-- Step 3 -->
+                            <rect x="280" y="25" width="90" height="50" rx="10" fill="transparent" stroke="#cbd5e1" stroke-width="2"/>
+                            <text x="325" y="55" fill="#cbd5e1" font-size="14" text-anchor="middle" font-family="sans-serif">Word 3</text>
+                        </svg>
+                        
+                        <p style="color: var(--accent-alert); font-size: 1.1em; margin-top: 5px;">
+                            <strong>Sequential Processing</strong><br>
+                            <span style="font-size: 0.8em;">Slow. Cannot scale.</span>
+                        </p>
                     </div>
-                    <!-- Increased font-size from 1em to 1.35em -->
-                    <p style="font-size: 1.35em;">
-                        <strong>Parallel.</strong>
-                        <br><span style="color: var(--accent-green);">Massive Scaling Enabled.</span>
-                    </p>
+
+                    <!-- RIGHT: TRANSFORMER (Vertical Space Fixed) -->
+                    <div>
+                        <h3 style="color: var(--accent-cyan); margin-bottom: 10px;">After: Transformers</h3>
+                        
+                        <!-- SVG: Increased Height to 180 to separate Inputs from GPU block -->
+                        <svg width="100%" height="180" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+                                </marker>
+                            </defs>
+
+                            <!-- Inputs (Top) -->
+                            <rect x="20" y="10" width="90" height="50" rx="10" fill="rgba(34, 211, 238, 0.1)" stroke="#22d3ee" stroke-width="2"/>
+                            <text x="65" y="40" fill="white" font-size="14" text-anchor="middle" font-family="sans-serif">Word 1</text>
+
+                            <rect x="155" y="10" width="90" height="50" rx="10" fill="rgba(34, 211, 238, 0.1)" stroke="#22d3ee" stroke-width="2"/>
+                            <text x="200" y="40" fill="white" font-size="14" text-anchor="middle" font-family="sans-serif">Word 2</text>
+
+                            <rect x="290" y="10" width="90" height="50" rx="10" fill="rgba(34, 211, 238, 0.1)" stroke="#22d3ee" stroke-width="2"/>
+                            <text x="335" y="40" fill="white" font-size="14" text-anchor="middle" font-family="sans-serif">Word 3</text>
+
+                            <!-- Arrows Down (Longer to create vertical space) -->
+                            <line x1="65" y1="65" x2="65" y2="125" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrow-cyan)" />
+                            <line x1="200" y1="65" x2="200" y2="125" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrow-cyan)" />
+                            <line x1="335" y1="65" x2="335" y2="125" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrow-cyan)" />
+
+                            <!-- GPU Block (Bottom) -->
+                            <rect x="10" y="130" width="380" height="40" rx="5" fill="#1e293b" stroke="#22d3ee" stroke-width="2"/>
+                            <text x="200" y="155" fill="#22d3ee" font-size="14" text-anchor="middle" font-family="sans-serif" font-weight="bold" letter-spacing="1">GPU PARALLEL COMPUTE</text>
+                        </svg>
+
+                        <p style="color: var(--accent-green); font-size: 1.1em; margin-top: 5px;">
+                            <strong>Parallel Processing</strong><br>
+                            <span style="font-size: 0.8em;">Processes everything at once.</span>
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <div class="visual-diagram" style="margin-top: -5px; margin-bottom: 15px;">
-                <h3>Mechanism: "Self-Attention"</h3>
-                
-                <div class="flow-container" style="margin-top: 15px; align-items: center;">
-                    <div style="font-size: 1.3em; text-align: center;">
-                        "The <strong>bank</strong> of the river..."
-                    </div>
-                    <div class="arrow" style="color: var(--accent-cyan); margin: 0 15px;">↔</div>
-                    <div class="flow-box" style="border-style: dashed; border-color: var(--accent-cyan); padding: 10px;">
-                        CONTEXT MAP
-                    </div>
-                </div>
-                
-                <div class="highlight-box" style="margin-top: 20px; border-color: var(--accent-cyan); cursor: pointer;" onclick="this.querySelector('.blur-answer').classList.add('revealed');">
-                    <strong>❓ Why was this the breakthrough?</strong>
-                    <div class="blur-answer" style="margin-top: 10px; font-size: 0.9em;">
-                        <strong>Parallelization.</strong>
-                        <br>This allowed us to throw massive compute at the problem, which wasn't possible with RNNs.
-                    </div>
+            <!-- INTERACTIVE Q&A BOX -->
+            <div class="highlight-box" style="margin-top: 20px; border-color: var(--accent-cyan); cursor: pointer;" onclick="this.querySelector('.blur-answer').classList.add('revealed'); this.querySelector('.click-hint').style.display='none'">
+                <div class="discussion-cue" style="background: var(--accent-cyan);">Key Concept</div>
+                <strong>❓ Why was this the breakthrough?</strong>
+                <div class="click-hint">Click to Reveal</div>
+                <div class="blur-answer" style="margin-top: 10px; font-size: 0.9em;">
+                    <strong>Parallelization.</strong>
+                    <br>RNNs had to wait for word 1 to finish before starting word 2. 
+                    Transformers ingest the whole book at once. This allowed us to use thousands of GPUs simultaneously.
                 </div>
             </div>
         </div>
