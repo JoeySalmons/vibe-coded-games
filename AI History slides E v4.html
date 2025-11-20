@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI History: 2025 Edition</title>
+    <style>
+        :root {
+            /* High Contrast Dark Theme */
+            --bg-gradient: linear-gradient(135deg, #020617 0%, #1e1b4b 100%);
+            --card-bg: #1e293b;
+            --text-main: #ffffff;
+            --text-secondary: #cbd5e1;
+            
+            /* Neon Accents */
+            --accent-cyan: #22d3ee; 
+            --accent-purple: #a78bfa;
+            --accent-pink: #f472b6;
+            --accent-green: #34d399;
+            --accent-alert: #fb7185;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Layout */
+        .slide-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .slide {
+            display: none;
+            width: 95%;
+            max-width: 1400px;
+            height: 90vh;
+            background: var(--card-bg);
+            border-radius: 24px;
+            padding: 40px 60px;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            flex-direction: column;
+        }
+
+        .slide.active { display: flex; animation: fadeIn 0.4s ease-out; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* TYPOGRAPHY */
+        h1 {
+            font-size: 4.5em;
+            line-height: 1.1;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 3em;
+            color: var(--accent-cyan);
+            border-bottom: 3px solid rgba(34, 211, 238, 0.3);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h3 { font-size: 1.8em; color: var(--accent-purple); margin: 20px 0 10px 0; }
+        
+        p, li {
+            font-size: 1.4em;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        ul { margin-left: 40px; }
+        li { margin-bottom: 12px; }
+
+        /* COMPONENTS */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        
+        .main-layout { height: 100%; align-items: center; }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px solid transparent;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(to right, rgba(34, 211, 238, 0.1), rgba(167, 139, 250, 0.1));
+            border: 2px solid var(--accent-cyan);
+            padding: 25px;
+            border-radius: 15px;
+            font-size: 1.3em;
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .discussion-cue {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: var(--accent-pink);
+            color: black;
+            font-weight: bold;
+            font-size: 0.6em;
+            padding: 5px 15px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 0 10px var(--accent-pink);
+        }
+
+        .year-badge {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 5px 20px;
+            border-radius: 50px;
+            font-size: 0.6em;
+            vertical-align: middle;
+        }
+
+        /* DIAGRAMS */
+        .visual-diagram {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            margin-top: 20px;
+        }
+
+        .flow-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .flow-box {
+            background: var(--card-bg);
+            border: 3px solid var(--accent-purple);
+            padding: 20px;
+            border-radius: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+            min-width: 150px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .arrow { font-size: 3em; color: var(--text-secondary); }
+
+        /* NAVIGATION: Hidden visually, kept in DOM for JS logic */
+        .nav-bar {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            gap: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 1000;
+        }
+
+        button {
+            background: var(--accent-cyan);
+            color: #000;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover { transform: scale(1.05); background: white; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* SLIDE COUNTER */
+        .slide-counter {
+            position: absolute; 
+            bottom: 20px;
+            right: 30px;
+            font-size: 1.2em; 
+            font-family: monospace; 
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* REVEAL / INTERACTIVITY CLASSES */
+        .blur-answer {
+            filter: blur(10px);
+            user-select: none;
+            transition: filter 0.5s;
+            cursor: pointer;
+        }
+        .blur-answer:hover { filter: blur(5px); }
+        .blur-answer.revealed { filter: blur(0); cursor: default; }
+        
+        .click-hint {
+            font-size: 0.8em; color: var(--accent-pink); 
+            margin-top: 10px; text-align: center; 
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        /* MEDIA QUERY */
+        @media (max-height: 1080px) {
+            .slide { padding: 25px 40px; height: 92vh; }
+            h2 { margin-bottom: 15px; font-size: 2.6em; padding-bottom: 10px; }
+            h3 { margin: 10px 0 5px 0; }
+            .card, .visual-diagram, .highlight-box { padding: 15px 20px; margin-top: 10px; }
+            .grid-2 { gap: 20px; }
+            .flow-box { padding: 10px; min-width: 100px; }
+            .slide-counter { bottom: 15px; right: 30px; }
+        }
+
+        /* Added with revised slide 1 */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 25px;
+            align-items: stretch;
+        }
+        
+        .timeline-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            transition: transform 0.3s;
+        }
+        
+        .timeline-box:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="slide-container">
+
+        <!-- SLIDE 1: THE TRAJECTORY -->
+        <div class="slide active" style="justify-content: center; text-align: center;">
+            <div class="slide-counter">1 / 14</div>
+            <h1 style="line-height: 1.3; padding-bottom: 15px;">The Trajectory</h1>
+            <h2 style="border: none; justify-content: center; color: var(--text-secondary);">
+                The world is entering a <span style="color: var(--accent-cyan); margin-left: 10px;">Historical Discontinuity</span>.
+            </h2>
+            
+            <div class="grid-3" style="margin-top: 40px; text-align: left;">
+                
+                <!-- 2022 -->
+                <div class="timeline-box" style="border-top: 3px solid var(--text-secondary);">
+                    <div style="display:flex; justify-content:space-between;">
+                        <h3 style="margin:0; font-size: 1.4em; color: var(--text-secondary);">2022</h3>
+                        <span style="font-size: 2em;">⌨️</span>
+                    </div>
+                    <strong style="margin-top: 10px; font-size: 1.3em;">The "Coder"</strong>
+                    <p style="font-size: 1.1em; margin-top: 10px;">
+                        <span style="opacity: 0.7;">Focus:</span> Syntax & Libraries<br>
+                        <span style="opacity: 0.7;">Constraint:</span> Human Typing Speed<br>
+                        <span style="opacity: 0.7;">Role:</span> "How do I write this loop?"
+                    </p>
+                </div>
+
+                <!-- 2025 -->
+                <div class="timeline-box" style="border-top: 3px solid var(--accent-cyan); background: rgba(34, 211, 238, 0.05);">
+                    <div style="display:flex; justify-content:space-between;">
+                        <h3 style="margin:0; font-size: 1.4em; color: var(--accent-cyan);">Today</h3>
+                        <span style="font-size: 2em;">🧠</span>
+                    </div>
+                    <strong style="margin-top: 10px; font-size: 1.3em; color: white;">The "Architect"</strong>
+                    <p style="font-size: 1.1em; margin-top: 10px;">
+                        <span style="opacity: 0.7;">Focus:</span> Logic & Systems<br>
+                        <span style="opacity: 0.7;">Constraint:</span> Context Window<br>
+                        <span style="opacity: 0.7;">Role:</span> "Does this logic make sense?"
+                    </p>
+                </div>
+
+                <!-- 2030 -->
+                <div class="timeline-box" style="border-top: 3px dashed var(--accent-purple);">
+                    <div style="display:flex; justify-content:space-between;">
+                        <h3 style="margin:0; font-size: 1.4em; color: var(--accent-purple);">2030?</h3>
+                        <span style="font-size: 2em;">🧞</span>
+                    </div>
+                    <strong style="margin-top: 10px; font-size: 1.3em;">The "Orchestrator"</strong>
+                    <p style="font-size: 1.1em; margin-top: 10px;">
+                        <span style="opacity: 0.7;">Focus:</span> Intent & Governance<br>
+                        <span style="opacity: 0.7;">Constraint:</span> Energy & Compute<br>
+                        <span style="opacity: 0.7;">Role:</span> "What problem should we solve?"
+                    </p>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="margin: 40px auto; width: 85%; border: 1px solid var(--text-secondary);">
+                <p style="font-size: 1.3em; line-height: 1.4;">
+                    This is the steepest technological ascent in history.<br>
+                    To navigate the <strong style="color: var(--accent-purple);">Future</strong>, you need to understand the trends of the <strong style="color: var(--accent-cyan);">Past</strong>.
+                </p>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: The Interactive Poll -->
+        <div class="slide" style="justify-content: center; text-align: center;">
+            <div class="slide-counter">2 / 14</div>
+            <h2>The Reality Check</h2>
+            
+            <div class="highlight-box" style="margin: 40px auto; width: 70%; border-color: var(--accent-green);">
+                <div class="discussion-cue">Audience Poll</div>
+                <p style="margin-bottom: 20px; font-size: 1.6em;">Show of hands:</p>
+                <p style="text-align: left; padding-left: 20px;">
+                    🙋 Who used AI to write code this week?<br>
+                    🙋 Who used AI to search the web?<br>
+                    🙋 Who trusts the AI's answer 100%?
+                </p>
+            </div>
+
+            <p style="color: var(--accent-cyan); margin-top: 20px;">Today is November 20, 2025.<br>Let's see how we got here.</p>
+        </div>
+
+        <!-- SLIDE 3: The Foundations -->
+        <div class="slide">
+            <div class="slide-counter">3 / 14</div>
+            <h2>1. The Foundations <span class="year-badge">1943 - 2010</span></h2>
+            
+            <div class="grid-2 main-layout">
+                <div>
+                    <h3>The "Perceptron"</h3>
+                    <p><strong>McCulloch & Pitts (1943)</strong> proposed that biological neurons could be modeled as math.</p>
+                    
+                    <!-- DISCUSSION QUESTION -->
+                    <div class="highlight-box" style="border-color: var(--accent-pink); background: rgba(244, 114, 182, 0.1); margin-top:30px; cursor: pointer;" onclick="this.querySelector('.blur-answer').classList.add('revealed'); this.querySelector('.click-hint').style.display='none'">
+                        <div class="discussion-cue">Discussion</div>
+                        <strong>❓ The 70 Year Gap</strong><br>
+                        <p style="font-size: 1em; margin-top: 10px;">Neural networks were invented in 1943. Why did they stay "dumb" until 2012?</p>
+                        <div class="click-hint">Click to Reveal Answer</div>
+                        <div class="blur-answer">
+                            <hr style="border-color: rgba(255,255,255,0.2); margin: 10px 0;">
+                            <strong>Answer:</strong> We didn't have the <strong>Data</strong> (Internet) and we didn't have the <strong>Compute</strong> (GPUs).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="visual-diagram">
+                    <h3 style="margin-top: 0;">How it works</h3>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 40px;">
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <div class="flow-box" style="min-width: 80px; border-radius: 50%; font-size: 0.8em;">Input</div>
+                            <div class="flow-box" style="min-width: 80px; border-radius: 50%; font-size: 0.8em;">Input</div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-box" style="border-radius: 50%; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; border-color: var(--accent-green);">
+                            Sum &<br>Fire
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-box" style="border: none; background: none; font-size: 2em;">Outcome</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: Deep Learning -->
+        <div class="slide">
+            <div class="slide-counter">4 / 14</div>
+            <h2>2. The Deep Learning Boom <span class="year-badge">2012 - 2017</span></h2>
+            <p>We figured out how to stack "layers" of neurons deep. We called it <strong>Deep Learning</strong>.</p>
+
+            <div class="grid-2 main-layout">
+                <div class="card">
+                    <h3>🏆 AlexNet (2012)</h3>
+                    <p>The "Big Bang."</p>
+                    <ul>
+                        <li><strong>Task:</strong> Recognize 1000 objects (ImageNet).</li>
+                        <li><strong>Innovation:</strong> Using <strong>Gaming GPUs</strong> to do math.</li>
+                    </ul>
+                </div>
+                <div class="card" style="border-color: var(--accent-purple);">
+                    <h3>♟️ AlphaGo (2016)</h3>
+                    <div class="highlight-box" style="margin: 10px 0; padding: 15px;">
+                        <div class="discussion-cue">Trivia</div>
+                        <p style="font-size: 1em;">In Move 37 vs Lee Sedol, the commentators thought the AI made a mistake. Why?</p>
+                    </div>
+                    <p>It displayed <strong>Intuition</strong>. It made a move no human had ever taught it.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: Transformers (REVISED - SCALING FOCUS) -->
+        <div class="slide">
+            <div class="slide-counter">5 / 14</div>
+            <h2>3. The Transformer Era <span class="year-badge">2017</span></h2>
+            <p>The architecture that replaced the RNN and powers nearly <strong>everything</strong> today.</p>
+
+            <div class="grid-2 main-layout">
+                <!-- Left: The Problem -->
+                <div style="opacity: 0.8;">
+                    <h3 style="color: var(--text-secondary);">Before: RNNs</h3>
+                    <!-- Increased font-size from 0.9em to 1.25em -->
+                    <div class="flow-box" style="border-color: var(--text-secondary); margin-bottom: 10px; font-size: 1.25em; padding: 15px;">
+                        Word 1 → Word 2 → Word 3...
+                    </div>
+                    <!-- Increased font-size from 1em to 1.35em -->
+                    <p style="font-size: 1.35em;">
+                        <strong>Sequential.</strong>
+                        <br><span style="color: var(--accent-alert);">Cannot scale on GPUs.</span>
+                    </p>
+                </div>
+
+                <!-- Right: The Solution -->
+                <div>
+                    <h3 style="color: var(--accent-cyan);">After: Transformers</h3>
+                    <!-- Increased font-size from 0.9em to 1.25em -->
+                    <div class="flow-box" style="border-color: var(--accent-cyan); margin-bottom: 10px; font-size: 1.25em; padding: 15px;">
+                        [Word 1, Word 2, Word 3] (All at once)
+                    </div>
+                    <!-- Increased font-size from 1em to 1.35em -->
+                    <p style="font-size: 1.35em;">
+                        <strong>Parallel.</strong>
+                        <br><span style="color: var(--accent-green);">Massive Scaling Enabled.</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="visual-diagram" style="margin-top: -5px; margin-bottom: 15px;">
+                <h3>Mechanism: "Self-Attention"</h3>
+                
+                <div class="flow-container" style="margin-top: 15px; align-items: center;">
+                    <div style="font-size: 1.3em; text-align: center;">
+                        "The <strong>bank</strong> of the river..."
+                    </div>
+                    <div class="arrow" style="color: var(--accent-cyan); margin: 0 15px;">↔</div>
+                    <div class="flow-box" style="border-style: dashed; border-color: var(--accent-cyan); padding: 10px;">
+                        CONTEXT MAP
+                    </div>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 20px; border-color: var(--accent-cyan); cursor: pointer;" onclick="this.querySelector('.blur-answer').classList.add('revealed');">
+                    <strong>❓ Why was this the breakthrough?</strong>
+                    <div class="blur-answer" style="margin-top: 10px; font-size: 0.9em;">
+                        <strong>Parallelization.</strong>
+                        <br>This allowed us to throw massive compute at the problem, which wasn't possible with RNNs.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: Generative Images -->
+        <div class="slide">
+            <div class="slide-counter">6 / 14</div>
+            <h2>4. The Generative Explosion <span class="year-badge">2021 - 2022</span></h2>
+            <p>From analyzing to <strong>creating</strong>.</p>
+
+            <div class="grid-2 main-layout">
+                <div>
+                    <h3>The Timeline</h3>
+                    <ul style="font-size: 1.2em;">
+                        <li><strong>DALL-E 1 (2021):</strong> Proof of concept.</li>
+                        <li><strong>Midjourney (Summer 2022):</strong> Aesthetic/Art focus.</li>
+                        <li style="color: var(--accent-green); font-weight: bold;">Stable Diffusion (Fall 2022):</li>
+                    </ul>
+                    <p>Stable Diffusion was the turning point. Why? Because it was <strong>Open Source</strong> and ran on consumer hardware.</p>
+                </div>
+                
+                <div class="visual-diagram">
+                    <h3>Concept: Diffusion</h3>
+                    <div class="flow-container">
+                        <div>
+                            <div style="font-size: 3em;">🌫️</div>
+                            <p>Static</p>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div>
+                            <div style="font-size: 3em; opacity: 0.6;">🖼️</div>
+                            <p>Denoise</p>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div>
+                            <div style="font-size: 3em;">🎨</div>
+                            <p>Image</p>
+                        </div>
+                    </div>
+                    <p>The AI learns to subtract noise to reveal an image.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: Efficiency -->
+        <div class="slide">
+            <div class="slide-counter">7 / 14</div>
+            <h2>5. Smart Scaling <span class="year-badge">2022</span></h2>
+            <p style="color: var(--text-main); font-weight: bold;">Efficiency became as important as size.</p>
+            
+            <div class="grid-2 main-layout">
+                <div class="card">
+                    <h3>🐭 The "Chinchilla" Paper</h3>
+                    <p><strong>DeepMind (April 2022)</strong></p>
+                    
+                    <div class="highlight-box" style="margin: 10px 0; font-size: 1em;">
+                        <div class="discussion-cue">Debate</div>
+                        <strong>Bigger Model vs. More Data?</strong>
+                    </div>
+                    
+                    <p>DeepMind proved that small models trained on <strong>massive data</strong> outperform giant models trained on little data.</p>
+                </div>
+                
+                <div class="card">
+                    <h3>🦩 Flamingo (Vision)</h3>
+                    <p>Proved you could "glue" eyes onto a text brain.</p>
+                    <p>Before this, the model was blind. After this, it could look at a meme and explain the joke.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: ChatGPT -->
+        <div class="slide">
+            <div class="slide-counter">8 / 14</div>
+            <h2>6. The "iPhone Moment" <span class="year-badge">Nov 2022</span></h2>
+            
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="font-size: 3em; margin-bottom: 10px; color: var(--text-main);">ChatGPT</h1>
+                <p>100 Million users in 2 months.</p>
+            </div>
+
+            <div class="visual-diagram" style="position: relative;">
+                <h3>The Secret Sauce: RLHF</h3>
+                <p style="margin-bottom: 30px;">(Reinforcement Learning from Human Feedback)</p>
+                
+                <div style="display: flex; gap: 30px; justify-content: center; width: 100%;">
+                    <div class="flow-box" style="border-color: var(--text-secondary); background: transparent; flex: 1; padding: 15px;">
+                        <strong style="display:block; margin-bottom:10px;">1. Pre-training</strong>
+                        <span>Predict the internet.</span><br>
+                        <span style="color: var(--accent-alert); font-weight: bold;">"Wild" & Unpredictable</span>
+                    </div>
+                    <div class="arrow">→</div>
+                    <div class="flow-box" style="border-color: var(--accent-green); flex: 1; padding: 15px;">
+                        <strong style="display:block; margin-bottom:10px;">2. Alignment (RLHF)</strong>
+                        <span>Humans steer behavior.</span><br>
+                        <span style="color: var(--accent-green); font-weight: bold;">Follows Instructions</span>
+                    </div>
+                </div>
+            </div>
+            <p style="text-align: center; margin-top: 30px;">It wasn't <em>just</em> a new model. It was a new <strong>interface</strong>.</p>
+        </div>
+
+        <!-- SLIDE 9: Open Source -->
+        <div class="slide">
+            <div class="slide-counter">9 / 14</div>
+            <h2>7. Open Weights & Democratization <span class="year-badge">2023</span></h2>
+            <p style="color: var(--text-main); font-weight: bold;">High-performance AI became accessible without supercomputers.</p>
+
+            <div class="grid-2 main-layout">
+                <div>
+                    <h3>🦙 The Llama Leak</h3>
+                    <p><strong>Feb 2023:</strong> Meta released LLaMA to researchers. It leaked immediately.</p>
+                    <p>This sparked the "Cambrian Explosion" of open source AI. Suddenly, you didn't need OpenAI to run a brain.</p>
+                </div>
+
+                <div class="card" style="border-color: var(--accent-cyan);">
+                    <h3>The Innovation: Quantization</h3>
+                    <p>How do you fit a brain on a laptop?</p>
+                    
+                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 20px;">
+                        <div class="flow-box" style="border-color: white; padding: 10px;">16-bit<br>(Huge)</div>
+                        <div class="arrow">→</div>
+                        <div class="flow-box" style="border-color: var(--accent-cyan); padding: 10px;">4-bit<br>(Tiny)</div>
+                    </div>
+                    
+                    <p style="margin-top: 15px; font-size: 1.1em;">Community hackers realized you can delete 75% of the precision without losing intelligence.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 10: The 2025 Landscape -->
+        <div class="slide">
+            <div class="slide-counter">10 / 14</div>
+            <h2>8. The Landscape Today <span class="year-badge">Nov 2025</span></h2>
+            
+            <div class="grid-2 main-layout">
+                <!-- Left Card: The Big Three -->
+                <div class="card" style="border-color: var(--accent-purple);">
+                    <h3>The "Big Three"</h3>
+                    <ul style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                        <li style="color: var(--text-secondary);"><strong style="color: var(--text-main);">OpenAI:</strong> GPT-5 Pro (Aug '25). Expensive, generalist.</li>
+                        <li style="color: var(--text-secondary);"><strong style="color: var(--text-main);">Anthropic:</strong> Sonnet 4.5 (Sept '25). The coding king.</li>
+                        <li style="color: var(--text-secondary);"><strong style="color: var(--text-main);">Google:</strong> Gemini 3 (Nov '25). Massive context, current best generalist model.</li>
+                    </ul>
+                </div>
+
+                <!-- Right Card: Open Source -->
+                <div class="card" style="border-color: var(--accent-alert); display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3>The Open Source Shift</h3>
+                        <p style="margin-top: 10px; color: var(--text-secondary);">Meta's Llama 4 was a disappointment - did they hit a "Data Wall" or was it bad engineering? Or something else?</p>
+                    </div>
+
+                    <!-- The Trend Box -->
+                    <div class="highlight-box" style="background: rgba(255, 80, 80, 0.15); border: 1px solid var(--accent-alert); padding: 15px; border-radius: 8px; margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="color: var(--accent-alert); font-size: 1.1em;">The East Rises</strong>
+                            <span style="background: var(--accent-alert); color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold;">TREND</span>
+                        </div>
+                        <p style="font-size: 0.9em; margin-bottom: 10px;">The best open models now come from China: DeepSeek, Qwen, Kimi...</p>
+                        <p style="font-size: 0.9em; font-style: italic; color: var(--text-main); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                            Discussion: Why are US companies more closed?
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SLIDE 11: Reasoning & Synthetic Data -->
+        <div class="slide">
+            <div class="slide-counter">11 / 14</div>
+            <h2>9. The "Reasoning" Standard <span class="year-badge">Early 2025</span></h2>
+            
+            <div class="visual-diagram" style="padding: 20px 0; margin-bottom: 15px;">
+                <div class="grid-2" style="display: grid; grid-template-columns: 1.0fr 1.0fr; align-items: center; gap: 20px;">
+                    
+                    <!-- Left: Old Way -->
+                    <div style="text-align: center;">
+                        <h3 style="color: var(--text-secondary); margin-bottom: 5px; font-size: 1.7em;">Old AI</h3>
+                        <div class="flow-box" style="opacity: 0.7; font-size: 1.1em; padding: 10px; width: 50%; margin: 0 auto;">Auto-Complete</div>
+                    </div>
+                    
+                    <!-- Right: New Way -->
+                    <div style="border-left: 2px dashed rgba(255,255,255,0.2); padding-left: 20px; text-align: center;">
+                        <h3 style="color: var(--accent-pink); margin-bottom: 5px; font-size: 1.7em;">Reasoning AI</h3>
+                        <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                            <div class="flow-box" style="border-color: var(--accent-pink); font-size: 0.9em; padding: 6px 12px;">Generate Thoughts</div>
+                            <div class="arrow" style="font-size: 1em; line-height: 1;">↓</div>
+                            <div class="flow-box" style="border-color: var(--accent-pink); font-size: 0.9em; padding: 6px 12px;">Verify (Math/Code)</div>
+                            <div class="arrow" style="font-size: 1em; line-height: 1;">↓</div>
+                            <div class="flow-box" style="background: var(--accent-pink); font-size: 1.0em; padding: 10px 20px;">Correct Answer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="border-color: var(--accent-pink); background: rgba(255, 0, 128, 0.05); margin-top: 15px; padding: 12px; cursor: pointer;" onclick="this.querySelector('.blur-answer').classList.add('revealed');">
+                <div class="discussion-cue" style="background: var(--accent-pink); color: white; font-size: 0.8em; padding: 2px 8px;">Discussion</div>
+                
+                <div style="font-size: 0.95em; line-height: 1.3; margin-bottom: 5px;">
+                    <strong>❓ The Training Data Paradox</strong><br>
+                    <span style="font-size: 0.9em;">The internet has Questions and Answers, but rarely contains the <em>inner monologue</em> of solving them.</span>
+                    <br>
+                    <span style="color: var(--text-secondary); font-size: 0.9em; display: block; margin-top: 4px;">How did we train the AI to "think" if that data doesn't exist?</span>
+                </div>
+                
+                <div class="blur-answer" style="margin-top: 8px; border-top: 2px solid rgba(255, 0, 128, 0.3); padding-top: 8px;">
+                    <strong style="color: var(--accent-pink); font-size: 0.95em;">Synthetic Data & RL</strong>
+                    <ul style="margin-top: 5px; margin-left: 30%; margin-bottom: 5px; font-size: 0.70em; line-height: 1.4; text-align: left;">
+                        <li>Force the AI to generate 1,000 different "reasoning traces."</li>
+                        <li>Check the final answer.</li>
+                        <li>If it works, feed that reasoning trace back into the training set.</li>
+                    </ul>
+                    <div style="font-size: 0.85em; font-style: italic;">The AI teaches itself to think.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 12: World Models -->
+        <div class="slide">
+            <div class="slide-counter">12 / 14</div>
+            <h2>10. World Models & Simulation <span class="year-badge">Mid 2025</span></h2>
+            <p>AI is moving beyond text to understanding <strong>Physics</strong>.</p>
+
+            <div class="highlight-box" style="border-color: var(--accent-green); background: rgba(52, 211, 153, 0.1); margin: 15px 0;">
+                <h3>🧞 Genie 3 (Google)</h3>
+                <p><strong>The "Holodeck" Moment.</strong></p>
+                <p>Give it an image -> It generates a playable video game.</p>
+            </div>
+
+            <div class="grid-2 main-layout">
+                <div class="card">
+                    <h3>Sora, Veo, Runway, Kling</h3>
+                    <p>Video models are beginning to understand the world.</p>
+                </div>
+                <div class="card">
+                    <h3>Why does it matter?</h3>
+                    <p><strong>Robotics.</strong> If an AI can simulate a world accurately enough, it can endlessly practice driving a car or folding clothes or any other task.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 13: THE THESIS (SCALE) -->
+        <div class="slide">
+            <div class="slide-counter">13 / 14</div>
+            <h2>The Thesis: <span style="color: var(--accent-alert);">Scale is All You Need</span></h2>
+            
+            <div class="grid-2 main-layout" style="gap: 30px;">
+                
+                <!-- The Timeline Stack -->
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="flow-box" style="border-color: var(--accent-pink); text-align: left; padding: 15px;">
+                        <strong style="color: var(--accent-pink);">2025: Verifiable Scale</strong>
+                        <p style="font-size: 0.8em; margin: 5px 0 0 0;">Simulation & Reasoning. Human data is no longer the bottleneck.</p>
+                    </div>
+                    <div class="arrow" style="font-size: 1.5em; text-align: center; line-height: 0.5;">↑</div>
+                    
+                    <div class="flow-box" style="border-color: var(--accent-cyan); text-align: left; padding: 15px;">
+                        <strong style="color: var(--accent-cyan);">2022: Data Scale</strong>
+                        <p style="font-size: 0.8em; margin: 5px 0 0 0;">The Internet. We fed it everything, and it got smarter.</p>
+                    </div>
+                    <div class="arrow" style="font-size: 1.5em; text-align: center; line-height: 0.5;">↑</div>
+                    
+                    <div class="flow-box" style="border-color: var(--accent-purple); text-align: left; padding: 15px;">
+                        <strong style="color: var(--accent-purple);">2017: Algorithmic Scale</strong>
+                        <p style="font-size: 0.8em; margin: 5px 0 0 0;">Transformers allows parallel training. Required for the next step.</p>
+                    </div>
+                    <div class="arrow" style="font-size: 1.5em; text-align: center; line-height: 0.5;">↑</div>
+
+                    <div class="flow-box" style="border-color: var(--text-secondary); text-align: left; padding: 15px; opacity: 0.8;">
+                        <strong style="color: var(--text-secondary);">2012: Hardware Scale</strong>
+                        <p style="font-size: 0.8em; margin: 5px 0 0 0;">AlexNet. We realized GPUs could train neural nets.</p>
+                    </div>
+                </div>
+
+                <!-- The "Why It Matters" Box -->
+                <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+                    <div class="highlight-box" style="border-color: var(--accent-alert); background: rgba(251, 113, 133, 0.1); text-align: left;">
+                        <h3 style="color: var(--accent-alert); margin-top: 0; font-size: 1.6em;">The Takeaway</h3>
+                        <p style="color: var(--text-main); font-size: 1.1em; margin-top: 15px;">
+                            We are spending hundreds of billions on GPUs and restarting nuclear power plants for one reason:
+                        </p>
+                        <p style="font-size: 1.4em; font-weight: bold; margin: 20px 0; text-align: center; color: white;">
+                            Intelligence scales with computational power.
+                        </p>
+                        <p style="font-size: 1em; font-weight: bold;">
+                            It is not magic. It is engineering. And we haven't hit the ceiling yet.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 14: CONCLUSION & RESOURCES -->
+        <div class="slide">
+            <div class="slide-counter">14 / 14</div>
+            <h2>This is Not Normal.</h2>
+            
+            <div class="grid-2 main-layout">
+                <!-- Left: The "Witness" Statement -->
+                <div>
+                    <p style="font-size: 1.5em; line-height: 1.4; color: var(--text-main);">
+                        You are living through a historical discontinuity. 
+                    </p>
+                    <p style="margin-top: 20px;">
+                        The rules of software (and soon labor) are being rewritten in real-time.
+                    </p>
+                    <p style="margin-top: 20px; color: var(--accent-cyan);">
+                        Don't just watch. Verify.
+                    </p>
+                </div>
+
+                <!-- Right: Resources -->
+                <div class="card" style="border-color: var(--accent-purple);">
+                    <h3>Tools to Verify Reality</h3>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 20px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 2em;">🧪</span>
+                            <div>
+                                <strong style="color: var(--text-main);">Chatbot Arena (LMSYS)</strong>
+                                <p style="font-size: 0.8em; margin: 0;">See who is winning right now.</p>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 2em;">🧠</span>
+                            <div>
+                                <strong style="color: var(--text-main);">Use the SOTA</strong>
+                                <p style="font-size: 0.8em; margin: 0;">Try <strong>Gemini 3</strong> or <strong>Claude Sonnet 4.5</strong>.</p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 2em;">🌐</span>
+                            <div>
+                                <strong style="color: var(--text-main);">Boisestate.ai</strong>
+                                <p style="font-size: 0.8em; margin: 0;">Access some of these tools for free through the university.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 40px;">
+                <button onclick="location.reload()">Restart Presentation ↻</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Script -->
+    <div class="nav-bar">
+        <button id="prevBtn" onclick="plusSlides(-1)">❮ Prev</button>
+        <button id="nextBtn" onclick="plusSlides(1)">Next ❯</button>
+    </div>
+
+    <script>
+        let slideIndex = 1;
+        showSlides(slideIndex);
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "ArrowRight") plusSlides(1);
+            if (event.key === "ArrowLeft") plusSlides(-1);
+            if (event.key === " ") {
+                // Reveal answers on Spacebar
+                let activeSlide = document.querySelector('.slide.active');
+                let hiddenAnswer = activeSlide.querySelector('.blur-answer:not(.revealed)');
+                if(hiddenAnswer) hiddenAnswer.classList.add('revealed');
+            }
+        });
+
+        function plusSlides(n) { showSlides(slideIndex += n); }
+
+        function showSlides(n) {
+            let i;
+            let slides = document.getElementsByClassName("slide");
+            let nextBtn = document.getElementById("nextBtn");
+            let prevBtn = document.getElementById("prevBtn");
+
+            if (n > slides.length) {slideIndex = 1}    
+            if (n < 1) {slideIndex = slides.length}
+
+            for (i = 0; i < slides.length; i++) {
+                slides[i].classList.remove("active");
+                slides[i].style.display = "none";  
+            }
+
+            slides[slideIndex-1].style.display = "flex";
+            setTimeout(() => { slides[slideIndex-1].classList.add("active"); }, 10);
+
+            prevBtn.disabled = (slideIndex === 1);
+            nextBtn.innerHTML = (slideIndex === slides.length) ? "Finish" : "Next ❯";
+        }
+    </script>
+</body>
+</html>
