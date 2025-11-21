@@ -50,9 +50,9 @@ Click any link to play or use the app instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Room%20Reservation%20Hell%20v3.3.html)
 *   **Description:** A choice-based narrative game simulating the frustration of university bureaucracy. Make decisions to manage your stats and navigate absurd challenges to book a room for your club.
 
-### Solarized Clicker: Singularity (v3.3)
-*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Solarized%20Cookie%20Clicker%20Singularity%20v3.3.html)
-*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get more cookies and purchase upgrades to increase your output. Works on mobile but works best on desktop.
+### Solarized Clicker: Singularity (v6.5)
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Solarized%20Cookie%20Clicker%20Singularity%20v6.5.html)
+*   **Description:** A classic idle clicker game inspired by *Cookie Clicker*. Click the main icon to generate cookies, then spend them on buildings to automate production. Hunt for randomly appearing Golden Cookies to get more cookies and prestige after you get far enough into the game to unlock additional unique upgrades. Works on mobile and desktop.
 
 ### The Infinite Content Machine (v4.2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
