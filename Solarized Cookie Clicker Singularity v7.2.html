@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Solarized Clicker: Mobile</title>
+    <title>Solarized Clicker: Multiverse</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
     <style>
         :root {
@@ -39,6 +39,7 @@
             -webkit-tap-highlight-color: transparent;
         }
         #big-cookie:active { transform: scale(0.95); }
+        #big-cookie.disabled { filter: grayscale(100%); cursor: not-allowed; opacity: 0.5; }
         .cookie-display { font-size: 2.5em; font-weight: bold; color: var(--base02); margin-top: 10px; }
         .cps-display { font-size: 1.2em; color: var(--base00); }
         
@@ -67,13 +68,8 @@
         .tab-content.active { display: block; }
 
         /* BULK BUY CONTROLS */
-        .bulk-buy-controls {
-            display: flex; justify-content: center; margin-bottom: 15px; gap: 5px;
-        }
-        .bulk-btn {
-            flex: 1; padding: 8px; border: 1px solid var(--base1); background: var(--base3);
-            cursor: pointer; color: var(--base01); font-weight: bold; border-radius: 4px;
-        }
+        .bulk-buy-controls { display: flex; justify-content: center; margin-bottom: 15px; gap: 5px; }
+        .bulk-btn { flex: 1; padding: 8px; border: 1px solid var(--base1); background: var(--base3); cursor: pointer; color: var(--base01); font-weight: bold; border-radius: 4px; }
         .bulk-btn.active { background: var(--blue); color: var(--base3); border-color: var(--blue); }
 
         /* STORE ITEMS */
@@ -173,6 +169,25 @@
             font-size: 0.7em; white-space: nowrap; color: var(--base01); font-weight: bold;
         }
 
+        /* MULTIVERSE SCREEN */
+        #multiverse-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--base03); color: var(--base3);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 5000; overflow-y: auto; padding: 20px;
+        }
+        .multiverse-title { font-size: 2.5em; color: var(--magenta); margin-bottom: 10px; text-align: center; }
+        .multiverse-desc { font-size: 1.2em; max-width: 600px; text-align: center; margin-bottom: 30px; }
+        .challenge-container { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%; max-width: 900px; }
+        .challenge-card {
+            background: var(--base02); border: 2px solid var(--base01);
+            border-radius: 8px; padding: 20px; width: 250px; cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .challenge-card:hover { transform: translateY(-5px); border-color: var(--cyan); }
+        .challenge-name { font-size: 1.3em; font-weight: bold; color: var(--blue); margin-bottom: 10px; }
+        .challenge-effect { font-size: 0.9em; color: var(--base1); }
+
         /* --- MOBILE RESPONSIVENESS --- */
         @media (max-width: 900px) {
             .game-container { flex-direction: column; }
@@ -204,6 +219,12 @@
     </style>
 </head>
 <body>
+    <div id="multiverse-screen">
+        <div class="multiverse-title">The Universe Has Collapsed</div>
+        <div class="multiverse-desc">You have reached the limits of this reality. A new universe awaits your guidance. Choose the conditions of your next existence.</div>
+        <div class="challenge-container" id="challenge-list"></div>
+    </div>
+
     <div id="golden-cookie-bag-container" aria-label="Golden Cookie Bag">
         <svg viewBox="0 0 100 100" class="bag-back"><path d="M 20 20 Q 50 10, 80 20 L 90 80 Q 50 95, 10 80 Z" fill="#a5682a" /></svg>
         <div id="stored-cookie-visuals"></div>
@@ -218,6 +239,7 @@
                 <div id="big-cookie"></div>
                 <div class="cookie-display"><span id="cookie-count">0</span> cookies</div>
                 <div class="cps-display">per second: <span id="cps-count">0.0</span></div>
+                <div class="cps-display" id="challenge-display" style="font-size: 0.8em; color: var(--magenta); margin-top: 5px;"></div>
             </div>
             <div class="stats-section">
                 <div class="stat-line"><span class="stat-label">Time Played:</span><span id="time-played-small" class="stat-value">0s</span></div>
@@ -276,6 +298,7 @@
                     <div class="stat-line"><span>Golden Cookies (All Time):</span><span id="golden-clicks">0</span></div>
                     <div class="stat-line"><span>Cookies/Click:</span><span id="click-power-stat">1</span></div>
                     <div class="stat-line"><span>Prestige Count:</span><span id="prestige-stat">0</span></div>
+                    <div class="stat-line"><span>Universes Destroyed:</span><span id="universes-stat">0</span></div>
                     <div class="stat-line"><span>Time Since Black Hole:</span><span id="bh-time-stat">N/A</span></div>
                 </div>
             </div>
@@ -302,6 +325,12 @@
                 OFFLINE_EFFICIENCY: 0.5, GOLDEN_COOKIE_BAG_VISUAL_LIMIT: 10, SAVE_KEY: 'solarizedClickerSave_v6',
                 INFINITY_CAP: 1e306
             };
+            this.challenges = [
+                { id: 'standard', name: 'Standard Universe', desc: 'No special modifiers.' },
+                { id: 'idle', name: 'Iron Will', desc: 'Main Cookie is disabled. Buildings and Upgrades are 25% cheaper.' },
+                { id: 'inflation', name: 'Hyperinflation', desc: 'Base production +100%. Building cost scaling increased to 1.20.' },
+                { id: 'grandmapocalypse', name: 'Grandmapocalypse', desc: 'Grandmas are 10x stronger. All other buildings are 50% weaker.' }
+            ];
         }
 
         init() {
@@ -325,6 +354,7 @@
         getInitialGameState() {
             return {
                 cookies: 0, cps: 0, clickPower: 1,
+                activeChallenge: 'standard', // NEW: Tracks current challenge
                 wishes: { horizons: 0, endCount: 0 },
                 stats: { totalCookies: 0, totalClicks: 0, goldenCookiesClicked: 0, gameStartTime: Date.now(), lastSaveTime: Date.now(), firstBlackHoleBuyTime: null, universesDestroyed: 0, prestigeCount: 0 },
                 goldenCookie: { minDelay: 80, maxDelay: 240, duration: 10, variedRewards: false, buildingReward: 1, autoCollect: false, magnet: false, timer: 0, bagUnlocked: false, storedCookies: 0, baseMultiplier: 0.5, cpsMultiplier: 1, cpsDuration: 30, wallet: 0, runCount: 0 },
@@ -373,12 +403,28 @@
                 secret: [ { id: 'secret1', name: '??????', desc: 'The universe bends to your will.', cost: 1, requirement: { type: 'building', id: 'blackhole', count: 100 } } ] 
             }; 
         }
-        getPrestigeUpgradeData() { return { 
-            production: [ { id: 'starter_kit', name: 'Starter Kit', desc: 'Start each new run with 5 Grandmas.', cost: 5 }, { id: 'cosmic_multiplier', name: 'Cosmic Multiplier', desc: 'Increases the passive CPS bonus from each CE to +10%.', cost: 25 }, { id: 'singularity_clicks', name: 'Singularity Clicks', desc: 'Each click also grants CPS equal to 0.2% of total CPS per CE point.', cost: 15 } ], 
-            qol: [ { id: 'tier1_legacy', name: 'Tier 1 Legacy', desc: 'The first tier upgrade for every building is purchased automatically for free.', cost: 40 }, { id: 'offline_astral_flow', name: 'Offline Astral Flow', desc: 'Increases offline progress efficiency to 100%.', cost: 10 }, { id: 'preserve_elders', name: 'Preserve Elders', desc: 'Keep half of your Grandmas after prestiging.', cost: 150 } ], 
-            mechanics: [ { id: 'gc_bag_unlock', name: 'Unlock: Golden Cookie Bag', desc: 'Unlocks the ability to store Golden Cookies.', cost: 10 }, { id: 'synergistic_start', name: 'Synergistic Start', desc: 'Unlock the "Mining Grandmas" synergy upgrade for free.', cost: 40 }, { id: 'black_hole_tuning', name: 'Black Hole Tuning', desc: 'Your Black Holes start with a base growth rate of 0.015.', cost: 200 }, { id: 'supernova_unlock', name: 'Unlock: The Supernova', desc: 'A new, powerful clickable appears every 1-2 hours.', cost: 500 } ], 
-            celestial: [ { id: 'celestial_silver', name: 'Unlock: Silver Cookies', desc: 'Adds Silver Cookies to the spawn pool, which can grant free buildings.', cost: 15 }, { id: 'celestial_rainbow', name: 'Unlock: Rainbow Cookies', desc: 'Adds Rainbow Cookies to the spawn pool, which cause a "Click Frenzy".', cost: 25 }, { id: 'celestial_storm', name: 'Unlock: Cookie Storms', desc: 'Adds Cookie Storms to the spawn pool, a highly interactive event.', cost: 50 }, { id: 'subatomic_optimization', name: 'Subatomic Optimization', desc: 'Building cost scaling is reduced from 1.15 to 1.14.', cost: 500 } ] 
-        }; }
+        getPrestigeUpgradeData() { 
+            return { 
+                production: [ { id: 'starter_kit', name: 'Starter Kit', desc: 'Start each new run with 5 Grandmas.', cost: 5 }, { id: 'cosmic_multiplier', name: 'Cosmic Multiplier', desc: 'Increases the passive CPS bonus from each CE to +10%.', cost: 25 }, { id: 'singularity_clicks', name: 'Singularity Clicks', desc: 'Each click also grants CPS equal to 0.2% of total CPS per CE point.', cost: 15 } ], 
+                qol: [ { id: 'tier1_legacy', name: 'Tier 1 Legacy', desc: 'The first tier upgrade for every building is purchased automatically for free.', cost: 40 }, { id: 'offline_astral_flow', name: 'Offline Astral Flow', desc: 'Increases offline progress efficiency to 100%.', cost: 10 }, { id: 'preserve_elders', name: 'Preserve Elders', desc: 'Keep half of your Grandmas after prestiging.', cost: 150 } ], 
+                mechanics: [ { id: 'gc_bag_unlock', name: 'Unlock: Golden Cookie Bag', desc: 'Unlocks the ability to store Golden Cookies.', cost: 10 }, { id: 'synergistic_start', name: 'Synergistic Start', desc: 'Unlock the "Mining Grandmas" synergy upgrade for free.', cost: 40 }, { id: 'black_hole_tuning', name: 'Black Hole Tuning', desc: 'Your Black Holes start with a base growth rate of 0.015.', cost: 200 }, { id: 'supernova_unlock', name: 'Unlock: The Supernova', desc: 'A new, powerful clickable appears every 1-2 hours.', cost: 500 } ], 
+                
+                // UPDATED CELESTIAL CATEGORY
+                celestial: [ 
+                    // Standard Unlocks (Originals)
+                    { id: 'celestial_silver', name: 'Unlock: Silver Cookies', desc: 'Adds Silver Cookies to the spawn pool.', cost: 15, type: 'unlock' }, 
+                    { id: 'celestial_rainbow', name: 'Unlock: Rainbow Cookies', desc: 'Adds Rainbow Cookies to the spawn pool.', cost: 25, type: 'unlock' }, 
+                    { id: 'celestial_storm', name: 'Unlock: Cookie Storms', desc: 'Adds Cookie Storms to the spawn pool.', cost: 50, type: 'unlock' }, 
+                    
+                    // New Game+ Enhancers (Replacements)
+                    { id: 'silver_coating', name: 'Silver Coating', desc: 'Silver Cookies grant +2 extra buildings.', cost: 75, type: 'enhance' },
+                    { id: 'rainbow_prism', name: 'Rainbow Prism', desc: 'Rainbow Cookie effects last twice as long.', cost: 100, type: 'enhance' },
+                    { id: 'storm_stabilizer', name: 'Storm Stabilizer', desc: 'Cookie Storm drops are collected automatically.', cost: 150, type: 'enhance' },
+                    
+                    { id: 'subatomic_optimization', name: 'Subatomic Optimization', desc: 'Building cost scaling is reduced from 1.15 to 1.14.', cost: 500 } 
+                ] 
+            }; 
+        }
         
         getAltarData() {
              return [
@@ -389,8 +435,19 @@
                  { id: 'wish_end', name: 'Wish for the End', desc: 'Reduces the Infinity Cap by 10^20. Repeatable.', cost: 50 }
              ];
         }
-        getCookieGraphics() { return { golden: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="%23ffd700" stroke="%23b58900" stroke-width="3"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="%23b58900">★</text></svg>', silver: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f0f0f0"/><stop offset="1" stop-color="#a0a0a0"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(%23g)" stroke="#707070" stroke-width="3"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="#707070">B</text></svg>', rainbow: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><conic-gradient id="g" from="0" cx="50" cy="50"><stop offset="0" stop-color="red"/><stop offset="0.16" stop-color="orange"/><stop offset="0.33" stop-color="yellow"/><stop offset="0.5" stop-color="lime"/><stop offset="0.66" stop-color="blue"/><stop offset="0.83" stop-color="indigo"/><stop offset="1" stop-color="violet"/></conic-gradient></defs><circle cx="50" cy="50" r="48" fill="url(%23g)" stroke="#fff" stroke-width="3"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="#fff">⚡</text></svg>', storm: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="g"><stop stop-color="#268bd2"/><stop offset="1" stop-color="#002b36"/></radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(%23g)" stroke="#eee8d5" stroke-width="3"/><text x="50" y="68" font-size="50" text-anchor="middle" fill="#eee8d5">🌪️</text></svg>', }; }
-        
+
+        getCookieGraphics() { 
+            return { 
+                golden: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23ffd700' stroke='%23b58900' stroke-width='3'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='%23b58900'%3E%E2%98%85%3C/text%3E%3C/svg%3E",
+                
+                silver: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23e0e0e0' stroke='%23a0a0a0' stroke-width='3'/%3E%3Ccircle cx='50' cy='50' r='40' fill='%23c0c0c0' stroke='none'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='%23808080'%3EB%3C/text%3E%3C/svg%3E",
+                
+                rainbow: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23ff00ff' stroke='%23ffffff' stroke-width='3'/%3E%3Cpath d='M50 2 A48 48 0 0 1 98 50 L50 50 Z' fill='%23ffff00'/%3E%3Cpath d='M98 50 A48 48 0 0 1 50 98 L50 50 Z' fill='%2300ffff'/%3E%3Cpath d='M50 98 A48 48 0 0 1 2 50 L50 50 Z' fill='%23ff0000'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='%23ffffff'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E",
+                
+                storm: "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23555555' stroke='%23222222' stroke-width='3'/%3E%3Cpath d='M30 50 Q50 20 70 50 T90 50' stroke='%23ffffff' stroke-width='4' fill='none'/%3E%3Ctext x='50' y='80' font-size='40' text-anchor='middle' fill='%23ffffff'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E", 
+            }; 
+        }
+
         _makeCleanNumber(num) {
             const magnitude = Math.pow(10, Math.floor(Math.log10(num))); const normalized = num / magnitude; const steps = [1, 2.5, 5, 7.5, 10];
             const clean = steps.reduce((prev, curr) => Math.abs(curr - normalized) < Math.abs(prev - normalized) ? curr : prev); return clean * magnitude;
@@ -421,6 +478,7 @@
                 goldenClicksSmall: document.getElementById('golden-clicks-small'), goldenClicksSystem: document.getElementById('golden-clicks'),
                 goldenClicksRun: document.getElementById('golden-clicks-run'),
                 clickPowerStat: document.getElementById('click-power-stat'), prestigeStat: document.getElementById('prestige-stat'),
+                universesStat: document.getElementById('universes-stat'),
                 bhTimeStat: document.getElementById('bh-time-stat'),
                 goldenCookie: document.getElementById('golden-cookie'), goldenCookieBagContainer: document.getElementById('golden-cookie-bag-container'), 
                 storedCookieCount: document.getElementById('stored-cookie-count'), storedCookieVisuals: document.getElementById('stored-cookie-visuals'), 
@@ -433,7 +491,8 @@
                 saveBrowserBtn: document.getElementById('save-browser-btn'), loadBrowserBtn: document.getElementById('load-browser-btn'), 
                 saveFileBtn: document.getElementById('save-file-btn'), loadFileBtn: document.getElementById('load-file-btn'), 
                 fileInput: document.getElementById('file-input'), resetBtn: document.getElementById('reset-btn'),
-                bulkBtns: document.querySelectorAll('.bulk-btn')
+                bulkBtns: document.querySelectorAll('.bulk-btn'),
+                multiverseScreen: document.getElementById('multiverse-screen'), challengeList: document.getElementById('challenge-list'), challengeDisplay: document.getElementById('challenge-display')
             };
         }
 
@@ -497,11 +556,36 @@
 
         triggerSingularityCollapse() {
             clearInterval(this.intervals.gameLoop);
-            alert("THE UNIVERSE HAS COLLAPSED!\n\nYou have generated so much matter that reality has shattered.\nYou have completed the game.");
-            const universes = (this.game.stats.universesDestroyed || 0) + 1;
+            clearInterval(this.intervals.slowLoop);
+            clearInterval(this.intervals.recalc);
+            clearInterval(this.intervals.autosave);
+            this.renderMultiverseScreen();
+        }
+        
+        renderMultiverseScreen() {
+            this.dom.multiverseScreen.style.display = 'flex';
+            let descText = "You have reached the limits of this reality. A new universe awaits your guidance.";
+            descText += "<br><br><span style='color:var(--yellow)'>★ New Game+ Active: Silver, Rainbow, and Storm cookies are permanently unlocked.</span>";
+            this.dom.challengeList.innerHTML = '';
+            this.challenges.forEach(ch => {
+                const card = document.createElement('div');
+                card.className = 'challenge-card';
+                card.innerHTML = `<div class="challenge-name">${ch.name}</div><div class="challenge-effect">${ch.desc}</div>`;
+                card.onclick = () => this.startNewUniverse(ch.id);
+                this.dom.challengeList.appendChild(card);
+            });
+        }
+        
+        startNewUniverse(challengeId) {
+            const totalUniverses = (this.game.stats.universesDestroyed || 0) + 1;
+            // Hard Reset but keep universes count
             localStorage.removeItem(this.CONSTANTS.SAVE_KEY);
-            this.game = this.getInitialGameState();
-            this.game.stats.universesDestroyed = universes;
+            
+            const newState = this.getInitialGameState();
+            newState.stats.universesDestroyed = totalUniverses;
+            newState.activeChallenge = challengeId;
+            
+            this.game = newState;
             this.saveGame();
             location.reload();
         }
@@ -521,6 +605,10 @@
         }
         
         clickCookie() {
+            if (this.game.activeChallenge === 'idle') {
+                this.showNotification("Challenge Active: Clicking Disabled");
+                return;
+            }
             this.game.cookies += this.game.clickPower;
             this.game.stats.totalCookies += this.game.clickPower;
             this.game.prestige.cookiesThisRun += this.game.clickPower;
@@ -543,33 +631,18 @@
             else if (upgradeType && upgradeId) { this.buyUpgrade(upgradeType, upgradeId); }
         }
 
-        getBuildingCost(id, currentCount, amount) {
-            const b = this.game.buildings[id];
-            // New scaling logic
-            const scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
-            let totalCost = 0;
-            // Simple geometric sum: a * (r^n - 1) / (r - 1) * r^currentCount
-            // But iterating is safer for varied amounts
-            for(let i=0; i<amount; i++) {
-                const nextCost = this.getInitialGameState().buildings[id].cost * Math.pow(scaling, currentCount + i);
-                totalCost += nextCost;
-            }
-            return Math.ceil(totalCost);
-        }
-
         buyBuilding(id, isShift) {
             const building = this.game.buildings[id];
             let amountToBuy = 1;
+            let costMultiplier = this.game.activeChallenge === 'idle' ? 0.75 : 1.0;
+            let scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
+            if (this.game.activeChallenge === 'inflation') scaling = 1.20;
             
             if (this.buyMultiplier === 'max') {
-                // Loop buying until can't afford. Cap at 100 per tick to avoid lag
                 let affordable = 0;
-                let tempCost = 0;
                 let tempCookies = this.game.cookies;
-                const scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
-                
                 while(affordable < 100) {
-                    const nextCost = this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count + affordable);
+                    const nextCost = Math.ceil(this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count + affordable) * costMultiplier);
                     if(tempCookies >= nextCost) {
                         tempCookies -= nextCost;
                         affordable++;
@@ -577,22 +650,18 @@
                         break;
                     }
                 }
-                amountToBuy = affordable > 0 ? affordable : 1; // At least try 1
+                amountToBuy = affordable > 0 ? affordable : 1; 
             } else {
                 amountToBuy = this.buyMultiplier;
             }
             
-            // Execution
-            const scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
-            
             for (let i = 0; i < amountToBuy; i++) {
-                const nextCost = Math.ceil(this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count));
+                const nextCost = Math.ceil(this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count) * costMultiplier);
                 
                 if (this.game.cookies >= nextCost) {
                     this.game.cookies -= nextCost;
                     building.count++;
                     
-                    // Tier 1 Legacy Logic
                     if (this.game.prestige.upgrades['tier1_legacy'] && building.upgradeLevel === 0 && this.upgradeData.tier[id]) {
                         const firstTierUpgrade = this.upgradeData.tier[id][0];
                         if (!this.game.upgrades[firstTierUpgrade.id]) {
@@ -601,10 +670,8 @@
                             this.showNotification(`${building.name} Tier 1 Legacy unlocked!`);
                         }
                     }
-                    
-                    // Update displayed cost for next one
-                    const nextNextCost = Math.ceil(this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count));
-                    building.cost = nextNextCost; 
+                    // Save recalculated cost
+                    building.cost = Math.ceil(this.getInitialGameState().buildings[id].cost * Math.pow(scaling, building.count) * costMultiplier);
                 } else {
                     break;
                 }
@@ -619,8 +686,12 @@
             if (type === 'tier') { upgrade = this.upgradeData.tier[id][this.game.buildings[id].upgradeLevel]; } 
             else if (type === 'blackHoleRate') { upgrade = this.upgradeData.blackHoleRate.find(u => u.id === id); } 
             else { upgrade = this.upgradeData[type].find(u => u.id === id); }
-            if (!upgrade || this.game.upgrades[upgrade.id] || this.game.cookies < upgrade.cost) return;
-            this.game.cookies -= upgrade.cost; this.game.upgrades[upgrade.id] = true;
+            
+            let cost = upgrade.cost;
+            if (this.game.activeChallenge === 'idle') cost *= 0.75;
+            
+            if (!upgrade || this.game.upgrades[upgrade.id] || this.game.cookies < cost) return;
+            this.game.cookies -= cost; this.game.upgrades[upgrade.id] = true;
             this._applyUpgradeEffect(type, id); document.getElementById(`upgrade-${upgrade.id}`).classList.add('purchased');
             this.recalculateStats(); this.updateUI(); this.updateStoreAvailability();
         }
@@ -657,7 +728,6 @@
             
             this.game.buildings.blackhole.growthRate = rate + upgradeBonus;
             
-            // Fix for reloading game resetting the interval bonus
             let interval = 60000;
             if (this.game.upgrades['bhs3']) { interval = 45000; }
             this.game.buildings.blackhole.growthInterval = interval;
@@ -676,6 +746,8 @@
             let cpsBonus = 0; if (this.game.upgrades['cs3']) { cpsBonus = this.game.cps * 0.01; }
             if (this.game.prestige.upgrades['singularity_clicks']) { cpsBonus += this.game.cps * (0.002 * this.game.prestige.cosmicEssence); }
             let frenzyMultiplier = 1; if (this.game.buffs.clickFrenzy.active && Date.now() < this.game.buffs.clickFrenzy.expiry) { frenzyMultiplier = 777; } else { this.game.buffs.clickFrenzy.active = false; }
+            
+            // Universe Multiplier logic moved here
             let universeMultiplier = 1 + (this.game.stats.universesDestroyed || 0) * 0.1;
             this.game.clickPower = (baseClickPower + flatBonus + cpsBonus) * frenzyMultiplier * universeMultiplier;
         }
@@ -687,6 +759,18 @@
                 this.upgradeData.tier[key]?.forEach((tier, i) => { if (b.upgradeLevel > i) buildingMultiplier *= 2; });
                 let synergyMultiplier = 1; this.upgradeData.synergy.forEach(upg => { if (this.game.upgrades[upg.id] && upg.target === key) { synergyMultiplier += this.game.buildings[upg.source].count * upg.bonus; } });
                 let grandmaClickBonus = 1; if (key === 'grandma' && this.game.upgrades['cs2']) { grandmaClickBonus += Math.floor(this.game.stats.totalClicks / 25) * 0.01; }
+                
+                // NEW: Grandma Universe Bonus
+                if (key === 'grandma' && this.game.stats.universesDestroyed > 0) {
+                    buildingMultiplier *= Math.pow(1.25, this.game.stats.universesDestroyed);
+                }
+                
+                // CHALLENGE: Grandmapocalypse
+                if (this.game.activeChallenge === 'grandmapocalypse') {
+                    if (key === 'grandma') buildingMultiplier *= 10;
+                    else buildingMultiplier *= 0.5;
+                }
+                
                 let buildingCps = b.count * b.baseCps * buildingMultiplier * synergyMultiplier * grandmaClickBonus;
                 if (key === 'blackhole' && this.game.stats.firstBlackHoleBuyTime) { const intervalsSinceStart = (Date.now() - this.game.stats.firstBlackHoleBuyTime) / b.growthInterval; const timeBonus = Math.pow(1 + b.growthRate, intervalsSinceStart); buildingCps *= timeBonus; }
                 totalCps += buildingCps;
@@ -694,6 +778,11 @@
             totalCps *= globalMultiplier;
             let ceMultiplier = this.game.prestige.upgrades['cosmic_multiplier'] ? 0.10 : 0.05;
             totalCps *= (1 + this.game.prestige.cosmicEssence * ceMultiplier);
+            
+            // CHALLENGE: Inflation
+            if (this.game.activeChallenge === 'inflation') totalCps *= 2;
+            
+            // Universe multiplier
             let universeMultiplier = 1 + (this.game.stats.universesDestroyed || 0) * 0.1;
             this.game.cps = totalCps * universeMultiplier;
         }
@@ -723,6 +812,16 @@
             document.title = `${this.formatNumber(Math.floor(this.game.cookies))} cookies`;
             this.dom.cookieCount.textContent = this.formatNumber(Math.floor(this.game.cookies)); this.dom.cpsCount.textContent = this.formatNumber(this.game.cps);
             
+            if(this.game.activeChallenge === 'idle') this.dom.bigCookie.classList.add('disabled');
+            else this.dom.bigCookie.classList.remove('disabled');
+
+            if(this.game.activeChallenge !== 'standard') {
+                const ch = this.challenges.find(c => c.id === this.game.activeChallenge);
+                this.dom.challengeDisplay.textContent = `Challenge: ${ch ? ch.name : 'Unknown'}`;
+            } else {
+                this.dom.challengeDisplay.textContent = "";
+            }
+
             const tc = this.game.stats.totalClicks.toLocaleString();
             if(this.dom.totalClicksSmall) this.dom.totalClicksSmall.textContent = tc;
             if(this.dom.totalClicksSystem) this.dom.totalClicksSystem.textContent = tc;
@@ -739,11 +838,11 @@
 
             if(this.dom.goldenClicksRun) this.dom.goldenClicksRun.textContent = this.game.goldenCookie.runCount.toLocaleString();
             if(this.dom.clickPowerStat) this.dom.clickPowerStat.textContent = this.formatNumber(this.game.clickPower);
-            if(this.dom.prestigeStat) this.dom.prestigeStat.textContent = this.game.stats.prestigeCount || 0; // Tracks manual resets
+            if(this.dom.prestigeStat) this.dom.prestigeStat.textContent = this.game.stats.prestigeCount || 0; 
+            if(this.dom.universesStat) this.dom.universesStat.textContent = this.game.stats.universesDestroyed || 0; 
             if(this.dom.totalCookiesStat) this.dom.totalCookiesStat.textContent = this.formatNumber(this.game.stats.totalCookies);
             if(this.dom.runCookiesStat) this.dom.runCookiesStat.textContent = this.formatNumber(this.game.prestige.cookiesThisRun);
             
-            // Black Hole Timer
             if(this.dom.bhTimeStat) {
                 if(this.game.stats.firstBlackHoleBuyTime) {
                      const bhTime = (Date.now() - this.game.stats.firstBlackHoleBuyTime) / 1000;
@@ -757,7 +856,9 @@
 
         updateStoreAvailability() {
             const buildingKeys = Object.keys(this.game.buildings);
-            const scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
+            let scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
+            if (this.game.activeChallenge === 'inflation') scaling = 1.20;
+            let costMultiplier = this.game.activeChallenge === 'idle' ? 0.75 : 1.0;
             
             for (let i = 0; i < buildingKeys.length; i++) {
                 const key = buildingKeys[i]; const b = this.game.buildings[key];
@@ -767,23 +868,20 @@
                 let cost = 0;
                 
                 if (this.buyMultiplier === 'max') {
-                   // Estimate cost for display
                     let affordable = 0;
                     let tempCookies = this.game.cookies;
-                    // Cap display calc to 100
                     let j=0;
                     while(j<100) {
-                        const nextCost = this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count + j);
+                        const nextCost = Math.ceil(this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count + j) * costMultiplier);
                         if(tempCookies >= nextCost) { tempCookies -= nextCost; cost+=nextCost; affordable++; j++; } else { break; }
                     }
                     if(affordable === 0) {
-                         // Show next single cost if cant afford any
-                         cost = this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count);
+                         cost = Math.ceil(this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count) * costMultiplier);
                     }
                 } else {
                     buyAmount = this.buyMultiplier;
                     for(let j=0; j<buyAmount; j++) {
-                        cost += this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count + j);
+                        cost += this.getInitialGameState().buildings[key].cost * Math.pow(scaling, b.count + j) * costMultiplier;
                     }
                     cost = Math.ceil(cost);
                 }
@@ -793,7 +891,13 @@
                 document.getElementById(`count-building-${key}`).textContent = b.count;
                 if (i < buildingKeys.length - 1 && b.count > 0) { document.getElementById(`building-${buildingKeys[i+1]}`).style.display = 'block'; }
             }
-            document.querySelectorAll('.upgrade-btn').forEach(button => { if (!button.parentElement.classList.contains('purchased')) { button.disabled = this.game.cookies < parseFloat(button.dataset.cost); } });
+            document.querySelectorAll('.upgrade-btn').forEach(button => { 
+                if (!button.parentElement.classList.contains('purchased')) { 
+                    let c = parseFloat(button.dataset.cost);
+                    if(this.game.activeChallenge === 'idle') c *= 0.75;
+                    button.disabled = this.game.cookies < c; 
+                } 
+            });
             document.querySelectorAll('[data-prestige-upgrade-id]').forEach(button => { button.disabled = (this.game.prestige.cosmicEssence - this.game.prestige.cosmicEssenceSpent) < parseFloat(button.dataset.cost); });
             document.querySelectorAll('[data-wish-id]').forEach(button => { button.disabled = this.game.goldenCookie.wallet < parseFloat(button.dataset.cost); });
         }
@@ -818,8 +922,15 @@
             const createUpgrade = (upgrade, typeArg, idArg) => {
                 if (this.game.upgrades[upgrade.id] || document.getElementById(`upgrade-${upgrade.id}`)) return;
                 if (type === 'goldenCookie' && upgrade.id === 'gc_bag' && this.game.prestige.upgrades['gc_bag_unlock']) return; 
+                
+                // Calculate the effective cost for the visual display
+                let displayCost = upgrade.cost;
+                if (this.game.activeChallenge === 'idle') displayCost *= 0.75;
+                
                 const element = document.createElement('div'); element.className = `store-item upgrade-item ${type}`; element.id = `upgrade-${upgrade.id}`;
-                element.innerHTML = `<button class="upgrade-btn" data-upgrade-type="${typeArg}" data-upgrade-id="${idArg}" data-cost="${upgrade.cost}"><div class="item-info"><div class="item-name">${upgrade.name}</div><div class="item-desc">${upgrade.desc || ''}</div></div><div class="item-cost">${this.formatNumber(upgrade.cost)}</div></button>`;
+                // usage: use displayCost in the .item-cost div, keep upgrade.cost in data-cost for reference
+                element.innerHTML = `<button class="upgrade-btn" data-upgrade-type="${typeArg}" data-upgrade-id="${idArg}" data-cost="${upgrade.cost}"><div class="item-info"><div class="item-name">${upgrade.name}</div><div class="item-desc">${upgrade.desc || ''}</div></div><div class="item-cost">${this.formatNumber(displayCost)}</div></button>`;
+                
                 this.dom.upgradesContainer.appendChild(element);
             };
             if (type === 'tier') { for (const key in this.upgradeData.tier) { const building = this.game.buildings[key]; if (building.upgradeLevel < this.upgradeData.tier[key].length) { const upgrade = this.upgradeData.tier[key][building.upgradeLevel]; if (building.count >= upgrade.requirement.count) createUpgrade(upgrade, 'tier', key); } } } 
@@ -849,11 +960,13 @@
             
             preservedPrestige.infinityCapDivisor = 1; 
             preservedStats.firstBlackHoleBuyTime = null;
-            
-            // Increment Prestige Count
             preservedStats.prestigeCount = (preservedStats.prestigeCount || 0) + 1;
             
+            // Preserve current challenge
+            const currentChallenge = this.game.activeChallenge;
+            
             this.game = this.getInitialGameState();
+            this.game.activeChallenge = currentChallenge;
             this.game.stats = preservedStats; this.game.prestige = preservedPrestige;
             this.game.wishes = { horizons: 0, endCount: 0 };
             
@@ -867,12 +980,24 @@
             this.showNotification(`Singularity Collapsed! You gained ${ceToGain} CE.`);
         }
         renderPrestigeUpgrades() {
-            const container = this.dom.prestigeUpgradesContainer; if (container.childElementCount > 0 && container.childElementCount >= Object.values(this.prestigeUpgradeData).flat().length - Object.keys(this.game.prestige.upgrades).length) return;
+            const container = this.dom.prestigeUpgradesContainer; 
             container.innerHTML = '';
+            
+            const beaten = (this.game.stats.universesDestroyed || 0) > 0;
+
             for (const category in this.prestigeUpgradeData) {
                 this.prestigeUpgradeData[category].forEach(upgrade => {
-                    if (this.game.prestige.upgrades[upgrade.id]) return;
-                    const element = document.createElement('div'); element.className = 'store-item upgrade-item'; element.id = `prestige-upgrade-${upgrade.id}`;
+                    if (this.game.prestige.upgrades[upgrade.id]) return; // Already bought
+
+                    // LOGIC: If beaten, hide "unlocks", show "enhancers"
+                    if (category === 'celestial') {
+                        if (upgrade.type === 'unlock' && beaten) return; // Hide basic unlocks in NG+
+                        if (upgrade.type === 'enhance' && !beaten) return; // Hide enhancers in first run
+                    }
+
+                    const element = document.createElement('div'); 
+                    element.className = 'store-item upgrade-item'; 
+                    element.id = `prestige-upgrade-${upgrade.id}`;
                     element.innerHTML = `<button data-prestige-upgrade-id="${upgrade.id}" data-cost="${upgrade.cost}"><div class="item-info"><div class="item-name">${upgrade.name}</div><div class="item-desc">${upgrade.desc}</div></div><div class="item-cost" style="color:var(--violet)">${upgrade.cost} CE</div></button>`;
                     container.appendChild(element);
                 });
@@ -933,7 +1058,19 @@
             }
         }
 
-        setNextGoldenCookieTimer() { const { minDelay, maxDelay } = this.game.goldenCookie; this.game.goldenCookie.timer = (Math.random() * (maxDelay - minDelay) + minDelay) * 1000; }
+        setNextGoldenCookieTimer() { 
+            let { minDelay, maxDelay } = this.game.goldenCookie; 
+            
+            // PITY TIMER: Speed up spawns if stuck at start of Iron Will
+            if (this.game.activeChallenge === 'idle' && this.game.stats.totalCookies === 0) {
+                minDelay = 30;
+                maxDelay = 45;
+            }
+
+            if (this.game.upgrades['secret1']) { minDelay /= 3; maxDelay /= 3; }
+            
+            this.game.goldenCookie.timer = (Math.random() * (maxDelay - minDelay) + minDelay) * 1000; 
+        }
         setSupernovaTimer() { const { minDelay, maxDelay } = this.game.supernova; this.game.supernova.timer = (Math.random() * (maxDelay - minDelay) + minDelay) * 1000; }
         
         spawnSupernova() {
@@ -948,10 +1085,36 @@
         
         spawnGoldenCookie() {
             if (this.dom.goldenCookie.style.display === 'block') return; 
-            let cookieType;
-            if(this.game.buffs.guaranteedStorm) { cookieType = 'storm'; this.game.buffs.guaranteedStorm = false; } else { cookieType = this.getRandomCookieType(); }
-            if (this.game.goldenCookie.magnet) { this.clickGoldenCookie({ currentTarget: { dataset: { cookieType: cookieType } } }); return; }
-            const gc = this.dom.goldenCookie; gc.dataset.cookieType = cookieType; gc.style.backgroundImage = `url('${this.cookieGraphics[cookieType]}')`;
+            
+            let cookieType = 'golden';
+            // Check guaranteed storm buff
+            if(this.game.buffs.guaranteedStorm) { 
+                cookieType = 'storm'; 
+                this.game.buffs.guaranteedStorm = false; 
+            } else { 
+                cookieType = this.getRandomCookieType(); 
+            }
+
+            // Safety: Fallback if type logic fails or graphic is missing
+            if (!this.cookieGraphics[cookieType]) {
+                console.warn(`Missing graphic for ${cookieType}, defaulting to Golden`);
+                cookieType = 'golden';
+            }
+
+            if (this.game.goldenCookie.magnet) { 
+                // Pass mock object, but simulate dataset for logic
+                this.clickGoldenCookie({ 
+                    currentTarget: { 
+                        dataset: { cookieType: cookieType },
+                        // Magnet doesn't need style, handled in click function check
+                    } 
+                }); 
+                return; 
+            }
+
+            const gc = this.dom.goldenCookie; 
+            gc.dataset.cookieType = cookieType; 
+            gc.style.backgroundImage = `url("${this.cookieGraphics[cookieType]}")`; // Ensure quotes inside url()
             
             const maxTop = window.innerHeight - 80;
             const maxLeft = window.innerWidth - 80;
@@ -964,12 +1127,29 @@
         }
         
         getRandomCookieType() {
+            // IRON WILL PITY SYSTEM
+            // If in Iron Will mode and we haven't produced anything yet, we MUST give a Silver Cookie
+            // otherwise the game is literally unplayable.
+            if (this.game.activeChallenge === 'idle' && this.game.buildings.grandma.count === 0 && this.game.buildings.farm.count === 0) {
+                return 'silver';
+            }
+
             const pool = [{ type: 'golden', weight: 100 }];
-            if (this.game.prestige.upgrades['celestial_silver']) pool.push({ type: 'silver', weight: 10 });
-            if (this.game.prestige.upgrades['celestial_rainbow']) pool.push({ type: 'rainbow', weight: 5 });
-            if (this.game.prestige.upgrades['celestial_storm']) pool.push({ type: 'storm', weight: 3 });
-            const totalWeight = pool.reduce((sum, item) => sum + item.weight, 0); let random = Math.random() * totalWeight;
-            for (const item of pool) { if (random < item.weight) return item.type; random -= item.weight; }
+            const beaten = (this.game.stats.universesDestroyed || 0) > 0;
+            
+            // Check for new Enhancer Upgrades to adjust weights? 
+            // For now, we keep weights standard but enable the types.
+            
+            if (this.game.prestige.upgrades['celestial_silver'] || beaten) pool.push({ type: 'silver', weight: 10 });
+            if (this.game.prestige.upgrades['celestial_rainbow'] || beaten) pool.push({ type: 'rainbow', weight: 5 });
+            if (this.game.prestige.upgrades['celestial_storm'] || beaten) pool.push({ type: 'storm', weight: 3 });
+            
+            let totalWeight = pool.reduce((sum, item) => sum + item.weight, 0);
+            let random = Math.random() * totalWeight;
+            for (const item of pool) { 
+                if (random < item.weight) return item.type; 
+                random -= item.weight; 
+            }
             return 'golden';
         }
         
@@ -1001,15 +1181,25 @@
         spawnCookieStorm() {
             this.showNotification("COOKIE STORM!");
             const count = 30;
+            const autoCollect = this.game.prestige.upgrades['storm_stabilizer']; // Check upgrade
+
             for (let i = 0; i < count; i++) {
                 setTimeout(() => {
-                    const mini = document.createElement('div');
-                    mini.className = 'mini-cookie';
-                    mini.style.left = (Math.random() * (window.innerWidth - 50)) + 'px';
-                    mini.style.top = -50 + 'px';
-                    mini.addEventListener('mousedown', (e) => { e.stopPropagation(); this.game.cookies += this.game.cps * 60; this.showNotification(`+${this.formatNumber(this.game.cps * 60)}`); mini.remove(); });
-                    mini.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); this.game.cookies += this.game.cps * 60; this.showNotification(`+${this.formatNumber(this.game.cps * 60)}`); mini.remove(); });
-                    document.body.appendChild(mini); setTimeout(() => { if(mini.parentNode) mini.remove(); }, 4000);
+                    // If auto-collect is ON, skip creating DOM elements and just give rewards
+                    if (autoCollect) {
+                        this.game.cookies += this.game.cps * 60;
+                        // Optional: reduced notification spam
+                        if (i % 5 === 0) this.showNotification(`Stabilizer: +${this.formatNumber(this.game.cps * 60)}`);
+                    } else {
+                        const mini = document.createElement('div');
+                        mini.className = 'mini-cookie';
+                        // ... (existing logic for clicking mini cookies) ...
+                        mini.style.left = (Math.random() * (window.innerWidth - 50)) + 'px';
+                        mini.style.top = -50 + 'px';
+                        mini.addEventListener('mousedown', (e) => { e.stopPropagation(); this.game.cookies += this.game.cps * 60; this.showNotification(`+${this.formatNumber(this.game.cps * 60)}`); mini.remove(); });
+                        mini.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); this.game.cookies += this.game.cps * 60; this.showNotification(`+${this.formatNumber(this.game.cps * 60)}`); mini.remove(); });
+                        document.body.appendChild(mini); setTimeout(() => { if(mini.parentNode) mini.remove(); }, 4000);
+                    }
                 }, i * 200);
             }
         }
@@ -1034,18 +1224,39 @@
                     this.game.cookies += reward; this.showNotification(`Golden Cookie! +${this.formatNumber(reward)} cookies!`);
                     break;
                 case 'silver':
-                    const owned = Object.values(this.game.buildings).filter(b => b.count > 0);
+                    const allBuildings = Object.values(this.game.buildings);
+                    const owned = allBuildings.filter(b => b.count > 0);
+                    let targetBuilding;
+
                     if (owned.length > 0) {
-                        const mostExpensive = owned.reduce((max, b) => b.cost > max.cost ? b : max, owned[0]);
-                        mostExpensive.count += 5; 
-                        this.showNotification(`Silver Cookie! +5 free ${mostExpensive.name}s!`);
+                        // Scenario A: Player has buildings. Find the most expensive one owned.
+                        targetBuilding = owned.reduce((max, b) => b.cost > max.cost ? b : max, owned[0]);
+                    } else {
+                        // Scenario B: Player has 0 buildings. Find the cheapest building to start them off.
+                        targetBuilding = allBuildings.reduce((min, b) => b.cost < min.cost ? b : min, allBuildings[0]);
+                    }
+
+                    if (targetBuilding) {
+                        // ENHANCER: Silver Coating
+                        let amount = 5;
+                        if (this.game.prestige.upgrades['silver_coating']) amount += 2;
+                        
+                        targetBuilding.count += amount; 
+                        this.showNotification(`Silver Cookie! +${amount} free ${targetBuilding.name}s!`);
                     }
                     break;
                 case 'rainbow':
-                    this.game.buffs.clickFrenzy.active = true; this.game.buffs.clickFrenzy.expiry = Date.now() + 17000;
-                    this.showNotification(`Click Frenzy! Clicks are x777 more powerful for 17s!`);
+                    this.game.buffs.clickFrenzy.active = true; 
+                    // ENHANCER: Rainbow Prism
+                    let duration = 17000;
+                    if (this.game.prestige.upgrades['rainbow_prism']) duration *= 2;
+                    
+                    this.game.buffs.clickFrenzy.expiry = Date.now() + duration;
+                    this.showNotification(`Click Frenzy! Clicks are x777 more powerful for ${duration/1000}s!`);
                     break;
-                case 'storm': this.spawnCookieStorm(); break;
+                case 'storm': 
+                    this.spawnCookieStorm(); 
+                    break;
             }
         }
 
@@ -1080,7 +1291,6 @@
                 this.game.stats = { ...defaultState.stats, ...loaded.stats };
                 this.game.goldenCookie = { ...defaultState.goldenCookie, ...loaded.goldenCookie };
                 
-                // Data structure integrity check for wishes
                 if (!this.game.wishes) { this.game.wishes = { horizons: 0, endCount: 0 }; }
                 else if (typeof this.game.wishes.endCount === 'undefined') { this.game.wishes.endCount = 0; }
 
@@ -1088,9 +1298,12 @@
                     for (const key in defaultState.buildings) {
                         if (loaded.buildings[key]) {
                             const savedCost = loaded.buildings[key].cost;
-                            // Use scaling sensitive cost calculation for fallback
-                            const scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
-                            const calculatedCost = Math.ceil(this.getInitialGameState().buildings[key].cost * Math.pow(scaling, (loaded.buildings[key].count || 0)));
+                            // Challenge Logic in fallback calculation
+                            let scaling = this.game.prestige.upgrades['subatomic_optimization'] ? 1.14 : this.CONSTANTS.BUILDING_COST_MULTIPLIER;
+                            if (this.game.activeChallenge === 'inflation') scaling = 1.20;
+                            let costMultiplier = this.game.activeChallenge === 'idle' ? 0.75 : 1.0;
+
+                            const calculatedCost = Math.ceil(this.getInitialGameState().buildings[key].cost * Math.pow(scaling, (loaded.buildings[key].count || 0)) * costMultiplier);
                             
                             this.game.buildings[key] = {
                                 ...defaultState.buildings[key],
