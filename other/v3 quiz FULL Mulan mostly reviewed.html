@@ -1,0 +1,3238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disney Ultimate Quiz v3.1</title>
+    <!-- Lottie Player for Animations -->
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    <style>
+        :root {
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --font-header: 'Georgia', serif;
+            --bg-gradient-start: #1e5799;
+            --bg-gradient-end: #7db9e8;
+            --container-bg: rgba(255, 255, 255, 0.95);
+            --highlight: #004a8f;
+            --btn-hover: #e3f2fd;
+            --correct: #4caf50;
+            --wrong: #f44336;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-main);
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0d2642;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            background: var(--container-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 95%;
+            max-width: 750px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        h1, h2 { font-family: var(--font-header); color: var(--highlight); margin-bottom: 1rem; }
+        .hide { display: none !important; }
+
+        /* UI ELEMENTS */
+        .btn {
+            padding: 12px 25px; border: 2px solid var(--highlight); border-radius: 50px;
+            background: #fff; color: var(--highlight); cursor: pointer; margin: 5px; font-weight: bold; transition: 0.2s;
+        }
+        .btn:hover { background: var(--btn-hover); transform: translateY(-2px); }
+        .btn-primary { background: var(--highlight); color: white; }
+        .btn-primary:hover { background: #003366; }
+        .btn-danger { border-color: #d32f2f; color: #d32f2f; }
+
+        /* OPTIONS GRID */
+        .options-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media(min-width: 600px) { .options-grid { grid-template-columns: 1fr 1fr; } }
+        .option-btn {
+            width: 100%; padding: 12px; text-align: left; border: 1px solid #ccc; border-radius: 8px;
+            background: white; cursor: pointer; font-size: 0.95rem; transition: 0.2s;
+        }
+        .option-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--highlight); }
+        .option-btn.correct { background: var(--correct) !important; color: white; border-color: var(--correct); }
+        .option-btn.wrong { background: var(--wrong) !important; color: white; opacity: 0.6; }
+
+        /* LOBBY & SETTINGS */
+        .lobby-section { margin: 15px 0; text-align: left; border-top: 1px solid #ccc; padding-top: 15px; }
+        .checkbox-label { display:inline-block; background: white; padding: 8px 15px; margin: 5px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; }
+        
+        /* PROGRESS */
+        .progress-track { width: 100%; height: 8px; background: #ddd; border-radius: 4px; margin-bottom: 20px; }
+        .progress-fill { height: 100%; background: var(--highlight); width: 0%; transition: width 0.3s; }
+
+        /* SNOW & DEBUG */
+        .snowflake { position: fixed; top: -10%; color: #fff; z-index: 1; animation: fall 10s linear infinite; }
+        @keyframes fall { to { top: 100%; } }
+        #debug-btn { position: absolute; bottom: 5px; right: 5px; opacity: 0.3; font-size: 0.7rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="snow-container"></div>
+
+    <div class="app-container">
+        
+        <!-- SCREEN 1: LOBBY -->
+        <div id="lobby-screen">
+            <h1>Disney Master Quiz</h1>
+            
+            <div class="lobby-section">
+                <h3>1. Select Movies</h3>
+                <div id="movie-selection"></div>
+            </div>
+
+            <div class="lobby-section">
+                <div class="control-row">
+                    <h3>2. Difficulty</h3>
+                    <select id="difficulty-select" style="padding: 8px; font-size: 1rem;">
+                        <option value="easy">Easy (Hint + 3 Choices)</option>
+                        <option value="medium" selected>Medium (Hint + 5 Choices)</option>
+                        <option value="hard">Hard (No Hint + 8 Choices)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="lobby-section">
+                <div class="control-row">
+                    <h3>3. Length</h3>
+                    <div>
+                        <input type="number" id="q-count-input" value="10" min="1" max="50" style="width: 60px; padding: 8px;">
+                        <span id="max-q-label" style="font-size: 0.8rem; color:#666;">(Max: 0)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button id="btn-start" class="btn btn-primary">Start Quiz</button>
+                <button id="btn-resume" class="btn hide">Resume Save</button>
+            </div>
+        </div>
+
+        <!-- SCREEN 2: QUIZ -->
+        <div id="quiz-screen" class="hide">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; color:#666;">
+                <span id="progress-text">Q 1/10</span>
+                <span id="score-text">Score: 0</span>
+            </div>
+            <div class="progress-track"><div id="progress-bar" class="progress-fill"></div></div>
+
+            <h2 id="question-text" style="min-height: 60px;">Question...</h2>
+            <div id="options-container" class="options-grid"></div>
+
+            <div style="margin-top: 25px; display: flex; justify-content: space-between;">
+                <button id="btn-finish-early" class="btn btn-danger">Finish Early</button>
+                <button id="btn-next" class="btn hide">Next >></button>
+            </div>
+        </div>
+
+        <!-- SCREEN 3: RESULT -->
+        <div id="result-screen" class="hide">
+            <h1>Result</h1>
+            
+            <!-- PLACEHOLDER ANIMATION: Replace src with your Olaf/Disney JSON URL -->
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <lottie-player 
+                    src="https://assets10.lottiefiles.com/packages/lf20_jR229r.json" 
+                    background="transparent" 
+                    speed="1" 
+                    style="width: 150px; height: 150px;" 
+                    loop autoplay>
+                </lottie-player>
+            </div>
+
+            <h2 id="final-score" style="font-size: 3rem;">0 / 0</h2>
+            <p id="final-msg">Msg</p>
+            <br>
+            <button id="btn-restart" class="btn btn-primary">Back to Menu</button>
+        </div>
+
+        <button id="debug-btn">🛠 Debug Chars</button>
+    </div>
+
+    <script>
+        /* 
+         * ============================================================
+         * 1. NESTED DATA STRUCTURE (Optimized)
+         * ============================================================
+         * Questions are grouped by movie key to avoid repeating "movie": "Name"
+         */
+        const questionDatabase = {
+            "Mulan": [
+              {
+                "type": "quote",
+                "content": "We're under attack! Light the signal!",
+                "context": "while standing on the great wall",
+                "answer": "A guard on the Great Wall",
+                "distractors": ["General Li", "Chi Fu", "The Emperor", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "Now all of China knows you're here.",
+                "context": "after lighting the signal fire",
+                "answer": "A guard on the Great Wall",
+                "distractors": ["General Li", "The Emperor", "Chi Fu", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Perfect.",
+                "context": "while holding a flag over the fire",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "The Emperor", "General Li", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Your Majesty, the Huns have crossed our Northern border.",
+                "context": "while addressing the emperor in the palace",
+                "answer": "General Li",
+                "distractors": ["Chi Fu", "Shan-Yu", "Fa Zhou", "A messenger"]
+              },
+              {
+                "type": "quote",
+                "content": "Impossible! No one can get through The Great Wall.",
+                "context": "upon hearing the news of invasion",
+                "answer": "Chi Fu",
+                "distractors": ["The Emperor", "General Li", "Shan-Yu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Shun-Yu is leading them.",
+                "context": "identifying the enemy leader",
+                "answer": "General Li",
+                "distractors": ["Chi Fu", "A scout", "Fa Zhou", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "No! Send your troops to protect my people.",
+                "context": "rejecting the plan to protect the palace",
+                "answer": "The Emperor",
+                "distractors": ["General Li", "Chi Fu", "Fa Zhou", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Deliver conscription notices throughout all the provinces.",
+                "context": "ordering the army mobilization",
+                "answer": "The Emperor",
+                "distractors": ["General Li", "Chi Fu", "Shan-Yu", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Forgive me your Majesty, but I believe my troops can stop him.",
+                "context": "expressing confidence in the army",
+                "answer": "General Li",
+                "distractors": ["Chi Fu", "Fa Zhou", "Captain Li Shang", "A guard"]
+              },
+              {
+                "type": "quote",
+                "content": "I won't take any chances, General.",
+                "context": "insisting on conscription",
+                "answer": "The Emperor",
+                "distractors": ["Chi Fu", "Shan-Yu", "Fa Zhou", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "A single grain of rice can tip the scale.",
+                "context": "explaining why every man is needed",
+                "answer": "The Emperor",
+                "distractors": ["General Li", "Chi Fu", "Grandma Fa", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "One man may be the difference between victory and defeat.",
+                "context": "emphasizing the value of each soldier",
+                "answer": "The Emperor",
+                "distractors": ["General Li", "Chi Fu", "Shan-Yu", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Quiet and demure...graceful...polite...",
+                "context": "while eating rice and rehearsing",
+                "answer": "Mulan",
+                "distractors": ["The Matchmaker", "Fa Li", "Grandma Fa", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Ahh, notes, in case I forget something?",
+                "context": "when her mother notices writing on her arm",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "A village girl", "Fa Li", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Who's the smartest doggie in the world?",
+                "context": "talking to Little Brother",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "Fa Li", "Fa Zhou", "A village child"]
+              },
+              {
+                "type": "quote",
+                "content": "Come on smart boy, can you help me with my chores today?",
+                "context": "preparing to feed the chickens",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Fa Li", "Grandma Fa", "A village boy"]
+              },
+              {
+                "type": "quote",
+                "content": "Honorable ancestors, please help Mulan impress the matchmaker today.",
+                "context": "praying in the family temple",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "Mulan", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Please, PLEASE, help her.",
+                "context": "while praying with chickens eating grain",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "Mulan", "The Bath Lady"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many chickens eat the grain dropped around Fa Zhou",
+                "context": "while he is praying to the ancestors",
+                "answer": "Seven",
+                "distractors": ["Two", "Four", "Six", "Five"]
+              },
+              {
+                "type": "quote",
+                "content": "Father I brought your--whoop!",
+                "context": "bumping into her father with tea",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "One of the maidens", "A village girl"]
+              },
+              {
+                "type": "quote",
+                "content": "I brought a spare.",
+                "context": "pulling a teacup from her dress",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "The Matchmaker", "The Bath Lady"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many cups of tea does Mulan say the doctor prescribed for the morning?",
+                "context": "while pouring tea for Fa Zhou",
+                "answer": "Three",
+                "distractors": ["Two", "Four", "One", "Five"]
+              },
+              {
+                "type": "quote",
+                "content": "Mulan, you should already be in town.",
+                "context": "chiding his daughter for being late",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "The Bath Lady", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Don't worry father. I won't let you down.",
+                "context": "promising to uphold family honor",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Fa Li", "The Matchmaker", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Wish me luck.",
+                "context": "before running down the stairs to town",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "Fa Zhou", "An unnamed recruit"]
+              },
+              {
+                "type": "quote",
+                "content": "I'm going to...pray some more.",
+                "context": "watching Mulan leave in a rush",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "The Matchmaker", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Fa Li, is your daughter here yet?",
+                "context": "looking out from a building",
+                "answer": "The Bath Lady",
+                "distractors": ["Grandma Fa", "The Matchmaker", "One of the dressers", "A neighbor"]
+              },
+              {
+                "type": "quote",
+                "content": "The matchmaker is not a patient woman.",
+                "context": "warning someone about the time",
+                "answer": "The Bath Lady",
+                "distractors": ["Fa Li", "Grandma Fa", "Fa Zhou", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Of all days to be late.",
+                "context": "worrying about Mulan's arrival",
+                "answer": "Fa Li",
+                "distractors": ["The Matchmaker", "Grandma Fa", "The Bath Lady", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "How lucky can they be, they're dead.",
+                "context": "referring to the ancestors",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "Fa Li", "Mushu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "I've got all the luck we'll need.",
+                "context": "holding a cricket cage",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "Fa Li", "The Matchmaker", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "This is your chance to prove yourself.",
+                "context": "speaking to Cri-Kee",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "Fa Li", "Mushu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Grandma No!",
+                "context": "watching Grandma Fa step into traffic",
+                "answer": "Fa Li",
+                "distractors": ["Mulan", "Fa Zhou", "The Bath Lady", "A townsperson"]
+              },
+              {
+                "type": "quote",
+                "content": "Yep, this cricket's a lucky one.",
+                "context": "after causing a traffic accident unhurt",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "Fa Li", "The Matchmaker", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "I'm here.",
+                "context": "arriving with hay in her hair",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "Fa Li", "A village girl", "Little Brother"]
+              },
+              {
+                "type": "quote",
+                "content": "None of your 'xcuses.",
+                "context": "pulling Mulan inside",
+                "answer": "Fa Li",
+                "distractors": ["The Matchmaker", "Grandma Fa", "The Bath Lady", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "We're gonna turn this sow's ear Into a silk purse.",
+                "context": "singing while undressing Mulan",
+                "answer": "The Bath Lady",
+                "distractors": ["Fa Li", "The Matchmaker", "Grandma Fa", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "It's freezing.",
+                "context": "stepping into the bath water",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "The Bath Lady", "One of the maidens"]
+              },
+              {
+                "type": "quote",
+                "content": "It would have been warm if you were here on time.",
+                "context": "scolding Mulan about the bath temperature",
+                "answer": "Fa Li",
+                "distractors": ["The Bath Lady", "The Matchmaker", "Grandma Fa", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Trust my recipe for instant bride",
+                "context": "singing while washing Mulan's hair",
+                "answer": "The Bath Lady",
+                "distractors": ["The Matchmaker", "Fa Li", "Grandma Fa", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Mulan, what's this?",
+                "context": "noticing ink on Mulan's arm",
+                "answer": "Fa Li",
+                "distractors": ["The Matchmaker", "The Bath Lady", "Grandma Fa", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Here, hold this.",
+                "context": "handing the cricket cage to Fa Li",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "The Matchmaker", "The Bath Lady", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Wait and see When we're through",
+                "context": "singing while brushing hair",
+                "answer": "One of the hair dressers",
+                "distractors": ["The Matchmaker", "Fa Li", "Grandma Fa", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "Boys will gladly go to war for you",
+                "context": "singing about Mulan's potential appeal",
+                "answer": "One of the hair dressers",
+                "distractors": ["Mulan", "The Matchmaker", "Fa Li", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "A girl can bring her family Great honor in one way",
+                "context": "singing after pulling Mulan from a board game",
+                "answer": "Fa Li and others",
+                "distractors": ["The Emperor", "Fa Zhou", "Mulan", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Men want girls with good taste",
+                "context": "singing while dressing Mulan",
+                "answer": "One of the dressers",
+                "distractors": ["The Matchmaker", "Grandma Fa", "Mulan", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "Obedient",
+                "context": "singing a single word attribute",
+                "answer": "Fa Li",
+                "distractors": ["The Matchmaker", "One of the dressers", "Grandma Fa", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "And a tiny waist",
+                "context": "singing while pulling the sash tight",
+                "answer": "One of the dressers",
+                "distractors": ["Fa Li", "The Matchmaker", "Grandma Fa", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "We all must serve our Emperor",
+                "context": "singing in the street",
+                "answer": "The Chorus",
+                "distractors": ["The soldiers", "The ancestors", "Chi Fu", "The Huns"]
+              },
+              {
+                "type": "quote",
+                "content": "A girl by bearing sons",
+                "context": "singing about a woman's duty",
+                "answer": "The Chorus",
+                "distractors": ["The Matchmaker", "Fa Li", "Mulan", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Like a lotus blossom soft and pale",
+                "context": "singing while applying powder",
+                "answer": "The Make-up Lady and Fa Li",
+                "distractors": ["The Matchmaker", "Grandma Fa", "The ancestors", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "How could any fellow say 'No sale'",
+                "context": "singing while applying lipstick",
+                "answer": "The Make-up Lady and Fa Li",
+                "distractors": ["Grandma Fa", "The Matchmaker", "The Chorus", "One of the dressers", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "There, you're ready.",
+                "context": "after placing a hair comb",
+                "answer": "Fa Li",
+                "distractors": ["The Matchmaker", "The Make-up Lady", "Grandma Fa", "One of the hair dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Not yet! An apple for serenity",
+                "context": "placing a fruit in Mulan's mouth",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "The Matchmaker", "The Bath Lady", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "A pendant for balance",
+                "context": "placing an item under the sash",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "The Matchmaker", "Fa Zhou", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Beads of jade for beauty",
+                "context": "placing a necklace on Mulan",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "The Matchmaker", "The Make-up Lady", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Now add a cricket just for luck",
+                "context": "placing a cage in the sash",
+                "answer": "Grandma Fa",
+                "distractors": ["Mushu", "Fa Li", "Mulan", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Ancestors Hear my plea",
+                "context": "singing while running to join the line",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Fa Li", "Grandma Fa", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Help me not to make a fool of me",
+                "context": "singing a prayer for help",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "One of the maidens", "An unnamed recruit", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Scarier than the undertaker",
+                "context": "singing about the matchmaker",
+                "answer": "Mulan and the maidens",
+                "distractors": ["The townspeople", "The soldiers", "Fa Li and Grandma Fa", "The ancestors"]
+              },
+              {
+                "type": "quote",
+                "content": "Please bring honor to us all!",
+                "context": "singing the final line of the song",
+                "answer": "Mulan and the maidens",
+                "distractors": ["The ancestors", "The soldiers", "The Emperor's guard", "The Huns"]
+              },
+              {
+                "type": "quote",
+                "content": "Fa Mulan",
+                "context": "calling a name from a clipboard",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "Fa Li", "The Emperor", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Present.",
+                "context": "jumping up and raising a hand",
+                "answer": "Mulan",
+                "distractors": ["A young soldier", "Grandma Fa", "Fa Zhou", "An unnamed recruit"]
+              },
+              {
+                "type": "quote",
+                "content": "Speaking without permission.",
+                "context": "reprimanding Mulan immediately",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "The Emperor", "Fa Zhou", "Fa Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Oops.",
+                "context": "whispering after being scolded",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "Yao", "Mushu", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Who spit in her bean curd?",
+                "context": "commenting on the matchmaker's attitude",
+                "answer": "Grandma Fa",
+                "distractors": ["Mulan", "The Bath Lady", "A townsperson", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Huh, Hmm, too skinny.",
+                "context": "critiquing Mulan's appearance",
+                "answer": "The Matchmaker",
+                "distractors": ["The Bath Lady", "Fa Li", "Grandma Fa", "One of the dressers"]
+              },
+              {
+                "type": "quote",
+                "content": "Hmph, not good for bearing sons.",
+                "context": "judging Mulan's hips",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "Grandma Fa", "Fa Li", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "Recite the final admonition.",
+                "context": "testing Mulan's knowledge",
+                "answer": "The Matchmaker",
+                "distractors": ["The Emperor", "Chi Fu", "Fa Zhou", "Fa Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Fulfill your duties calmly and re...f--spectfully.",
+                "context": "reciting while reading cheating notes",
+                "answer": "Mulan",
+                "distractors": ["One of the maidens", "Fa Li", "Grandma Fa", "A student"]
+              },
+              {
+                "type": "quote",
+                "content": "Reflect before you snack...act.",
+                "context": "misreading smudged ink on an arm",
+                "answer": "Mulan",
+                "distractors": ["One of the maidens", "Fa Li", "Grandma Fa", "A student"]
+              },
+              {
+                "type": "quote",
+                "content": "This shall bring you honor and glory.",
+                "context": "finishing the recitation quickly",
+                "answer": "Mulan",
+                "distractors": ["The Matchmaker", "The Emperor", "Fa Zhou", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Now, pour the tea",
+                "context": "giving instructions for the tea ceremony",
+                "answer": "The Matchmaker",
+                "distractors": ["Fa Li", "Grandma Fa", "The Emperor", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "To please your future in-laws you must demonstrate a sense of dignity",
+                "context": "lecturing while getting ink on her face",
+                "answer": "The Matchmaker",
+                "distractors": ["Fa Li", "Grandma Fa", "Fa Zhou", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "And silent!",
+                "context": "snapping while sniffing the tea",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "Fa Zhou", "The Emperor", "Fa Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Could I just take that back...one moment.",
+                "context": "trying to retrieve the cup with the cricket",
+                "answer": "Mulan",
+                "distractors": ["A servant", "One of the maidens", "Fa Li", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Why you clumsy--",
+                "context": "before realizing a cricket is in her dress",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "Fa Li", "A drill sergeant", "The Bath Lady"]
+              },
+              {
+                "type": "quote",
+                "content": "I think it's going well, don't you?",
+                "context": "hearing crashing noises from outside",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "Mulan", "Mushu", "A neighbor"]
+              },
+              {
+                "type": "quote",
+                "content": "Put it out! Put it out! Put it out!",
+                "context": "running out with a burning behind",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "One of the guards", "A townsperson", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "You are a disgrace!",
+                "context": "shouting after the fire is out",
+                "answer": "The Matchmaker",
+                "distractors": ["Chi Fu", "Fa Zhou", "The Emperor", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "Look at me",
+                "context": "singing while looking in a water trough",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "One of the maidens", "Grandma Fa", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Can it be I'm not meant to play this part?",
+                "context": "singing after releasing the cricket",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "One of the maidens", "A soldier", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "Who is that girl I see",
+                "context": "singing while looking into a pond",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "The Matchmaker", "Fa Li", "One of the ancestors"]
+              },
+              {
+                "type": "quote",
+                "content": "When will my reflection show Who I am inside?",
+                "context": "singing the final refrain",
+                "answer": "Mulan",
+                "distractors": ["The Matchmaker", "Fa Li", "Fa Zhou", "A young maiden"]
+              },
+              {
+                "type": "quote",
+                "content": "My, my, what beautiful blossoms we have this year",
+                "context": "trying to cheer up his daughter",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "The Emperor", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "But, I'll bet that when it blooms, it will be the most beautiful of all.",
+                "context": "referring to a late blooming flower",
+                "answer": "Fa Zhou",
+                "distractors": ["Fa Li", "Grandma Fa", "The Emperor", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Stay inside.",
+                "context": "warning Mulan as horses approach",
+                "answer": "Fa Li",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Chi Fu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Citizens I bring you a proclamation from the Imperial City",
+                "context": "announcing in the town square",
+                "answer": "Chi Fu",
+                "distractors": ["General Li", "The Emperor", "A royal herald", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "By order of the Emperor, one man from every family must serve in the Imperial Army.",
+                "context": "reading the conscription decree",
+                "answer": "Chi Fu",
+                "distractors": ["General Li", "The Emperor", "Captain Li Shang", "A town crier"]
+              },
+              {
+                "type": "quote",
+                "content": "I will serve the Emperor in my father's place.",
+                "context": "said by a man holding back his father",
+                "answer": "Yi's Son",
+                "distractors": ["Mulan", "Fa Zhou", "A guard", "A young man from the Fa family"]
+              },
+              {
+                "type": "quote",
+                "content": "The Fa Family.",
+                "context": "calling the next name on the list",
+                "answer": "Chi Fu",
+                "distractors": ["The Emperor", "General Li", "A clerk", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "I am ready to serve the Emperor.",
+                "context": "stepping forward without a cane",
+                "answer": "Fa Zhou",
+                "distractors": ["General Li", "An unnamed recruit", "Chi Fu", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Father, you can't go.",
+                "context": "interrupting the conscription",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "A neighbor", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Silence!",
+                "context": "shouting at Mulan for speaking",
+                "answer": "Chi Fu",
+                "distractors": ["Fa Zhou", "The Emperor", "General Li", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "You would do well to teach your daughter to hold her tongue in a man's presence.",
+                "context": "insulting Fa Zhou regarding Mulan",
+                "answer": "Chi Fu",
+                "distractors": ["The Matchmaker", "General Li", "A village elder", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "Mulan, you dishonor me.",
+                "context": "scolding Mulan",
+                "answer": "Fa Zhou",
+                "distractors": ["Chi Fu", "Fa Li", "The Matchmaker", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Report tomorrow at the Wu Shu camp.",
+                "context": "giving final orders to Fa Zhou",
+                "answer": "Chi Fu",
+                "distractors": ["General Li", "Captain Li Shang", "A soldier", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "You shouldn't have to go.",
+                "context": "arguing at the dinner table",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "Chi Fu", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "There are plenty of young men to fight for China.",
+                "context": "arguing during dinner",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "Chi Fu", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "It is an honor to protect my country and my family.",
+                "context": "defending the decision to fight",
+                "answer": "Fa Zhou",
+                "distractors": ["General Li", "Captain Li Shang", "Chi Fu", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "So you'll die for honor!",
+                "context": "shouting in anger at dinner",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "Chi Fu", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "I will DIE doing what's right.",
+                "context": "standing up and shouting back",
+                "answer": "Fa Zhou",
+                "distractors": ["General Li", "The Emperor", "Mulan", "Captain Li Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "I know my place, it is time you learned yours.",
+                "context": "ending the argument harshly",
+                "answer": "Fa Zhou",
+                "distractors": ["The Matchmaker", "Chi Fu", "The Emperor", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object does Mulan use to cut her hair?",
+                "context": "while inside the armory",
+                "answer": "Her father's sword",
+                "distractors": ["A knife", "Shears", "Scissors", "A dagger"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object does Mulan leave in place of the conscription notice?",
+                "context": "on the bedside table",
+                "answer": "Her hair comb",
+                "distractors": ["Her necklace", "A flower", "The cricket cage", "Her earrings"]
+              },
+              {
+                "type": "trivia",
+                "content": "What word does Mulan write last on her arm?",
+                "context": "when preparing for the matchmaker",
+                "answer": "Punctual",
+                "distractors": ["Poised", "Polite", "Silent", "Perfect"]
+              },
+              {
+                "type": "quote",
+                "content": "Mulan is gone.",
+                "context": "when waking up with a start",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "Fa Zhou", "Mushu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "If I reveal her, she will be.",
+                "context": "referring to Mulan potentially being killed",
+                "answer": "Fa Zhou",
+                "distractors": ["Grandma Fa", "The Emperor", "General Li", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object does Fa Zhou find on his nightstand in place of his conscription notice?",
+                "context": "when he realizes Mulan is gone",
+                "answer": "A hair comb",
+                "distractors": ["A jade necklace", "A letter", "A flower", "A medallion", "A sword"]
+              },
+              {
+                "type": "quote",
+                "content": "Mushu, awaken!",
+                "context": "when activating the incense burner",
+                "answer": "The First Ancestor",
+                "distractors": ["Grandma Fa", "The Great Stone Dragon", "Fa Zhou", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "I live!",
+                "context": "immediately upon rising from the smoke",
+                "answer": "Mushu",
+                "distractors": ["The Great Stone Dragon", "Shan-Yu", "The First Ancestor", "Cri-Kee", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "So tell me what mortal needs my protection.",
+                "context": "speaking to The First Ancestor",
+                "answer": "Mushu",
+                "distractors": ["The Great Stone Dragon", "A Warrior Ancestor", "Cri-Kee", "Khan"]
+              },
+              {
+                "type": "quote",
+                "content": "Anybody who is foolish enough to threaten our family, vengeance will be MINE.",
+                "context": "while growling at the ancestors",
+                "answer": "Mushu",
+                "distractors": ["Shan-Yu", "The Great Stone Dragon", "Yao", "The First Ancestor"]
+              },
+              {
+                "type": "quote",
+                "content": "And you, oh demoted one.",
+                "context": "while pointing to an empty pedestal",
+                "answer": "The First Ancestor",
+                "distractors": ["One of the ancestors", "The Great Stone Dragon", "Mulan", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "I...ring the gong.",
+                "context": "explaining his duties to the First Ancestor",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "One of the ancestors", "Fa Zhou", "Khan", "Little Brother"]
+              },
+              {
+                "type": "quote",
+                "content": "You're way past the beauty sleep thing now trust me!",
+                "context": "while banging the gong to wake the spirits",
+                "answer": "Mushu",
+                "distractors": ["The Matchmaker", "Chi Fu", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "My children never caused such trouble.",
+                "context": "complaining about Mulan's behavior",
+                "answer": "One of the ancestors",
+                "distractors": ["Grandma Fa", "The Matchmaker", "Fa Li", "Fa Zhou", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "They all became acupuncturists.",
+                "context": "complaining about Mulan's behavior",
+                "answer": "One of the ancestors",
+                "distractors": ["Grandma Fa", "The Matchmaker", "Fa Li", "Fa Zhou", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Well, We can't all be acupuncturists.",
+                "context": "retorting to a spirit's complaint",
+                "answer": "One of the ancestors",
+                "distractors": ["Mushu", "Mulan", "Chi Fu", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "No, your great granddaughter had to be a cross-dresser!",
+                "context": "arguing about dishonor",
+                "answer": "One of the ancestors",
+                "distractors": ["Chi Fu", "The Matchmaker", "Mushu", "Shang", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "Not to mention they'll lose the farm.",
+                "context": "adding to the list of potential disasters",
+                "answer": "One of the ancestors",
+                "distractors": ["Fa Zhou", "Mushu", "Yao", "Chi Fu", "The Matchmaker"]
+              },
+              {
+                "type": "trivia",
+                "content": "Which type of guardian does the ancestor holding the rabbit statue suggest sending?",
+                "context": "when discussing who to send after Mulan",
+                "answer": "The swiftest",
+                "distractors": ["The wisest", "The strongest", "The cunning", "The bravest", "The loudest"]
+              },
+              {
+                "type": "trivia",
+                "content": "Which type of guardian does the ancestor holding the monkey statue suggest sending?",
+                "context": "when discussing who to send after Mulan",
+                "answer": "The wisest",
+                "distractors": ["The swiftest", "The strongest", "The most cunning", "The invincible"]
+              },
+              {
+                "type": "quote",
+                "content": "Don't make me have to singe nobody to prove no point.",
+                "context": "after breathing a small flame",
+                "answer": "Mushu",
+                "distractors": ["The Great Stone Dragon", "Yao", "Shan-Yu", "Rocket", "Hades"]
+              },
+              {
+                "type": "quote",
+                "content": "Your mis-guidance led Fa Deng to disaster.",
+                "context": "blaming another spirit for past failures",
+                "answer": "One of the ancestors",
+                "distractors": ["The First Ancestor", "Chi Fu", "Shang", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Yeah, thanks a lot.",
+                "context": "while holding his own decapitated head",
+                "answer": "Fa Deng",
+                "distractors": ["Mushu", "One of the Hun Soldiers", "Yao", "Ling", "Chien-Po"]
+              },
+              {
+                "type": "quote",
+                "content": "The point is we will be sending a real dragon to retrieve Mulan.",
+                "context": "dismissing Mushu's offer to help",
+                "answer": "The First Ancestor",
+                "distractors": ["The Emperor", "General Li", "Fa Zhou", "Grandma Fa", "Fa Deng"]
+              },
+              {
+                "type": "quote",
+                "content": "Just one chance is that too much to ask? I mean, it's not like it'll kill ya.",
+                "context": "walking with a slouch and banging the gong",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Ling", "Khan", "Cri-Kee"]
+              },
+              {
+                "type": "quote",
+                "content": "Yo rocky, wake up! You gotta go fetch Mulan.",
+                "context": "attempting to wake a guardian",
+                "answer": "Mushu",
+                "distractors": ["Grandma Fa", "The First Ancestor", "Cri-Kee", "Khan"]
+              },
+              {
+                "type": "trivia",
+                "content": "What part of the Great Stone Dragon breaks off first?",
+                "context": "when Mushu is trying to wake it up",
+                "answer": "The ear",
+                "distractors": ["The nose", "The tail", "The claw", "The horn"]
+              },
+              {
+                "type": "quote",
+                "content": "Uh, Stoney, Stooooneeey. Oh man, they're gonna kill me!",
+                "context": "after the statue crumbles",
+                "answer": "Mushu",
+                "distractors": ["Ling", "Chien-Po", "Yao", "Khan"]
+              },
+              {
+                "type": "quote",
+                "content": "Great Stone Dragon, have you awaken?",
+                "context": "calling out through the temple window",
+                "answer": "The First Ancestor",
+                "distractors": ["Grandma Fa", "Fa Zhou", "One of the ancestors", "Fa Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Did, did I mention that I was the Great Stone Dragon?",
+                "context": "while holding the stone head up",
+                "answer": "Mushu",
+                "distractors": ["The Great Stone Dragon", "Cri-Kee", "Khan", "Mulan", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "The fate of the Fa Family rests in your claws.",
+                "context": "giving final instructions to the 'dragon'",
+                "answer": "The First Ancestor",
+                "distractors": ["The Emperor", "Fa Zhou", "Grandma Fa", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Don't even worry about it, I will not lose face.",
+                "context": "just before falling down the hill",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Fa Zhou", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "And all 'cause miss man decides to take her little drag show on the road.",
+                "context": "complaining about his elbow injury",
+                "answer": "Mushu",
+                "distractors": ["Chi Fu", "The Matchmaker", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "I make Mulan a war hero, then they'll be begging me to come back to work.",
+                "context": "explaining his master plan",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Fa Zhou", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Do I look like a sucker to you?",
+                "context": "questioning Cri-Kee's luck",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Ling", "Chi Fu", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "How 'bout I pop one of your antenna's off and throw it across the yard.",
+                "context": "threatening a smaller character",
+                "answer": "Mushu",
+                "distractors": ["Shan-Yu", "Yao", "The First Ancestor", "Khan", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Nice work, gentlemen. You found the Hun army.",
+                "context": "addressing the captured scouts",
+                "answer": "Shan-Yu",
+                "distractors": ["General Li", "Shang", "Chi Fu", "A Bald Hun Man"]
+              },
+              {
+                "type": "quote",
+                "content": "Stop me? He invited me. By building his wall, he challenged my strength.",
+                "context": "explaining his motivation for invasion",
+                "answer": "Shan-Yu",
+                "distractors": ["General Li", "Khan", "The Emperor", "Bori Khan"]
+              },
+              {
+                "type": "quote",
+                "content": "Go! Tell your emperor to send his strongest armies.",
+                "context": "releasing the scouts",
+                "answer": "Shan-Yu",
+                "distractors": ["General Li", "A Skinny Hun Man", "Chi Fu", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "How many men does it take to deliver a message.",
+                "context": "asking a rhetorical question to his archer",
+                "answer": "Shan-Yu",
+                "distractors": ["The Emperor", "Chi Fu", "General Li", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "One.",
+                "context": "while drawing back a bowstring",
+                "answer": "A Hun Archer",
+                "distractors": ["Shan-Yu", "Shang", "Mulan", "Mushu", "Yao", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Excuse me, where do I sign in? Hah, I see you have a sword. I have one too.",
+                "context": "practicing to themself",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Shang", "Ling", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who is Mulan talking to when she says 'I'm working on it'?",
+                "context": "outside the camp",
+                "answer": "Khan",
+                "distractors": ["Mushu", "Cri-Kee", "Chien-Po", "Yao", "General Li", "Shang", "Chi Fu", "Hua Li", "Little Brother"]
+              },
+              {
+                "type": "quote",
+                "content": "Did I hear someone ask for a miracle!?",
+                "context": "appearing as a giant shadow",
+                "answer": "Mushu",
+                "distractors": ["The Great Stone Dragon", "The First Ancestor", "Grandma Fa", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "What accent does Mushu use when he first speaks as a giant shadow?",
+                "context": "when Mulan first sees him on the rocks",
+                "answer": "Southern Baptist Preacher",
+                "distractors": ["New York Taxi Driver", "British Aristocrat", "Deep Baritone", "High-pitched Squeak"]
+              },
+              {
+                "type": "quote",
+                "content": "Heed my word, 'cause if the army finds out that you are a girl, the penalty is death.",
+                "context": "warning Mulan of the consequences",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "I am the guardian of lost souls.",
+                "context": "introducing himself with flair",
+                "answer": "Mushu",
+                "distractors": ["The First Ancestor", "The Great Stone Dragon", "Shang", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "Ah, my ancestors sent a little lizard to help me?",
+                "context": "seeing her guardian's true size",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Shang", "Chi Fu", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "My powers are beyond your mortal imagination.",
+                "context": "trying to intimidate Khan",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Fa Zhou", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "My eyes can see straight through your armor.",
+                "context": "claiming to have x-ray vision",
+                "answer": "Mushu",
+                "distractors": ["Shan-Yu", "The First Ancestor", "General Li", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Dishonor on your cow.",
+                "context": "scolding Mulan for slapping him",
+                "answer": "Mushu",
+                "distractors": ["Chi Fu", "Yao", "Khan", "Grandma Fa", "The Matchmaker"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who takes notes on a leaf about dishonors?",
+                "context": "when Mulan first meets Mushu",
+                "answer": "Cri-Kee",
+                "distractors": ["Khan", "Mulan", "Mushu", "Little Brother", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Don't you slap me no more, we clear on that?",
+                "context": "setting boundaries with Mulan",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Shang", "Ling", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Let's move it heifer.",
+                "context": "commanding the horse",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Mulan", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Beautiful isn't it?",
+                "context": "watching men picking their noses and toes",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Chi Fu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "No, they're men. And you're going to have to act just like them.",
+                "context": "giving advice on behavior",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Shang", "Chi Fu", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Look, this tattoo will protect me from harm.",
+                "context": "moments before getting punched in the stomach",
+                "answer": "An unnamed recruit",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "I hope you can get your money back.",
+                "context": "laughing at the soldier who got punched",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Mushu", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Punch him.",
+                "context": "advising Mulan on how to interact with Yao",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Shang", "General Li", "Fa Zhou", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "What are you looking at?",
+                "context": "noticing Mulan staring at him",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh Yao, you made a friend.",
+                "context": "after Mulan punches Yao",
+                "answer": "Chien-Po",
+                "distractors": ["Ling", "Mushu", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Good, Now slap him on the behind, they like that.",
+                "context": "giving bad advice to Mulan",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Shang", "Chi Fu", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "I'm going to hit you so hard it'll make your ancestors dizzy.",
+                "context": "grabbing Mulan by the collar",
+                "answer": "Yao",
+                "distractors": ["Shan-Yu", "Mushu", "Shang", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Relax and chant with me.",
+                "context": "trying to calm his friend down",
+                "answer": "Chien-Po",
+                "distractors": ["Ling", "Mulan", "A Monk", "Shang", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "Aaaaa, you ain't worth my time chicken boy.",
+                "context": "dismissing Mulan",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chi Fu", "Shang", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "Chicken boy!? Say that to my face ya limp noodle!",
+                "context": "yelling insults to instigate a fight",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Ling", "Yao", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who kicks Yao in the butt?",
+                "context": "during the camp brawl",
+                "answer": "Ling",
+                "distractors": ["Chien-Po", "Mulan", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What food item is knocked over during the line-up caused by the brawl?",
+                "context": "when the line of soldiers falls forward",
+                "answer": "Pot of congee",
+                "distractors": ["Basket of apples", "Sack of rice", "Pot of tea", "Stack of bowls"]
+              },
+              {
+                "type": "quote",
+                "content": "The Huns have struck here, here and here.",
+                "context": "pointing to a map",
+                "answer": "General Li",
+                "distractors": ["Shang", "Chi Fu", "Shan-Yu", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "I do love surprises.",
+                "context": "complimenting the General",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "Mulan", "Ling", "The Matchmaker", "Mushu", "Chien-Po"]
+              },
+              {
+                "type": "quote",
+                "content": "You will stay here and train the new recruits.",
+                "context": "giving orders to his son",
+                "answer": "General Li",
+                "distractors": ["Chi Fu", "Shang", "The Emperor", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "I believe Li Shang will do an excellent job.",
+                "context": "justifying the promotion",
+                "answer": "General Li",
+                "distractors": ["Chi Fu", "The Emperor", "Mulan", "Fa Zhou", "Chien-Po"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh, I will. I won't let you down.",
+                "context": "accepting the promotion to Captain",
+                "answer": "Shang",
+                "distractors": ["General Li", "Mulan", "Chi Fu", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "I'll expect a full report in three weeks.",
+                "context": "leaving instructions for the scribe",
+                "answer": "General Li",
+                "distractors": ["Shang", "Chi Fu", "The Emperor", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "And I won't leave anything out.",
+                "context": "promising to report honestly to the General",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "Mushu", "Mulan", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Leader of China's finest troops.",
+                "context": "talking to himself while tying his sword",
+                "answer": "Shang",
+                "distractors": ["General Li", "Mulan", "Chi Fu", "Yao", "The Emperor", "Fa Deng"]
+              },
+              {
+                "type": "quote",
+                "content": "Good luck, Father.",
+                "context": "whispering as the troops leave",
+                "answer": "Shang",
+                "distractors": ["Mulan", "Chi Fu", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Day one.",
+                "context": "marking a board with a brush",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "Mulan", "General Li", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "He started it!",
+                "context": "yelled at Mulan",
+                "answer": "The recruits",
+                "distractors": ["Mushu", "Chi Fu", "Shang", "Shan-Yu", "Fa Deng", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "I don't need anyone causing trouble in my camp!",
+                "context": "looking down at Mulan",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "Mushu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "Your commanding officer just asked you a question.",
+                "context": "stepping into Mulan's face",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "General Li", "Mushu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "Uhh, I've got a name. Huh. And it's a boys name too.",
+                "context": "stalling while trying to think of a name",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Shang", "Chi Fu", "Ling"]
+              },
+              {
+                "type": "trivia",
+                "content": "What is the first name Mushu suggests to Mulan?",
+                "context": "when Shang asks for her name",
+                "answer": "Ling",
+                "distractors": ["Ping", "Chu", "Yao", "Ming", "Li"]
+              },
+              {
+                "type": "quote",
+                "content": "I didn't ask for his name.",
+                "context": "impatiently waiting for an answer",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "Yao", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Gesundheit.",
+                "context": "making a joke about the name 'Ah Chu'",
+                "answer": "Mushu",
+                "distractors": ["Shang", "Chi Fu", "Yao", "Ling", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Ping was my best friend growing up!",
+                "context": "trying to cover for Mulan's hesitation",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Of course Ping DID steal my gir-",
+                "context": "being cut off by Mulan's hand",
+                "answer": "Mushu",
+                "distractors": ["Ling", "Yao", "Chien-Po", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "I didn't know Fa Zhou had a son.",
+                "context": "reading the conscription notice",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "General Li", "The Matchmaker", "Shan-Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "I can see why, the boy's an absolute lunatic.",
+                "context": "after seeing Mulan fail to spit properly",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "Yao", "Ling", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "You'll spend tonight picking up every single grain of rice.",
+                "context": "assigning a punishment to the troops",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "Mushu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "You know, we have to work on your people skills.",
+                "context": "popping out of the armor after the recruits growl",
+                "answer": "Mushu",
+                "distractors": ["Shang", "Khan", "Chi Fu", "Cri-Kee"]
+              },
+              {
+                "type": "quote",
+                "content": "All right, rise and shine sleeping beauty.",
+                "context": "when waking Mulan up in her tent",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Shang", "Cri-Kee", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What food items are in Mulan's breakfast bowl?",
+                "context": "when Mushu serves Mulan breakfast in the tent",
+                "answer": "Two eggs and bacon",
+                "distractors": ["Two dumplings and a sausage", "Rice and fish", "Two apples and a banana", "Porridge and berries", "Toast and jam"]
+              },
+              {
+                "type": "trivia",
+                "content": "What color is Mushu's apron?",
+                "context": "when Mushu serves Mulan breakfast in the tent",
+                "answer": "White and pink",
+                "distractors": ["White and green", "White and blue", "Pink and yellow", "Red and white", "Blue and purple"]
+              },
+              {
+                "type": "quote",
+                "content": "Hey, get outta there, you gonna make people sick!",
+                "context": "when seeing an insect in the porridge",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Yao", "Ling", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu use to fish Cri-Kee out of the porridge?",
+                "context": "during the breakfast scene in the tent",
+                "answer": "Chopsticks",
+                "distractors": ["A spoon", "A ladle", "His finger", "A fork", "A twig"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu say about his slippers?",
+                "context": "after seeing Mulan's 'war face'",
+                "answer": "My bunny slippers just ran for cover",
+                "distractors": ["I've lost my lucky slippers", "I need to buy me some new slippers", "My kitty slippers just disappeared"]
+              },
+              {
+                "type": "quote",
+                "content": "My little baby off to destroy people.",
+                "context": "as Mulan runs out of the tent to join the recruits",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Fa Li", "Grandma Fa", "The Matchmaker", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "I'd like a pan fried noodle.",
+                "context": "spoken in the chow line",
+                "answer": "An unnamed recruit",
+                "distractors": ["Ling", "Yao", "Chien-Po", "Mulan", "Mushu", "A guard"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh, oh, sweet and pungent shrimp.",
+                "context": "when talking about food in the chow line",
+                "answer": "Chien-Po",
+                "distractors": ["Ling", "Yao", "Mulan", "An unnamed recruit", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Looks like our new friend slept in this morning.",
+                "context": "when Mulan arrives late to the line",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Shang", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Yeah, 'cause I owe you a knuckle sandwich.",
+                "context": "threatening Mulan before training starts",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Shan Yu", "Hun Strong Man", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Ling do when Yao threatens to punch Mulan?",
+                "context": "while standing in the line up",
+                "answer": "Puts his fingers in his ears and turns away",
+                "distractors": ["Grins and watches", "Backs up a couple of steps", "Leans against Chien-Po's arm", "Laughs out loud", "Half covers his eyes with his hands"]
+              },
+              {
+                "type": "quote",
+                "content": "You will assemble swiftly and silently every morning.",
+                "context": "addressing the new recruits",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "The Emperor", "Shan Yu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "I'll get that arrow pretty boy. And I'll do it with my shirt on.",
+                "context": "before attempting to climb the pole",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "Mushu", "An unnamed recruit"]
+              },
+              {
+                "type": "trivia",
+                "content": "What do the two bronze disks represent according to Shang?",
+                "context": "during the arrow retrieval challenge",
+                "answer": "Discipline and Strength",
+                "distractors": ["Honor and Duty", "Spirit and Power", "Honor and Glory", "Loyalty and Bravery", "Strength and Honor"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who is the first recruit to attempt climbing the pole?",
+                "context": "after Shang demonstrates the challenge",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "An unnamed recruit"]
+              },
+              {
+                "type": "quote",
+                "content": "Did they send me daughters when I asked for sons?",
+                "context": "singing while training the troops",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "Shan Yu", "Yao", "The Emperor"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Ling put down Mulan's back?",
+                "context": "during the song 'I'll Make a Man Out of You'",
+                "answer": "A beetle",
+                "distractors": ["A spider", "A scorpion", "Ice", "Rice", "A worm"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many clay pots does Shang break apart in the air?",
+                "context": "during the staff training sequence",
+                "answer": "Two",
+                "distractors": ["One", "Three", "Four", "Five"]
+              },
+              {
+                "type": "quote",
+                "content": "You're the saddest bunch I ever met.",
+                "context": "singing while watching the troops fail",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Shan Yu", "General Li", "Mushu", "The Matchmaker"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Shang balance on his head while recruits throw stones at him?",
+                "context": "during the 'I'll Make a Man Out of You' montage",
+                "answer": "A bucket of water",
+                "distractors": ["A clay pot", "A bronze weight", "A helmet", "A sword", "A bamboo staff"]
+              },
+              {
+                "type": "trivia",
+                "content": "When Mulan tries to catch a fish with her hand, what does she grab instead?",
+                "context": "standing in the river during training",
+                "answer": "Yao's foot",
+                "distractors": ["Ling's hand", "A turtle", "A boot", "A snake", "Mushu's tail"]
+              },
+              {
+                "type": "quote",
+                "content": "Boy I was a fool in school for cutting gym.",
+                "context": "singing after hitting his head on a stone slab",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Mulan", "Shang", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "This guy's got 'em scared to death.",
+                "context": "watching Shang spar with Mulan from a tree",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Chi Fu", "Yao", "Khan", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Now I really wish that I knew how to swim!",
+                "context": "singing while balancing on poles in the water",
+                "answer": "Chien-Po",
+                "distractors": ["Ling", "Yao", "Mulan", "Shang", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What specific color is the 'pine' found on the doll?",
+                "context": "when the Huns are analyzing the doll found in the mountains",
+                "answer": "Black",
+                "distractors": ["Green", "Brown", "White", "Red", "Yellow"]
+              },
+              {
+                "type": "quote",
+                "content": "White horse hair. Imperial stallions.",
+                "context": "analyzing evidence found on a doll",
+                "answer": "A Bare-Chested Hun Man",
+                "distractors": ["Shan Yu", "A Short Hun Man", "A Hun Archer", "A Long Haired Hun", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Sulfur, from cannons.",
+                "context": "smelling the doll found in the tree",
+                "answer": "A Long Haired Hun",
+                "distractors": ["Shan Yu", "A Muscular Hun Man", "A Hun Archer", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Besides, the little girl will be missing her doll. We should return it to her.",
+                "context": "after discovering the Imperial Army's location",
+                "answer": "Shan Yu",
+                "distractors": ["A Hun Archer", "A Skinny Hun", "A Long-haired Hun", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Just because I look like a man doesn't mean I have to smell like one.",
+                "context": "before jumping into the lake to bathe",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Shang", "Chi Fu", "Ling", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "Well myself I kinda like that corn chip's smell.",
+                "context": "commenting on Mulan's hygiene concerns",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Khan", "Yao", "Ling", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object hits Mushu in the face while he is standing watch?",
+                "context": "during the bathing scene at the lake",
+                "answer": "Colored boxers",
+                "distractors": ["A white towel", "Shoes", "A bar of soap", "A helmet", "Blue slippers"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh hi guys, I didn't know you were here.",
+                "context": "speaking while in the lake",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Ling", "Yao", "Chien-Po", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "And I am ____, king of the rock.",
+                "context": "standing on a rock in the lake",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "Shang", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who pushes Ling off the rock after the snake scare?",
+                "context": "while the soldiers are at the lake",
+                "answer": "Yao",
+                "distractors": ["Chien-Po", "Mulan", "Shang", "Mushu", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "I never want to see a naked man again.",
+                "context": "after escaping the bathing soldiers",
+                "answer": "Mulan",
+                "distractors": ["Grandma Fa", "The Matchmaker", "Fa Li", "Mushu", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Those *boys* are no more fit to be soldiers than you are to be Captain.",
+                "context": "speaking to Shang inside the tent",
+                "answer": "Chi Fu",
+                "distractors": ["General Li", "The Emperor", "Shan Yu", "Mushu", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "The General may be your father, but I am the Emperor's council.",
+                "context": "asserting authority over Shang",
+                "answer": "Chi Fu",
+                "distractors": ["Shan Yu", "Mushu", "The Matchmaker", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "For what it's worth, I think you're a great captain.",
+                "context": "trying to comfort Shang",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Yao", "Ling", "Chien-Po", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does Cri-Kee write the fake letter from the General?",
+                "context": "inside Chi Fu's tent",
+                "answer": "He uses his feet",
+                "distractors": ["He uses a brush", "He uses his antennae", "He uses a stamp", "He uses his wings"]
+              },
+              {
+                "type": "trivia",
+                "content": "What kind of animal does Mushu ride while disguised as a soldier?",
+                "context": "when delivering the fake urgent news to Chi Fu",
+                "answer": "A Panda",
+                "distractors": ["A Horse", "A Cow", "A Pig", "A Tiger", "A Donkey"]
+              },
+              {
+                "type": "trivia",
+                "content": "What footwear is Chi Fu wearing when he walks out of the lake?",
+                "context": "just before the fake letter delivery scene",
+                "answer": "Bare feet",
+                "distractors": ["Big showering slippers", "Sandals", "Wooden clogs", "Silk shoes"]
+              },
+              {
+                "type": "quote",
+                "content": "What's the matter, you've never seen it 'black and white' before?",
+                "context": "referring to the panda he is riding",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Chi Fu", "The Emperor", "Shan Yu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What happens to the slipper Chi Fu is holding?",
+                "context": "during the encounter with the 'messenger'",
+                "answer": "The panda eats it",
+                "distractors": ["He throws it", "It falls in the lake", "Mushu steals it", "It catches fire", "He puts it on"]
+              },
+              {
+                "type": "quote",
+                "content": "We're in a war man! There's no time for stupid questions.",
+                "context": "berating Chi Fu while disguised",
+                "answer": "Mushu",
+                "distractors": ["Shang", "General Li", "Yao", "Ling", "Shan Yu"]
+              },
+              {
+                "type": "quote",
+                "content": "Pack your bags Cri-Kee, we're movin' out.",
+                "context": "after successfully tricking Chi Fu",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Khan", "Shang", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "In a thundering herd we feel a lot like cattle.",
+                "context": "singing during the march",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "Mushu", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Hey, think of instead, A girl worth fighting for.",
+                "context": "starting a song during the march",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Mulan", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "I want her paler than the moon with eyes that shine like stars.",
+                "context": "describing his dream girl in song",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Mulan", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "My girl will marvel at my strength, adore my battle scars.",
+                "context": "singing about his ideal woman",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "Shang", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "It all depends on what she cooks like: Beef, pork, chicken...",
+                "context": "singing about his priority in a partner",
+                "answer": "Chien-Po",
+                "distractors": ["Ling", "Yao", "Mulan", "Mushu", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does Ling make himself look muscular during his fantasy sequence?",
+                "context": "during 'A Girl Worth Fighting For'",
+                "answer": "He fills his armor with water",
+                "distractors": ["He stuffs it with hay", "He puffs out his chest", "He wears rocks", "He holds his breath", "He wears two suits of armor"]
+              },
+              {
+                "type": "quote",
+                "content": "How about a girl who's got a brain, Who always speaks her mind?",
+                "context": "suggesting traits for a 'girl worth fighting for'",
+                "answer": "Mulan",
+                "distractors": ["Ling", "Yao", "Chien-Po", "Mushu", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Nah!",
+                "context": "rejecting the idea of a girl with a brain",
+                "answer": "Ling, Yao and Chien-Po",
+                "distractors": ["Shang", "Chi Fu", "Mushu", "Shan-Yu", "Granda Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "I've a girl back home who's unlike any other.",
+                "context": "interrupting the soldiers' song",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "General Li", "Mushu", "Fa Zhou", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Yeah, the only girl who'd love him is his mother!",
+                "context": "whispering an insult about Chi Fu",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mulan", "Mushu", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "What are the soldiers about to throw at Mulan when the song ends abruptly?",
+                "context": "right before they find the burned village",
+                "answer": "Snowballs",
+                "distractors": ["Mud balls", "Rocks", "Helmets", "Water balloons", "Apples"]
+              },
+              {
+                "type": "quote",
+                "content": "Search for survivors.",
+                "context": "upon entering the burned village",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Mulan", "Yao", "Ling", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "What item does Chien-Po find and give to Shang at the massacre site?",
+                "context": "overlooking the battlefield",
+                "answer": "A helmet",
+                "distractors": ["A sword", "A flag", "A medal", "A letter", "A map"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mulan place at the base of Shang's sword in the snow?",
+                "context": "honoring the fallen army",
+                "answer": "The doll",
+                "distractors": ["A flower", "Her comb", "Incense", "A helmet", "A flag"]
+              },
+              {
+                "type": "quote",
+                "content": "The Huns are moving quickly... We're the only hope for the Emperor now.",
+                "context": "rallying the troops after finding the dead army",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Mulan", "General Li", "The Emperor", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "What accident reveals the troop's position to the Huns?",
+                "context": "during the ambush in the mountains",
+                "answer": "A cannon fires into the air",
+                "distractors": ["Mushu screams", "Khan whinnies", "Shang yells", "A pot falls", "Chi Fu sneezes"]
+              },
+              {
+                "type": "quote",
+                "content": "You just gave away our position. Now we're--",
+                "context": "yelling at Mulan before getting shot",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Yao", "Ling", "Chien-Po", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who frees Khan from the burning cannon cart?",
+                "context": "during the ambush battle",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Yao", "Chien-Po", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh sure, save the horse.",
+                "context": "after Mulan cuts Khan free",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Yao", "Ling", "Shang", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many cannons does Chi Fu hide behind?",
+                "context": "under a rock during the ambush battle",
+                "answer": "Four",
+                "distractors": ["Five", "Two", "Three", "Six", "Seven", "Eight"]
+              },
+              {
+                "type": "quote",
+                "content": "If we die, we die with honor.",
+                "context": "preparing to face the charging Hun army",
+                "answer": "Shang",
+                "distractors": ["Mulan", "Yao", "Chi Fu", "The Emperor", "General Li"]
+              },
+              {
+                "type": "quote",
+                "content": "Yao, aim the cannon at Shan-Yu.",
+                "context": "giving a final order before the charge",
+                "answer": "Shang",
+                "distractors": ["Mulan", "Chi Fu", "General Li", "Ling", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does Mulan notice the snow embankment on the mountain?",
+                "context": "right before she rushes forward with the cannon",
+                "answer": "She sees its reflection",
+                "distractors": ["She sees where the Huns are charging from", "Mushu tells her", "Shang points it out", "The falcon flies to it", "A rock falls from it"]
+              },
+              {
+                "type": "quote",
+                "content": "Ping, come back. Ping!",
+                "context": "calling after Mulan as she charges the Huns",
+                "answer": "Shang",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What knocks the flint out of Mulan's hand?",
+                "context": "when she is trying to light the cannon",
+                "answer": "Shan-Yu's falcon",
+                "distractors": ["An arrow", "Shan-Yu's sword", "A snowball", "Mushu's tail", "The wind"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does Mulan light the cannon fuse?",
+                "context": "during the battle on the mountain",
+                "answer": "She uses Mushu",
+                "distractors": ["She uses a match", "She uses a fire arrow", "She uses sparks from her sword", "She uses a torch", "She uses flint"]
+              },
+              {
+                "type": "quote",
+                "content": "He was three feet in front of you!",
+                "context": "riding the cannon towards the mountain top",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Shang", "Yao", "Chi Fu", "Mulan"]
+              },
+              {
+                "type": "trivia",
+                "content": "Where does Shan-Yu strike Mulan with his sword?",
+                "context": "during the confrontation in the snow",
+                "answer": "On her right side",
+                "distractors": ["On her left arm", "On her leg", "On her head", "Across her back", "On her right shoulder"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu use to ride down the avalanche?",
+                "context": "looking for Mulan",
+                "answer": "A shield",
+                "distractors": ["A helmet", "A boot", "A piece of wood", "A firework", "Cri-Kee"]
+              },
+              {
+                "type": "quote",
+                "content": "Man, you are one lucky bug.",
+                "context": "pulling Cri-Kee out of the snow",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Shang", "Yao", "Ling", "Chi Fu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who hauls the group up the cliff using the rope?",
+                "context": "at the end of the avalanche scene",
+                "answer": "Chien-Po",
+                "distractors": ["Yao", "Ling", "Shang", "Mulan", "The Horse"]
+              },
+              {
+                "type": "quote",
+                "content": "Ping, you are the craziest man I've ever met.",
+                "context": "thanking Mulan after the rescue",
+                "answer": "Shang",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Let's hear it for Ping! The bravest of us all.",
+                "context": "cheering for Mulan after the avalanche",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Shang", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "You're king of the mountain!",
+                "context": "praising Mulan on the cliff edge",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Shang", "Mushu", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Ping, hold on. Hold on.",
+                "context": "as Mulan loses consciousness",
+                "answer": "Shang",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Don't talk with your mouth full.",
+                "context": "reprimanding Mulan during breakfast",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Shang", "Chi Fu", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who is shown attempting to climb the pole immediately after Yao fails?",
+                "context": "beginning the 'I'll Make a Man Out of You' montage",
+                "answer": "Ling",
+                "distractors": ["Chien-Po", "Mulan", "Shang", "An unnamed recruit"]
+              },
+              {
+                "type": "quote",
+                "content": "Retrieve the arrow.",
+                "context": "instruction after shooting the pole",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Yao", "The Emperor", "General Li", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What happens to the rope when Yao shoots the arrow to save Mulan?",
+                "context": "during the cliff rescue",
+                "answer": "It slips through his hands",
+                "distractors": ["It breaks", "It misses Mulan", "It catches on a rock", "Shang grabs it", "Mulan misses it"]
+              },
+              {
+                "type": "quote",
+                "content": "We must be swift as the coursing river.",
+                "context": "singing",
+                "answer": "Shang and Chorus",
+                "distractors": ["Mulan", "Chi Fu", "The Huns", "The Emperor", "The Ancestors"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu sarcastically refer to when trying to simulate the General's urgency in the fake letter?",
+                "context": "criticizing Cri-Kee's writing",
+                "answer": "Asking for potpourri",
+                "distractors": ["Asking for tea", "Asking for silk", "Asking for fireworks", "Asking for dumplings", "Asking for money", "Asking for a foot massage"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many fruits does Shang hit with a single bow shot?",
+                "context": "during the training montage",
+                "answer": "Three",
+                "distractors": ["Two", "One", "Four", "Five"]
+              },
+              {
+                "type": "quote",
+                "content": "My manly ways and turns of phrase are sure to thrill her.",
+                "context": "boasting during the song",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Shang", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Now remember, it's your first day of training so listen to your teacher and no fighting.",
+                "context": "giving advice to Mulan",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Shang", "Chi Fu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "Am I late?",
+                "context": "speaking with porridge in their mouth",
+                "answer": "Mulan",
+                "distractors": ["Ling", "Yao", "Chien-Po", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who acts as a 'boxing coach' for Mulan from the tree?",
+                "context": "while Shang is beating her in sparring",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Khan", "Yao", "Ling", "The Ancestors"]
+              },
+              {
+                "type": "quote",
+                "content": "I can explain.",
+                "context": "when Shang is inside the tent",
+                "answer": "Mulan",
+                "distractors": ["Chi Fu", "The Medic", "Mushu", "Fa Zhou", "Grandma Fa"]
+              },
+              {
+                "type": "trivia",
+                "content": "Which character is seen nervously drumming their fingers on their knees outside the medic tent?",
+                "context": "while waiting for news about Mulan's injury",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Shang", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Huh? So it's true.",
+                "context": "upon entering the tent and seeing Mulan",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "The Emperor", "Yao", "General Li", "The Medic"]
+              },
+              {
+                "type": "trivia",
+                "content": "What specific object does Chi Fu remove from Mulan, causing her hair to fall?",
+                "context": "after dragging her out of the medic tent",
+                "answer": "Her hair tie",
+                "distractors": ["Her helmet", "Her comb", "Her armor", "Her sword", "Her ribbon"]
+              },
+              {
+                "type": "quote",
+                "content": "Trecherous snake.",
+                "context": "addressing the troops regarding Mulan",
+                "answer": "Chi Fu",
+                "distractors": ["Shan-Yu", "Shang", "Yao", "General Li", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "I did it to save my father.",
+                "context": "while kneeling on the ground before Shang",
+                "answer": "Mulan",
+                "distractors": ["Fa Li", "Grandma Fa", "Mushu", "Ping", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "High treason!",
+                "context": "shouting to the troops about Mulan's crime",
+                "answer": "Chi Fu",
+                "distractors": ["Shan-Yu", "The Emperor", "General Li", "Shang", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who does Chi Fu order to restrain Khan?",
+                "context": "when the horse rears back during the confrontation",
+                "answer": "A soldier standing by Khan",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Shang", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "Ultimate dishonor.",
+                "context": "whispering in Mulan's face while she winces",
+                "answer": "Chi Fu",
+                "distractors": ["The Ancestors", "Shang", "The Matchmaker", "Fa Zhou", "Shan-Yu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Where does Shang retrieve the sword he intends to use on Mulan?",
+                "context": "before approaching her on the ground",
+                "answer": "From Khan's scabbard",
+                "distractors": ["From his own belt", "From Chi Fu", "From the ground", "From Yao", "From the medic"]
+              },
+              {
+                "type": "quote",
+                "content": "Noooooo!",
+                "context": "rushing toward Mulan to stop Shang",
+                "answer": "Yao, Ling and Chien-Po",
+                "distractors": ["Mushu", "The Troops", "Chi Fu", "The Ancestors", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "You know the law.",
+                "context": "stopping Mulan's friends from intervening",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "General Li", "The Emperor", "Shan-Yu", "The Matchmaker"]
+              },
+              {
+                "type": "quote",
+                "content": "A life for a life. My debt is repaid.",
+                "context": "after throwing the sword down in front of Mulan",
+                "answer": "Shang",
+                "distractors": ["Shan-Yu", "The Emperor", "Chi Fu", "General Li", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Move out!",
+                "context": "ordering the troops to leave Mulan behind",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "The Parade Leader", "Yao", "Shan-Yu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who wraps the blanket around Mulan after the troops leave?",
+                "context": "while she is shivering in the snow",
+                "answer": "Khan",
+                "distractors": ["Mushu", "Cri-Kee", "Little Brother", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Cri-Kee use to light a fire for Mulan?",
+                "context": "after the army leaves them behind",
+                "answer": "Twigs",
+                "distractors": ["Matches", "Leaves", "A scroll", "Charcoal", "Gunpowder"]
+              },
+              {
+                "type": "quote",
+                "content": "I was this close, this close to impressing the ancestors...",
+                "context": "walking toward Mulan carrying a stick",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Yao", "Ling", "Grandma Fa", "The Great Stone Dragon"]
+              },
+              {
+                "type": "trivia",
+                "content": "What food item does Mushu cook over the fire?",
+                "context": "while complaining about losing his entourage",
+                "answer": "A dumpling",
+                "distractors": ["Porridge", "A fish", "Rice", "An apple", "Bacon"]
+              },
+              {
+                "type": "quote",
+                "content": "I should never have left home.",
+                "context": "speaking sadly by the fire",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Yao", "Ling", "Chien-Po"]
+              },
+              {
+                "type": "quote",
+                "content": "Who knew you'd end up shaming him, disgracing your ancestors, and losing all your friends.",
+                "context": "trying to comfort Mulan but making it worse",
+                "answer": "Mushu",
+                "distractors": ["Chi Fu", "The Matchmaker", "Grandma Fa", "Shang", "Cri-Kee"]
+              },
+              {
+                "type": "quote",
+                "content": "Maybe what I really wanted was to prove I could do things right.",
+                "context": "reflecting on her journey while holding her helmet",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Fa Zhou", "Yao", "Ling", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu use to clean Mulan's helmet?",
+                "context": "while trying to cheer her up",
+                "answer": "Spit",
+                "distractors": ["Snow", "Water", "His sleeve", "A leaf", "Oil"]
+              },
+              {
+                "type": "quote",
+                "content": "The truth is we're both frauds.",
+                "context": "admitting his own selfish motivations to Mulan",
+                "answer": "Mushu",
+                "distractors": ["Chi Fu", "The Matchmaker", "Shang", "Cri-Kee", "Ling"]
+              },
+              {
+                "type": "trivia",
+                "content": "Does Cri-Kee admit to lying about being lucky?",
+                "context": "when confronted by Mushu on the helmet",
+                "answer": "Yes, he nods",
+                "distractors": ["No, he shakes his head", "He chirps angrily", "He hides", "He points at Mushu", "He ignores the question"]
+              },
+              {
+                "type": "quote",
+                "content": "And what are you? A sheep?",
+                "context": "yelling at Khan after finding out Cri-Kee isn't lucky",
+                "answer": "Mushu",
+                "distractors": ["Chi Fu", "Mulan", "Yao", "Shang", "Cri-Kee"]
+              },
+              {
+                "type": "quote",
+                "content": "We started this thing together and that's how we'll finish.",
+                "context": "hugging Mulan before seeing the Huns",
+                "answer": "Mushu",
+                "distractors": ["Shang", "Yao", "Fa Zhou", "The Emperor", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Rrrrrrraaaaaaaaahhh!",
+                "context": "popping out of the snow at the avalanche site",
+                "answer": "Shan-Yu",
+                "distractors": ["Yao", "The Hun Archer", "Mushu", "Khan", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many Huns pop out of the snow to join Shan-Yu?",
+                "context": "at the avalanche site",
+                "answer": "Five",
+                "distractors": ["Ten", "Three", "Twelve", "Seven", "Two"]
+              },
+              {
+                "type": "trivia",
+                "content": "Which direction does Mushu point when Mulan starts chasing the Huns?",
+                "context": "the opposite direction",
+                "answer": "Toward home",
+                "distractors": ["Toward the palace", "Toward the mountains", "Toward the medic tent", "Toward the river", "Toward the moon"]
+              },
+              {
+                "type": "quote",
+                "content": "They popped out of the snow, like daisies!",
+                "context": "describing the Huns' survival",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Chi Fu", "Ling", "Yao", "Chien-Po"]
+              },
+              {
+                "type": "quote",
+                "content": "Are we in this together or not?",
+                "context": "challenging Mushu before riding to the city",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Yao", "Khan", "Cri-Kee", "Fa Zhou"]
+              },
+              {
+                "type": "quote",
+                "content": "Wu Hu Ha Ga, Wu Hu Ha Ga",
+                "context": "uttering fighting words while jumping onto Khan",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Shan-Yu", "A Hun Archer", "Chien-Po", "Ling", "A man in the crowd"]
+              },
+              {
+                "type": "trivia",
+                "content": "During the victory parade, who marches immediately after the drummers?",
+                "context": "in the procession order",
+                "answer": "The wind instruments",
+                "distractors": ["The acrobats", "The lion dancers", "Shang", "The Emperor", "The archers", "The flag bearers", "The fire dancers"]
+              },
+              {
+                "type": "quote",
+                "content": "Make way for the heros of China.",
+                "context": "announcing Shang's arrival in the city",
+                "answer": "Parade Leader",
+                "distractors": ["The Emperor", "Chi Fu", "Mushu", "General Li", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "Which group follows Shang and his men in the parade?",
+                "context": "at the end of the procession",
+                "answer": "Lion dancers",
+                "distractors": ["Fire dancers", "Archers", "Cannoneers", "Monks", "Children", "Acrobats"]
+              },
+              {
+                "type": "trivia",
+                "content": "What expression is on the faces of Shang's men during the victory parade?",
+                "context": "despite the crowd cheering",
+                "answer": "Sorrowful looks",
+                "distractors": ["Joyful smiles", "Angry scowls", "Bored expressions", "Fearful looks", "Proud grins"]
+              },
+              {
+                "type": "quote",
+                "content": "You don't belong here Mulan, go home.",
+                "context": "rejecting Mulan's warning in the parade",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "Yao", "Ling", "The Emperor", "A man in the crowd"]
+              },
+              {
+                "type": "quote",
+                "content": "Why else would I come back?",
+                "context": "trying to convince Shang the Huns are alive",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Shang", "General Li", "Fa Zhou", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Keep your eyes open. I know they're here.",
+                "context": "warning her friends in the parade",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Chi Fu", "The Parade Leader", "General Li"]
+              },
+              {
+                "type": "trivia",
+                "content": "Where does Mulan dismount Khan upon reaching the palace?",
+                "context": "while rushing to warn the Emperor",
+                "answer": "Near the entrance to the palace yard",
+                "distractors": ["At the city gates", "In the throne room", "On the palace steps", "In the market", "By the river"]
+              },
+              {
+                "type": "quote",
+                "content": "To find someone who will believe me.",
+                "context": "running into the palace yard",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Yao", "Ling", "Chien-Po"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who hands Shan-Yu's sword to Shang at the palace steps?",
+                "context": "during the presentation with the Emperor",
+                "answer": "Chi Fu",
+                "distractors": ["The Emperor", "Mulan", "General Li", "Yao", "A palace guard"]
+              },
+              {
+                "type": "trivia",
+                "content": "What sound causes the crowd to fall silent at the palace?",
+                "context": "before the Emperor speaks",
+                "answer": "A palace man striking a large gong",
+                "distractors": ["A trumpet blast", "A drum roll", "Fireworks exploding", "The Emperor clapping", "Shang shouting"]
+              },
+              {
+                "type": "quote",
+                "content": "My children, heaven smiles down upon the Middle Kingdom.",
+                "context": "addressing the silent crowd",
+                "answer": "The Emperor",
+                "distractors": ["Chi Fu", "Shang", "The Parade Leader", "General Li", "Mushu"]
+              },
+              {
+                "type": "quote",
+                "content": "Sir, the Emperor's in danger!",
+                "context": "pleading with a civilian in the crowd",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Yao", "Chi Fu", "Ling"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does the man in the crowd react when Mulan touches his shoulder?",
+                "context": "when she tries to warn him about the Huns",
+                "answer": "He rips his shoulder away",
+                "distractors": ["He screams", "He calls the guards", "He pushes her down", "He laughs at her", "He helps her"]
+              },
+              {
+                "type": "quote",
+                "content": "Hey, you're a girl again, remember?",
+                "context": "reminding Mulan why no one is listening",
+                "answer": "Mushu",
+                "distractors": ["Cri-Kee", "Chi Fu", "Shang", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Your Majesty, I present to you the sword of Shan-Yu.",
+                "context": "kneeling before the Emperor",
+                "answer": "Shang",
+                "distractors": ["Chi Fu", "General Li", "Mulan", "Yao", "The Parade Leader"]
+              },
+              {
+                "type": "quote",
+                "content": "Your father would have been very proud.",
+                "context": "speaking to Shang about General Li",
+                "answer": "The Emperor",
+                "distractors": ["Chi Fu", "Mulan", "Grandma Fa", "Fa Zhou", "The Ancestors"]
+              },
+              {
+                "type": "trivia",
+                "content": "What falls to Mulan's waist when she sits up in the medic tent?",
+                "context": "revealing her bandages",
+                "answer": "The blanket",
+                "distractors": ["Her armor", "Her robe", "Her hair", "The tent flap", "Her sash"]
+              },
+              {
+                "type": "trivia",
+                "content": "What is flying in the air during the victory parade?",
+                "context": "along with fireworks going off",
+                "answer": "Kites",
+                "distractors": ["Falcons", "Doves", "Lanterns", "Arrows", "Balloons"]
+              },
+              {
+                "type": "quote",
+                "content": "No matter how the wind howls, the mountain cannot bow to it.",
+                "context": "spoken to Shan-Yu on the palace balcony",
+                "answer": "The Emperor",
+                "distractors": ["Fa Zhou", "Shang", "Chi Fu", "Grandma Fa"]
+              },
+              {
+                "type": "trivia",
+                "content": "How many of Shan-Yu's men jump out from behind the dragon to capture the Emperor?",
+                "context": "during the initial ambush on the palace steps",
+                "answer": "5",
+                "distractors": ["3", "7", "10", "4"]
+              },
+              {
+                "type": "quote",
+                "content": "Does this dress make me look fat?",
+                "context": "whispered to Mulan while disguised as a concubine",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Mushu", "Chi Fu"]
+              },
+              {
+                "type": "quote",
+                "content": "Ugly concubines.",
+                "context": "spoken when spotting the disguised soldiers",
+                "answer": "A large Hun soldier",
+                "distractors": ["Shan-Yu", "Chi Fu", "The Matchmaker", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "What animal steals the sword before the palace ambush?",
+                "context": "when Shang is presenting the sword to the Emperor",
+                "answer": "A falcon",
+                "distractors": ["An eagle", "A hawk", "A vulture", "A crow", "A dragon", "A horse"]
+              },
+              {
+                "type": "quote",
+                "content": "Now that's what I call Mongolian Barbeque.",
+                "context": "referring to Shan-Yu's falcon",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Mulan", "One of the Ancestors", "Ling"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object do Shang and his soldiers use as an unsuccessful battering ram?",
+                "context": "while trying to enter the locked palace doors",
+                "answer": "A stone statue",
+                "distractors": ["A wooden beam", "A large bench", "A cannon", "A pillar"]
+              },
+              {
+                "type": "quote",
+                "content": "You fight good.",
+                "context": "spoken awkwardly to Mulan after the battle is over",
+                "answer": "Shang",
+                "distractors": ["Yao", "The Emperor", "Chi Fu", "Fa Zhou"]
+              },
+              {
+                "type": "trivia",
+                "content": "What falls out of Ling's dress when he waves at the Hun guard?",
+                "context": "while pretending to be a concubine",
+                "answer": "A bitten apple",
+                "distractors": ["A shiny dagger", "A red fan", "A banana peel", "A melon", "A tomato"]
+              },
+              {
+                "type": "quote",
+                "content": "Woo, sign me up for the next war.",
+                "context": "upon seeing Shang arrive at the Fa family home",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "Mulan", "The Matchmaker", "Fa Zhou"]
+              },
+              {
+                "type": "trivia",
+                "content": "What specific fruit does Chien-Po use to simulate a chest while in disguise?",
+                "context": "before smashing them on the guards' heads",
+                "answer": "Watermelons",
+                "distractors": ["Cantaloupes", "Pumpkins", "Coconuts", "Grapefruits"]
+              },
+              {
+                "type": "quote",
+                "content": "Would you like to stay forever?",
+                "context": "yelled from the background when Mulan invites Shang to dinner",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "Mushu", "Fa Zhou", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "What item does Shang use to shimmy up the palace column?",
+                "context": "after the other soldiers use their sashes",
+                "answer": "His cape",
+                "distractors": ["A rope", "His belt", "A curtain", "A flag"]
+              },
+              {
+                "type": "quote",
+                "content": "Call out for egg rolls!",
+                "context": "spoken while swinging on a chain in the temple",
+                "answer": "Mushu",
+                "distractors": ["Grandma Fa", "Ling", "Yao", "One of the Ancestors"]
+              },
+              {
+                "type": "trivia",
+                "content": "What song plays in the background while the soldiers dress as women?",
+                "context": "during the infiltration plan",
+                "answer": "I'll Make a Man Out of You (reprise)",
+                "distractors": ["Reflection", "Honor to Us All", "A Girl Worth Fighting For", "True to Your Heart"]
+              },
+              {
+                "type": "quote",
+                "content": "The flower that blooms in adversity is the most rare and beautiful of all.",
+                "context": "advice given to Shang regarding Mulan",
+                "answer": "The Emperor",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Chi Fu", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What weapon does Mulan use to cut the rope, preventing Shan-Yu from following the Emperor?",
+                "context": "on the high balcony during the rescue",
+                "answer": "Shan-Yu's sword",
+                "distractors": ["Shang's sword", "A dagger", "An arrow", "Her father's sword"]
+              },
+              {
+                "type": "quote",
+                "content": "Then you will kneel in pieces.",
+                "context": "spoken to the Emperor just before drawing a sword",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "General Li", "A Hun soldier", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "My little baby's all grown up and savin' China.",
+                "context": "spoken while crying as the country bows to Mulan",
+                "answer": "Mushu",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Fa Li", "The Emperor"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object hits Shan-Yu in the head before bouncing back to Mulan?",
+                "context": "when Shan-Yu is holding Shang by the collar",
+                "answer": "Her shoe",
+                "distractors": ["A helmet", "A rock", "A sword handle", "A fan"]
+              },
+              {
+                "type": "quote",
+                "content": "I tire of your arrogance old man.",
+                "context": "yelled at the Emperor",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "Shang", "General Li", "A Hun soldier"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mulan do to her hair to reveal her identity to Shan-Yu?",
+                "context": "during the confrontation on the ground floor",
+                "answer": "Pulls it back",
+                "distractors": ["Cuts it off", "Lets it down", "Puts on a helmet", "Braids it"]
+              },
+              {
+                "type": "quote",
+                "content": "What a mess.",
+                "context": "complaining about the destruction after the fireworks explosion",
+                "answer": "Chi Fu",
+                "distractors": ["Shang", "The Emperor", "Yao", "Ling"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Mushu use to fly over to the fireworks tower?",
+                "context": "with Cri-Kee helping",
+                "answer": "A kite",
+                "distractors": ["A rocket", "A banner", "A bird", "A lantern"]
+              },
+              {
+                "type": "quote",
+                "content": "'Tis a woman. She will never be worth anything.",
+                "context": "dismissing Mulan's achievements in front of the Emperor",
+                "answer": "Chi Fu",
+                "distractors": ["Shan-Yu", "The Matchmaker", "General Li", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object does Mulan use to disarm Shan-Yu on the roof?",
+                "context": "by catching his sword and twisting it",
+                "answer": "A paper fan",
+                "distractors": ["A sash", "A shoe", "Her helmet", "A stick"]
+              },
+              {
+                "type": "quote",
+                "content": "Is she allowed to do that?",
+                "context": "asked after Mulan hugs the Emperor",
+                "answer": "Yao",
+                "distractors": ["Ling", "Chien-Po", "Chi Fu", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who lights the fuse of the rocket strapped to Mushu?",
+                "context": "on the roof before launching at Shan-Yu",
+                "answer": "Cri-Kee",
+                "distractors": ["Mulan", "Shang", "Mushu himself", "Yao"]
+              },
+              {
+                "type": "quote",
+                "content": "Khan, let's go home.",
+                "context": "spoken after an awkward interaction",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Shang", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Where does the rocket hit Shan-Yu?",
+                "context": "propelling him into the fireworks tower",
+                "answer": "In the belly",
+                "distractors": ["In the face", "In the back", "In the leg", "In the chest"]
+              },
+              {
+                "type": "trivia",
+                "content": "What object does Mulan grab to slide down from the roof during the explosion?",
+                "context": "hanging on a taut rope",
+                "answer": "A lantern",
+                "distractors": ["A flag", "A sash", "A pulley", "A curtain"]
+              },
+              {
+                "type": "quote",
+                "content": "Citizens, I need firepower.",
+                "context": "spoken to the workers in the fireworks tower",
+                "answer": "Mushu",
+                "distractors": ["Shang", "Mulan", "Chi Fu", "Yao"]
+              },
+              {
+                "type": "trivia",
+                "content": "What part of Cri-Kee catches fire after the explosion?",
+                "context": "which Mushu pinches out",
+                "answer": "His antenna",
+                "distractors": ["His legs", "His wings", "His tail", "His back"]
+              },
+              {
+                "type": "quote",
+                "content": "Your worst nightmare.",
+                "context": "response when asked 'Who are you?' on the tower",
+                "answer": "Mushu",
+                "distractors": ["Shan-Yu", "Mulan", "The Great Stone Dragon", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Get off the roof, get off the roof, get off the roof.",
+                "context": "spoken while running away from the fireworks tower",
+                "answer": "Mulan",
+                "distractors": ["Mushu", "Shang", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "You are a lucky bug.",
+                "context": "spoken to Cri-Kee after surviving the explosion",
+                "answer": "Mushu",
+                "distractors": ["Mulan", "Grandma Fa", "One of the Ancestors", "The Emperor"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who is sitting on Khan's back when the horse bows to Mulan?",
+                "context": "during the palace celebration",
+                "answer": "Mushu and Cri-Kee",
+                "distractors": ["Grandma Fa", "Fa Li", "Little Brother", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "What happens to Chi Fu physically when the Emperor gives his job to Mulan?",
+                "context": "on the palace steps",
+                "answer": "He faints",
+                "distractors": ["He cries", "He runs away", "He screams", "He bows"]
+              },
+              {
+                "type": "quote",
+                "content": "It looks like you're out of ideas.",
+                "context": "mocking Mulan on the roof when she holds a fan",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "Shang", "A Hun soldier", "The Matchmaker"]
+              },
+              {
+                "type": "trivia",
+                "content": "What two items does the Emperor give Mulan to take home?",
+                "context": "as gifts to honor her family",
+                "answer": "His crest and Shan-Yu's sword",
+                "distractors": ["His hat and sword", "A medal and a scroll", "Gold and armor", "A horse and saddle"]
+              },
+              {
+                "type": "quote",
+                "content": "I am ready, baby.",
+                "context": "spoken while strapped to a large rocket",
+                "answer": "Mushu",
+                "distractors": ["Yao", "Ling", "Chien-Po", "Mulan"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Chien-Po do with Mulan, Yao, and Ling at the end?",
+                "context": "before Mulan leaves the palace",
+                "answer": "Lifts all three in a bear hug",
+                "distractors": ["Shakes their hands", "Bows to them", "Pats their backs", "High fives them"]
+              },
+              {
+                "type": "quote",
+                "content": "She get's it from my side of the family.",
+                "context": "commenting on Mulan's success during the celebration",
+                "answer": "One of the Ancestors",
+                "distractors": ["Grandma Fa", "Fa Zhou", "Fa Li", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "Where is Fa Zhou sitting when Mulan returns home?",
+                "context": "at the end of the movie",
+                "answer": "Beneath the blossom tree",
+                "distractors": ["Inside the house", "On the porch", "In the temple", "By the gate"]
+              },
+              {
+                "type": "quote",
+                "content": "Great, she brings home a sword. If you ask me she should have brought home a ma--",
+                "context": "cut off mid-sentence upon seeing Shang",
+                "answer": "Grandma Fa",
+                "distractors": ["Fa Li", "The Matchmaker", "Mushu", "Fa Zhou"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Fa Zhou do with the sword and crest Mulan offers him?",
+                "context": "before hugging her",
+                "answer": "Throws them to the ground",
+                "distractors": ["Hangs them on the wall", "Hands them to Grandma Fa", "Places them on the bench", "Bows to them"]
+              },
+              {
+                "type": "trivia",
+                "content": "What item does Shang try to return to Fa Zhou?",
+                "context": "claiming Mulan forgot it",
+                "answer": "Her helmet",
+                "distractors": ["Her sword", "Her medal", "Her fan", "Her armor"]
+              },
+              {
+                "type": "quote",
+                "content": "Boo.",
+                "context": "said mockingly after dropping from the roof",
+                "answer": "Shan-Yu",
+                "distractors": ["Mushu", "Ling", "Yao", "Shang"]
+              },
+              {
+                "type": "quote",
+                "content": "Guard the door.",
+                "context": "command given to his men on the balcony",
+                "answer": "Shan-Yu",
+                "distractors": ["Shang", "Chi Fu", "General Li", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "I tire of your arrogance old man.",
+                "context": "spoken to the Emperor while holding a sword to his throat",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "Shang", "General Li", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "What animal runs into the temple at the very end of the movie?",
+                "context": "acting happily",
+                "answer": "A dog",
+                "distractors": ["A chicken", "A pig", "A cat", "A cricket"]
+              },
+              {
+                "type": "quote",
+                "content": "My little baby's all grown up and savin' China.",
+                "context": "spoken while watching the crowd bow",
+                "answer": "Mushu",
+                "distractors": ["Grandma Fa", "Fa Li", "Fa Zhou", "The Emperor"]
+              },
+              {
+                "type": "trivia",
+                "content": "What is tied to the dog when he enters the temple?",
+                "context": "followed by chickens",
+                "answer": "A bag of grain",
+                "distractors": ["A bone", "A ribbon", "A bell", "A message"]
+              },
+              {
+                "type": "quote",
+                "content": "Take it, _____!",
+                "context": "the cue given to the 'drummer' to strike the gong and begin the party in the ancestral shrine",
+                "answer": "Mushu",
+                "distractors": ["Grandma Fa", "The First Ancestor", "Mulan", "Shang"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who tosses his own severed head into the air like a ball during the celebration?",
+                "context": "while partying in the Fa family shrine",
+                "answer": "Fa Deng",
+                "distractors": ["The First Ancestor", "One of the elderly Ancestors", "Fa Zhou", "The Farmer Ancestor"]
+              },
+              {
+                "type": "trivia",
+                "content": "Who strikes the gong to wake the ancestors at the end of the film?",
+                "context": "after Mushu is reinstated",
+                "answer": "Cri-Kee",
+                "distractors": ["Mushu", "Mulan", "Little Brother", "Grandma Fa"]
+              },
+              {
+                "type": "quote",
+                "content": "Oh he's so cute.",
+                "context": "spoken by a disguised soldier about a Hun guard",
+                "answer": "Ling",
+                "distractors": ["Yao", "Chien-Po", "Mulan", "Grandma Fa", "Mushu"]
+              },
+              {
+                "type": "trivia",
+                "content": "How does Ling disable the Long-Haired Hun during the fight?",
+                "context": "after kicking him in the stomach",
+                "answer": "Cracks his back with his head",
+                "distractors": ["Punches him in the face", "Trips him", "Hits him with a fan", "Throws him off the balcony"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Shan-Yu do to the corridor doors when chasing Mulan?",
+                "context": "after she locks the latch",
+                "answer": "Punches a hole through one",
+                "distractors": ["Kicks them down", "Slices them with his sword", "Burns them", "Smashes them with a statue"]
+              },
+              {
+                "type": "quote",
+                "content": "I'm making this up as I... go.",
+                "context": "response when asked for a plan",
+                "answer": "Mulan",
+                "distractors": ["Shang", "Mushu", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Who are you?",
+                "context": "asked when seeing a dragon",
+                "answer": "One of the firework lighters",
+                "distractors": ["Shan-Yu", "Shang", "Chi Fu", "A guard", "A man in the crowd"]
+              },
+              {
+                "type": "trivia",
+                "content": "What does Chien-Po use as a pulley to zip-line down with the Emperor?",
+                "context": "sliding down a rope",
+                "answer": "His sash",
+                "distractors": ["His belt", "A curtain", "A flag", "A chain", "A kite"]
+              },
+              {
+                "type": "quote",
+                "content": "You, you took away my victory.",
+                "context": "spoken in Shang's face",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "General Li", "The Emperor", "Mulan"]
+              },
+              {
+                "type": "quote",
+                "content": "The soldier from the mountains.",
+                "context": "spoken upon recognizing Mulan",
+                "answer": "Shan-Yu",
+                "distractors": ["Chi Fu", "Shang", "A Skinny Hun Man", "The Emperor"]
+              },
+              {
+                "type": "quote",
+                "content": "On the roof.",
+                "context": "shouted by someone spotting Mulan",
+                "answer": "A man in the crowd",
+                "distractors": ["Shang", "Mushu", "Chi Fu", "Shan-Yu", "Yao", "Ling"]
+              },
+              {
+                "type": "quote",
+                "content": "Would you like to stay for dinner?",
+                "context": "invitation to Shang",
+                "answer": "Mulan",
+                "distractors": ["Fa Zhou", "Grandma Fa", "Fa Li", "Mushu"]
+              }
+            ],
+            "Frozen": [
+                { "type": "quote", "content": "The cold never bothered me anyway.", "context": "during Let It Go", "answer": "Elsa", "distractors": ["Anna", "Olaf", "Hans", "Kristoff"] },
+                { "type": "quote", "content": "I like warm hugs!", "context": "meeting Anna", "answer": "Olaf", "distractors": ["Sven", "Marshmallow", "Oaken", "Duke of Weselton"] }
+            ],
+            "Aladdin": [
+                { "type": "quote", "content": "Phenomenal cosmic power!", "context": "describing his life", "answer": "Genie", "distractors": ["Jafar", "Aladdin", "Sultan", "Iago"] }
+            ]
+        };
+
+        /* ================= STATE & GLOBALS ================= */
+        let allQuestionsFlat = []; // We will flatten the DB into this
+        let globalCharacterPool = new Set(); // For Hard Mode distractors
+
+        let gameState = {
+            activeQuestions: [],
+            difficulty: 'medium',
+            currentIndex: 0,
+            score: 0
+        };
+
+        /* ================= INITIALIZATION ================= */
+        
+        // 1. Flatten DB & Build Global Pool
+        function initDatabase() {
+            allQuestionsFlat = [];
+            globalCharacterPool = new Set();
+
+            Object.keys(questionDatabase).forEach(movie => {
+                questionDatabase[movie].forEach(q => {
+                    // Add to flat list with Movie Key injected
+                    allQuestionsFlat.push({ ...q, movie: movie });
+
+                    // Add to Global Character Pool (Answer + Distractors)
+                    // We assume Quote answers are characters. Trivia answers might not be, 
+                    // but we filter logic later or accept some trivia answers as distractors.
+                    if(q.type === 'quote') {
+                        globalCharacterPool.add(q.answer);
+                        q.distractors.forEach(d => globalCharacterPool.add(d));
+                    }
+                });
+            });
+        }
+
+        // 2. Build UI
+        function initUI() {
+            initDatabase();
+            
+            const movieSelectDiv = document.getElementById('movie-selection');
+            Object.keys(questionDatabase).forEach(movie => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-label';
+                label.innerHTML = `<input type="checkbox" value="${movie}" checked onchange="updateMaxCount()"> ${movie}`;
+                movieSelectDiv.appendChild(label);
+            });
+
+            updateMaxCount();
+            
+            // Check Save
+            if(localStorage.getItem('disneyQuizV31')) document.getElementById('btn-resume').classList.remove('hide');
+
+            // Snow
+            const snowCont = document.getElementById('snow-container');
+            for(let i=0; i<20; i++){
+                let f = document.createElement('div'); f.className='snowflake'; f.innerText='❄';
+                f.style.left = Math.random()*100+'%'; f.style.animationDuration = (Math.random()*5+5)+'s';
+                f.style.opacity = Math.random(); snowCont.appendChild(f);
+            }
+        }
+
+        /* ================= GAME LOGIC ================= */
+
+        function startGame() {
+            const selectedMovies = Array.from(document.querySelectorAll('#movie-selection input:checked')).map(cb => cb.value);
+            if(selectedMovies.length === 0) return alert("Select a movie!");
+
+            // Filter from the FLATTENED list
+            let filtered = allQuestionsFlat.filter(q => selectedMovies.includes(q.movie));
+            filtered.sort(() => Math.random() - 0.5);
+
+            const count = parseInt(document.getElementById('q-count-input').value);
+            const finalSet = filtered.slice(0, count);
+
+            gameState = {
+                activeQuestions: finalSet,
+                difficulty: document.getElementById('difficulty-select').value,
+                currentIndex: 0,
+                score: 0
+            };
+
+            localStorage.removeItem('disneyQuizV31');
+            renderQuestion();
+            showScreen('quiz-screen');
+        }
+
+        function renderQuestion() {
+            const q = gameState.activeQuestions[gameState.currentIndex];
+            const diff = gameState.difficulty;
+
+            // 1. TEXT LOGIC
+            let text = (q.type === 'quote') ? `Who says: "${q.content}"` : q.content;
+            
+            // Context Visibility
+            if((diff === 'easy' || diff === 'medium') && q.context) {
+                const hint = (q.type === 'quote') ? `(${q.context})` : `Hint: ${q.context}`;
+                text += `<br><small style="color:#666;">${hint}</small>`;
+            }
+            document.getElementById('question-text').innerHTML = text;
+
+            // 2. OPTIONS LOGIC
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+            
+            let distractorCount = (diff === 'easy') ? 2 : (diff === 'medium') ? 4 : 7;
+            
+            // Start with defined distractors
+            let pool = [...q.distractors];
+
+            // HARD MODE: Inject Randoms from GLOBAL POOL
+            if(diff === 'hard') {
+                // Filter out current answer and existing distractors
+                const extras = Array.from(globalCharacterPool)
+                    .filter(c => c !== q.answer && !pool.includes(c));
+                extras.sort(() => Math.random() - 0.5);
+                pool = pool.concat(extras);
+            }
+
+            // Ensure strict count
+            pool = pool.slice(0, distractorCount);
+            
+            let finalOpts = [...pool, q.answer];
+            finalOpts.sort(() => Math.random() - 0.5);
+
+            // 3. RENDER BUTTONS
+            finalOpts.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(btn, opt === q.answer);
+                container.appendChild(btn);
+            });
+
+            // UI Updates
+            document.getElementById('progress-text').innerText = `Q ${gameState.currentIndex + 1} / ${gameState.activeQuestions.length}`;
+            document.getElementById('score-text').innerText = `Score: ${gameState.score}`;
+            document.getElementById('progress-bar').style.width = ((gameState.currentIndex / gameState.activeQuestions.length) * 100) + '%';
+
+            document.getElementById('btn-next').classList.add('hide');
+            document.getElementById('btn-finish-early').classList.remove('hide');
+        }
+
+        function handleAnswer(btn, isCorrect) {
+            document.querySelectorAll('.option-btn').forEach(b => {
+                b.disabled = true;
+                if(b.innerText === gameState.activeQuestions[gameState.currentIndex].answer) b.classList.add('correct');
+            });
+
+            if(isCorrect) {
+                btn.classList.add('correct');
+                gameState.score++;
+            } else {
+                btn.classList.add('wrong');
+            }
+
+            document.getElementById('score-text').innerText = `Score: ${gameState.score}`;
+            localStorage.setItem('disneyQuizV31', JSON.stringify(gameState));
+            
+            document.getElementById('btn-next').classList.remove('hide');
+            document.getElementById('btn-finish-early').classList.add('hide');
+        }
+
+        function endQuiz() {
+            localStorage.removeItem('disneyQuizV31');
+            // Fix: use currentIndex exactly
+            const totalAnswered = gameState.currentIndex;
+            
+            document.getElementById('final-score').innerText = `${gameState.score} / ${totalAnswered}`;
+            
+            let msg = "Good effort!";
+            if(totalAnswered > 0) {
+                const pct = gameState.score / totalAnswered;
+                if(pct === 1) msg = "Perfect Score!";
+                else if(pct > 0.8) msg = "Disney Master!";
+            } else {
+                msg = "You didn't answer anything!";
+            }
+            
+            document.getElementById('final-msg').innerText = msg;
+            showScreen('result-screen');
+        }
+
+        /* ================= UTILS ================= */
+        function updateMaxCount() {
+            const selected = Array.from(document.querySelectorAll('#movie-selection input:checked')).map(cb => cb.value);
+            const count = allQuestionsFlat.filter(q => selected.includes(q.movie)).length;
+            document.getElementById('q-count-input').max = count;
+            document.getElementById('max-q-label').innerText = `(Max: ${count})`;
+        }
+
+        function showScreen(id) {
+            ['lobby-screen', 'quiz-screen', 'result-screen'].forEach(s => document.getElementById(s).classList.add('hide'));
+            document.getElementById(id).classList.remove('hide');
+        }
+
+        function nextQuestion() {
+            gameState.currentIndex++;
+            if(gameState.currentIndex < gameState.activeQuestions.length) {
+                localStorage.setItem('disneyQuizV31', JSON.stringify(gameState));
+                renderQuestion();
+            } else {
+                endQuiz();
+            }
+        }
+
+        function resumeGame() {
+            const saved = localStorage.getItem('disneyQuizV31');
+            if(saved) {
+                gameState = JSON.parse(saved);
+                renderQuestion();
+                showScreen('quiz-screen');
+            }
+        }
+
+        // EVENT BINDINGS
+        document.getElementById('btn-start').addEventListener('click', startGame);
+        document.getElementById('btn-resume').addEventListener('click', resumeGame);
+        document.getElementById('btn-next').addEventListener('click', nextQuestion);
+        document.getElementById('btn-finish-early').addEventListener('click', endQuiz);
+        document.getElementById('btn-restart').addEventListener('click', () => showScreen('lobby-screen'));
+        document.getElementById('debug-btn').addEventListener('click', () => {
+            console.log("GLOBAL POOL:", Array.from(globalCharacterPool));
+            alert(`Debug: ${globalCharacterPool.size} unique characters loaded.`);
+        });
+
+        // START
+        initUI();
+
+    </script>
+</body>
+</html>
