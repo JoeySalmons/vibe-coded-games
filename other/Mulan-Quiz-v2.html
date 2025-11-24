@@ -53,9 +53,23 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            height: 50px;
+            min-height: 50px; /* Changed from height:50px to allow growing */
             margin-bottom: 20px;
             border-bottom: 2px solid rgba(183, 28, 28, 0.2);
+            flex-wrap: wrap; /* Allows content to wrap */
+        }
+
+        @media (max-width: 500px) {
+            .app-header {
+                flex-direction: column; /* Stack vertically */
+                align-items: flex-start; /* Title stays left */
+                padding-bottom: 10px;
+            }
+
+            #btn-finish-early {
+                align-self: flex-end; /* Button moves to the right */
+                margin-top: 5px;
+            }
         }
 
         h1 { 
@@ -3370,8 +3384,28 @@
         /* ================= UTILS ================= */
         function saveGame() { localStorage.setItem('mulanQuizSaved', JSON.stringify(gameState)); }
         function showScreen(id) {
+            // 1. Toggle Screens
             ['lobby-screen', 'quiz-screen', 'result-screen'].forEach(s => document.getElementById(s).classList.add('hide'));
             document.getElementById(id).classList.remove('hide');
+
+            // 2. Handle Top-Right Button Text & Visibility
+            const finishBtn = document.getElementById('btn-finish-early');
+            
+            if (id === 'lobby-screen') {
+                finishBtn.innerText = "Last Quiz Score";
+                // Only show if there is actually data from a previous run
+                if (gameState.activeQuestions && gameState.activeQuestions.length > 0) {
+                    finishBtn.classList.remove('hide');
+                }
+            } 
+            else if (id === 'quiz-screen') {
+                finishBtn.innerText = "End Quiz";
+                finishBtn.classList.remove('hide');
+            } 
+            else {
+                // Hide on Result screen to avoid redundancy
+                finishBtn.classList.add('hide');
+            }
         }
         function resumeGame() {
             const saved = localStorage.getItem('mulanQuizSaved');
