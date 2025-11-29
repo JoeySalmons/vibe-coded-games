@@ -38,6 +38,10 @@ Click any link to play or use the app instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Mayors%20Orbit%20v2.html)
 *   **Description:** A resource management game inspired by *Reigns*. Swipe cards left or right to make binary choices as mayor, balancing your approval, budget, and scandal meters to survive. Intended for mobile and desktop.
 
+### Mulan Master Quiz
+*   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/other/mulan_master_quiz_final.html)
+*   **Description:** Test your knowledge of the 1998 animated Disney film *Mulan*! The quiz features three difficulties and up to 400 possible questions to answer.
+
 ### Pumpkin Hunt Horror Game (v2)
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/Pumpkin%20Hunt%20Horror%20Game%20v3.html)
 *   **Description:** A 3D game inspired by *Slender Man*.
