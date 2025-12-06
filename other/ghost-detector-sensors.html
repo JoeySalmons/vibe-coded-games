@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>P.K.E. Sensor Suite</title>
+    <title>Spectral AR Surveyor</title>
     <style>
         :root {
             --primary: #00ff41;
@@ -28,98 +28,103 @@
             -webkit-user-select: none;
         }
 
-        /* VISUAL EFFECTS */
         #scanlines {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
                         linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
             background-size: 100% 3px, 6px 100%;
-            pointer-events: none; z-index: 50;
+            pointer-events: none;
+            z-index: 50;
         }
         
         #vignette {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,1) 100%);
-            pointer-events: none; z-index: 51;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,1) 100%);
+            pointer-events: none;
+            z-index: 51;
         }
 
         canvas {
-            display: block; position: absolute; top: 0; left: 0; z-index: 1;
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
         }
 
-        /* UI ELEMENTS */
         #ui-layer {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 20; display: flex; flex-direction: column;
-            justify-content: space-between; pointer-events: none;
-            box-sizing: border-box; padding: 10px;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            pointer-events: none;
+            box-sizing: border-box;
+            padding: 10px;
         }
 
         .top-bar {
-            display: flex; justify-content: space-between;
-            border-bottom: 1px solid var(--dim); padding-bottom: 5px;
-            background: rgba(0,0,0,0.5); font-size: 11px; letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--dim);
+            padding-bottom: 5px;
+            background: rgba(0,0,0,0.5);
+            font-size: 12px;
+            letter-spacing: 1px;
         }
 
         .rec-blob { color: var(--alert); animation: blink 1s infinite; }
 
         .center-hud {
-            flex-grow: 1; position: relative;
-            display: flex; justify-content: center; align-items: center;
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        /* Compass / Radar */
-        #radar-ring {
-            position: absolute; width: 250px; height: 250px;
-            border: 1px solid var(--dim); border-radius: 50%;
-            opacity: 0.8; transition: transform 0.1s linear;
+        .crosshair {
+            width: 40px; height: 40px;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            position: absolute;
         }
-        #radar-ring::before {
-            content: 'N'; position: absolute;
-            top: -15px; left: 50%; transform: translateX(-50%);
-            color: var(--primary); font-weight: bold;
-        }
-        #radar-ring::after {
-            content: ''; position: absolute;
-            top: 50%; left: 50%; width: 50%; height: 1px;
-            background: var(--dim); transform-origin: left;
-            animation: radar-sweep 2s infinite linear;
-        }
-
-        @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .crosshair::before { content:''; position:absolute; top:50%; left:-10px; right:-10px; height:1px; background:var(--dim); }
+        .crosshair::after { content:''; position:absolute; left:50%; top:-10px; bottom:-10px; width:1px; background:var(--dim); }
 
         .sensor-panel {
-            background: rgba(0, 10, 0, 0.9); border: 1px solid var(--primary);
-            padding: 5px; display: flex; flex-direction: column; gap: 5px;
+            background: rgba(0, 10, 0, 0.8);
+            border: 1px solid var(--primary);
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
 
         .main-status {
             font-size: 14px; text-align: center;
-            background: var(--dim); color: #fff; padding: 2px;
+            background: var(--dim); color: #fff;
+            padding: 4px; margin-bottom: 5px;
         }
 
-        .emf-readout {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 5px;
+        .bar-container {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 2px;
         }
-        .emf-track {
-            flex-grow: 1; height: 15px; background: #002200; border: 1px solid var(--dim);
+        .bar-label { font-size: 10px; width: 60px; }
+        .bar-track {
+            flex-grow: 1; height: 10px; background: #002200; border: 1px solid var(--dim);
         }
-        #emf-bar {
-            height: 100%; width: 0%; background: var(--primary);
-            transition: width 0.1s linear;
-        }
+        .bar-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.1s; }
 
-        .grid-readouts {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
-        }
+        .grid-readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
         .sensor-box {
             border: 1px solid var(--dim); padding: 4px;
             display: flex; justify-content: space-between; align-items: baseline;
         }
-        .sensor-box label { font-size: 10px; opacity: 0.7; }
+        .sensor-box label { font-size: 10px; color: var(--primary); opacity: 0.7; }
         .sensor-box span { font-size: 12px; font-weight: bold; }
 
-        /* START SCREEN */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 100;
@@ -129,17 +134,16 @@
         }
 
         button {
-            background: #000; color: var(--primary);
-            border: 1px solid var(--primary); padding: 20px 40px;
-            font-family: inherit; font-size: 16px; letter-spacing: 2px;
-            cursor: pointer; margin-top: 30px; box-shadow: 0 0 10px var(--dim);
+            background: #000; color: var(--primary); border: 1px solid var(--primary);
+            padding: 20px 40px; font-family: inherit; font-size: 16px;
+            text-transform: uppercase; letter-spacing: 2px; cursor: pointer;
+            margin-top: 30px; box-shadow: 0 0 10px var(--dim);
         }
-
-        .debug-msg { color: #555; font-size: 10px; margin-top: 10px; max-width: 80%; }
 
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
         .danger-text { color: var(--alert) !important; text-shadow: 0 0 5px red; }
-        .danger-bg { background-color: var(--alert) !important; }
+        .danger-bg { background-color: var(--alert) !important; box-shadow: 0 0 10px red; }
+        .ready-bg { background-color: var(--primary) !important; color: #000; }
     </style>
 </head>
 <body>
@@ -149,35 +153,43 @@
 
     <div id="ui-layer">
         <div class="top-bar">
-            <div><span class="rec-blob">●</span> SENSOR LINK ESTABLISHED</div>
-            <div id="gps-coords">WAITING FOR GPS...</div>
+            <div><span class="rec-blob">●</span> GYRO_ACTIVE</div>
+            <div id="gyro-coords">P: 0.0 | R: 0.0</div>
         </div>
 
         <div class="center-hud">
-            <div id="radar-ring"></div>
+            <div class="crosshair"></div>
         </div>
 
         <div class="sensor-panel">
-            <div class="main-status" id="system-status">INITIALIZING...</div>
+            <div class="main-status" id="system-status">INITIATE SCAN SWEEP</div>
             
-            <div class="emf-readout">
-                <div class="emf-label" style="font-size:10px;">KINETIC</div>
-                <div class="emf-track"><div id="emf-bar"></div></div>
-                <div id="emf-val" style="font-size:12px; width:30px; text-align:right;">0.0</div>
+            <div class="bar-container">
+                <div class="bar-label">ACQUISITION</div>
+                <div class="bar-track"><div id="scan-bar" class="bar-fill"></div></div>
+            </div>
+            
+            <div class="bar-container">
+                <div class="bar-label">EMF</div>
+                <div class="bar-track"><div id="emf-bar" class="bar-fill"></div></div>
             </div>
 
             <div class="grid-readouts">
                 <div class="sensor-box">
-                    <label>ACCEL X</label><span id="val-acc-x">0.00</span>
+                    <label>MOTION</label>
+                    <span id="val-motion">0.0 G</span>
                 </div>
                 <div class="sensor-box">
-                    <label>ACCEL Y</label><span id="val-acc-y">0.00</span>
+                    <label>TEMP</label>
+                    <span id="val-temp">72.4°F</span>
                 </div>
                 <div class="sensor-box">
-                    <label>HEADING</label><span id="val-head">0°</span>
+                    <label>PHASE</label>
+                    <span id="val-phase">0.00</span>
                 </div>
                 <div class="sensor-box">
-                    <label>FLUX</label><span id="val-flux">--</span>
+                    <label>DIST</label>
+                    <span id="val-dist">--</span>
                 </div>
             </div>
         </div>
@@ -185,262 +197,228 @@
 
     <div id="start-screen">
         <div style="border: 1px solid var(--primary); padding: 20px;">
-            <h1 style="margin:0; font-size: 24px; letter-spacing: 4px;">ECTO-LINK</h1>
-            <p style="font-size: 10px; opacity: 0.7;">REAL-TIME SENSOR ARRAY</p>
+            <h1 style="margin:0; font-size: 24px; letter-spacing: 4px;">SPECTRAL<br>AR SURVEYOR</h1>
+            <p style="font-size: 10px; opacity: 0.7;">GYROSCOPIC SENSORS REQUIRED</p>
         </div>
-        <p style="margin-top: 20px; font-size: 12px; max-width: 300px;">
-            REQ: HTTPS or Localhost<br>
-            Allows Accelerometer, Gyroscope & GPS access.
+        <p style="margin-top: 40px; font-size: 12px; width: 80%;">
+            INSTRUCTIONS:<br>
+            1. Allow Motion Permissions<br>
+            2. Physically move phone to scan room<br>
+            3. Track entities via Particles
         </p>
-        <button id="btn-start">CONNECT SENSORS</button>
-        <div class="debug-msg">iOS Users: This button triggers permission prompt.</div>
+        <button id="btn-start">ACTIVATE SENSORS</button>
     </div>
 
     <canvas id="canvas"></canvas>
 
 <script>
-    /**
-     * SENSOR VARIABLES
-     */
-    let sensorData = {
-        accX: 0, accY: 0, accZ: 0,
-        heading: 0,
-        lat: 0, lon: 0,
-        hasGPS: false,
-        motionIntensity: 0
-    };
-
-    /**
-     * VISUAL CONFIG
-     */
     const CONFIG = {
-        particleCount: 2000,
-        baseColor: 'rgba(0, 255, 65, ',
+        particleCount: 1500,
+        baseColor: 'rgba(0, 255, 65, ', 
         alertColor: 'rgba(255, 50, 50, ',
-        ghostChance: 0.002
+        scanThreshold: 150, // Amount of motion needed to spawn
+        dissipateDistance: 300 // Pixel distance from ghost anchor before it vanishes
     };
 
-    // State
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let width, height;
-    let particles = [];
-    let isRunning = false;
-    let mode = 'SCAN'; 
-    let eventTimer = 0;
-    let ghostPoints = [];
-    let audioSys;
-    let shapeEngine;
+    /* --- SENSOR & PHYSICS STATE --- */
+    let physics = {
+        tiltX: 0, // Gamma (-90 to 90)
+        tiltY: 0, // Beta (-180 to 180)
+        accel: 0, // Instantaneous motion
+        scanProgress: 0, // Accumulator for spawning
+        lastX: 0,
+        lastY: 0
+    };
 
-    // Physics for particles (Gravity)
-    let gravityX = 0;
-    let gravityY = 0;
+    let ghostState = {
+        active: false,
+        anchorX: 0, // Virtual World X
+        anchorY: 0, // Virtual World Y
+        type: 'none',
+        timer: 0
+    };
 
-    /**
-     * SENSOR HANDLING
-     */
-    function requestPermissions() {
-        // 1. Audio Context (Needs gesture)
-        audioSys = new AudioSystem();
-
-        // 2. iOS 13+ DeviceOrientation/Motion Permission
-        if (typeof DeviceOrientationEvent !== 'undefined' && 
-            typeof DeviceOrientationEvent.requestPermission === 'function') {
-            
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response == 'granted') {
-                        startSensors();
-                    } else {
-                        alert("Permission denied. Using fake data.");
-                        startFakeSensors();
-                    }
-                })
-                .catch(console.error);
-        } else {
-            // Non-iOS or older devices
-            startSensors();
-        }
-
-        // 3. Geolocation
-        if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition(
-                (pos) => {
-                    sensorData.hasGPS = true;
-                    sensorData.lat = pos.coords.latitude;
-                    sensorData.lon = pos.coords.longitude;
-                },
-                (err) => { console.log("GPS denied"); },
-                { enableHighAccuracy: true }
-            );
-        }
-
-        // Hide UI
-        document.getElementById('start-screen').style.display = 'none';
-        isRunning = true;
-        resize();
-        initParticles();
-        requestAnimationFrame(loop);
-    }
-
-    function startSensors() {
-        window.addEventListener('deviceorientation', (e) => {
-            // Compass heading (alpha) - Android uses absolute, iOS uses webkitCompassHeading
-            if(e.webkitCompassHeading) {
-                sensorData.heading = e.webkitCompassHeading;
-            } else if (e.alpha) {
-                sensorData.heading = 360 - e.alpha;
-            }
-        });
-
-        window.addEventListener('devicemotion', (e) => {
-            // Accelerometer with gravity
-            const acc = e.accelerationIncludingGravity;
-            if (acc) {
-                // Smoothing
-                sensorData.accX = sensorData.accX * 0.9 + (acc.x || 0) * 0.1;
-                sensorData.accY = sensorData.accY * 0.9 + (acc.y || 0) * 0.1;
-                sensorData.accZ = sensorData.accZ * 0.9 + (acc.z || 0) * 0.1;
-
-                // Calculate motion intensity (shaking)
-                // Use acceleration (without gravity) if available for shaking detection
-                const lin = e.acceleration;
-                if(lin && lin.x) {
-                    let totalMotion = Math.abs(lin.x) + Math.abs(lin.y) + Math.abs(lin.z);
-                    sensorData.motionIntensity = sensorData.motionIntensity * 0.9 + totalMotion * 0.1;
-                }
-            }
-        });
-    }
-
-    function startFakeSensors() {
-        // Fallback for desktop testing
-        setInterval(() => {
-            sensorData.heading += 0.5;
-            sensorData.motionIntensity = Math.random() * 2;
-        }, 100);
-    }
-
-    /**
-     * AUDIO SYSTEM
-     */
+    /* --- AUDIO --- */
     class AudioSystem {
         constructor() {
             const AC = window.AudioContext || window.webkitAudioContext;
             this.ctx = new AC();
-            this.nextClick = 0;
             
-            // Background Drone
-            this.osc = this.ctx.createOscillator();
-            this.gain = this.ctx.createGain();
-            this.osc.frequency.value = 50;
-            this.gain.gain.value = 0.05;
-            this.osc.connect(this.gain);
-            this.gain.connect(this.ctx.destination);
-            this.osc.start();
+            // Geiger Clicker
+            this.nextClickTime = 0;
+            
+            // Scanner Hum (Drone)
+            this.humOsc = this.ctx.createOscillator();
+            this.humGain = this.ctx.createGain();
+            this.humOsc.type = 'sawtooth';
+            this.humOsc.frequency.value = 40;
+            this.humGain.gain.value = 0.0;
+            this.humOsc.connect(this.humGain);
+            this.humGain.connect(this.ctx.destination);
+            this.humOsc.start();
+        }
+
+        update(intensity, motion) {
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            const now = this.ctx.currentTime;
+
+            // Hum Pitch varies with motion (Scanning sound)
+            const targetFreq = 40 + (motion * 50);
+            this.humOsc.frequency.setTargetAtTime(targetFreq, now, 0.1);
+            
+            // Hum Volume increases when Ghost is near (intensity)
+            const targetVol = 0.02 + (intensity * 0.1);
+            this.humGain.gain.setTargetAtTime(targetVol, now, 0.1);
+
+            // Geiger Clicks
+            if (now >= this.nextClickTime) {
+                // Interval drops as intensity rises
+                const interval = 1.0 - (intensity * 0.95); // 1s down to 0.05s
+                this.click(intensity);
+                this.nextClickTime = now + (interval * (0.5 + Math.random()));
+            }
         }
 
         click(intensity) {
-            if (this.ctx.state === 'suspended') this.ctx.resume();
-            const now = this.ctx.currentTime;
-            if (now < this.nextClick) return;
-
             const osc = this.ctx.createOscillator();
-            const g = this.ctx.createGain();
-            osc.frequency.value = 1200 + Math.random()*500;
+            const gain = this.ctx.createGain();
+            osc.frequency.value = 1200 - (Math.random() * 400);
             osc.type = 'square';
-            g.gain.setValueAtTime(0.1, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now+0.05);
-            osc.connect(g);
-            g.connect(this.ctx.destination);
-            osc.start(now);
-            osc.stop(now+0.05);
-
-            // Higher intensity = faster clicks
-            let rate = Math.max(0.05, 1.0 - (intensity * 0.8));
-            this.nextClick = now + (Math.random() * rate);
-        }
-        
-        updateDrone(intensity) {
-            // Pitch shifts with intensity
-            this.osc.frequency.setTargetAtTime(50 + (intensity * 200), this.ctx.currentTime, 0.1);
+            gain.gain.value = 0.05 + (intensity * 0.1);
+            
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.02);
         }
     }
 
-    /**
-     * SHAPE ENGINE
-     */
+    /* --- SHAPE GENERATION --- */
     class ShapeEngine {
         constructor(w, h) {
             this.w = w; this.h = h;
-            this.c = document.createElement('canvas');
-            this.c.width = w; this.c.height = h;
-            this.cx = this.c.getContext('2d');
+            this.tmpCanvas = document.createElement('canvas');
+            this.tmpCanvas.width = w; this.tmpCanvas.height = h;
+            this.tmpCtx = this.tmpCanvas.getContext('2d');
         }
-        getPoints(char) {
-            this.cx.clearRect(0,0,this.w,this.h);
-            this.cx.font = `bold ${Math.min(this.w,this.h)*0.5}px sans-serif`;
-            this.cx.textAlign = 'center'; this.cx.textBaseline = 'middle';
-            this.cx.fillStyle='white';
-            this.cx.fillText(char, this.w/2, this.h/2);
+
+        getPoints(type) {
+            this.tmpCtx.clearRect(0,0,this.w,this.h);
+            this.tmpCtx.fillStyle = '#fff';
+            this.tmpCtx.font = `bold ${Math.min(this.w,this.h)*0.5}px sans-serif`;
+            this.tmpCtx.textAlign = 'center';
+            this.tmpCtx.textBaseline = 'middle';
             
-            let data = this.cx.getImageData(0,0,this.w,this.h).data;
-            let res = [];
+            const icons = { 'skull':'💀', 'alien':'👽', 'ghost':'👻', 'demon':'👹' };
+            this.tmpCtx.fillText(icons[type], this.w/2, this.h/2);
+
+            const data = this.tmpCtx.getImageData(0,0,this.w,this.h).data;
+            const points = [];
             for(let y=0; y<this.h; y+=8) {
                 for(let x=0; x<this.w; x+=8) {
-                    if(data[(y*this.w+x)*4+3]>128) res.push({x,y});
+                    if(data[(y*this.w+x)*4+3]>128) points.push({x,y});
                 }
             }
-            return res;
+            return points;
         }
     }
 
-    /**
-     * PARTICLE SYSTEM
-     */
+    /* --- MAIN LOGIC --- */
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let particles = [];
+    let audio;
+    let shapeEngine;
+    let isRunning = false;
+
+    // Viewport Offset (Camera position based on tilt)
+    let camX = 0; 
+    let camY = 0;
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        shapeEngine = new ShapeEngine(width, height);
+        
+        // Re-center particles in world space roughly
+        if(particles.length > 0) {
+            particles.forEach(p => {
+                p.wx = Math.random() * width * 3 - width;
+                p.wy = Math.random() * height * 3 - height;
+            });
+        }
+    }
+
     class Particle {
         constructor() {
-            this.reset();
-        }
-        reset() {
-            this.x = Math.random() * width;
-            this.y = Math.random() * height;
+            // World Coordinates (Virtual space larger than screen)
+            this.wx = Math.random() * width * 2 - (width/2);
+            this.wy = Math.random() * height * 2 - (height/2);
+            this.z = Math.random() * 2 + 0.5; // Depth for parallax
+            
             this.vx = 0; this.vy = 0;
-            this.size = Math.random() * 2;
-            this.target = null;
+            this.baseAlpha = Math.random() * 0.4 + 0.1;
+            this.target = null; // {x, y} relative to world anchor
         }
+
         update() {
-            // Apply Accelerometer Gravity
-            // sensorData.accX acts on X axis, accY on Y axis
-            // Note: orientation might need flipping based on screen rotation, simplistic here
-            const gX = -sensorData.accX * 0.5; 
-            const gY = sensorData.accY * 0.5;
+            // 1. Calculate Screen Position based on Camera (Tilt)
+            // Parallax: closer items (higher z) move faster
+            const screenX = this.wx - (camX * this.z);
+            const screenY = this.wy - (camY * this.z);
 
-            if (mode === 'SCAN' || mode === 'FADE') {
-                this.vx += (Math.random()-0.5)*0.5 + gX * 0.1;
-                this.vy += (Math.random()-0.5)*0.5 + gY * 0.1;
-                this.vx *= 0.95; this.vy *= 0.95;
-                this.x += this.vx; this.y += this.vy;
+            // 2. Logic
+            if (ghostState.active && this.target) {
+                // Fly towards target shape
+                // Target is relative to the Ghost's World Anchor
+                const destX = ghostState.anchorX + this.target.x - (width/2); // Offset to center shape
+                const destY = ghostState.anchorY + this.target.y - (height/2);
 
-                // Wrap around screen
-                if(this.x < 0) this.x = width;
-                if(this.x > width) this.x = 0;
-                if(this.y < 0) this.y = height;
-                if(this.y > height) this.y = 0;
+                const dx = destX - this.wx;
+                const dy = destY - this.wy;
+                
+                this.wx += dx * 0.05;
+                this.wy += dy * 0.05;
+                
+                // Jitter
+                this.wx += (Math.random()-0.5)*2;
+                this.wy += (Math.random()-0.5)*2;
 
-            } else if (mode === 'FORM') {
-                if(this.target) {
-                    this.x += (this.target.x - this.x) * 0.1;
-                    this.y += (this.target.y - this.y) * 0.1;
-                    // Jitter based on motion intensity (shaking breaks the ghost)
-                    this.x += (Math.random()-0.5) * (1 + sensorData.motionIntensity * 50);
-                    this.y += (Math.random()-0.5) * (1 + sensorData.motionIntensity * 50);
-                }
+            } else {
+                // Brownian noise when idle
+                this.wx += (Math.random()-0.5) * 1;
+                this.wy += (Math.random()-0.5) * 1;
+                
+                // If screen position is way off, wrap around in world space
+                // This makes the particle field feel infinite
+                if (screenX < -50) this.wx += width + 100;
+                if (screenX > width + 50) this.wx -= width + 100;
+                if (screenY < -50) this.wy += height + 100;
+                if (screenY > height + 50) this.wy -= height + 100;
             }
         }
+
         draw() {
-            ctx.fillStyle = mode === 'FORM' ? CONFIG.alertColor+'0.6)' : CONFIG.baseColor+'0.5)';
-            ctx.fillRect(this.x, this.y, this.size, this.size);
+            const screenX = this.wx - (camX * this.z);
+            const screenY = this.wy - (camY * this.z);
+
+            // Don't draw if off screen
+            if (screenX < 0 || screenX > width || screenY < 0 || screenY > height) return;
+
+            let alpha = this.baseAlpha;
+            let color = CONFIG.baseColor;
+
+            if (ghostState.active && this.target) {
+                color = CONFIG.alertColor;
+                alpha = 0.8;
+            }
+
+            ctx.fillStyle = color + alpha + ')';
+            ctx.fillRect(screenX, screenY, 2 * this.z, 2 * this.z);
         }
     }
 
@@ -449,96 +427,162 @@
         for(let i=0; i<CONFIG.particleCount; i++) particles.push(new Particle());
     }
 
-    function triggerGhost() {
-        mode = 'FORM';
-        eventTimer = 300;
-        const shapes = ['💀','👽','👻','👹'];
-        const char = shapes[Math.floor(Math.random()*shapes.length)];
-        ghostPoints = shapeEngine.getPoints(char);
+    function spawnGhost() {
+        ghostState.active = true;
+        ghostState.type = ['skull','alien','ghost'][Math.floor(Math.random()*3)];
         
-        // Randomize assignments
-        particles.sort(()=>Math.random()-0.5);
-        particles.forEach((p,i) => {
-            p.target = (i < ghostPoints.length) ? ghostPoints[i] : null;
+        // Anchor the ghost in the world at the CURRENT camera position
+        // This puts it "in front" of the user
+        ghostState.anchorX = camX * 1.5; // *1.5 because particles have avg Z of 1.5
+        ghostState.anchorY = camY * 1.5;
+
+        // Reset progress
+        physics.scanProgress = 0;
+
+        const pts = shapeEngine.getPoints(ghostState.type);
+        particles.sort(() => Math.random() - 0.5);
+        particles.forEach((p, i) => {
+            if(i < pts.length) p.target = pts[i];
+            else p.target = null;
         });
-        
-        document.getElementById('system-status').innerText = "SPECTRAL ANOMALY DETECTED";
+
+        document.getElementById('system-status').innerText = "ENTITY MANIFESTED";
         document.getElementById('system-status').classList.add('danger-bg');
     }
 
+    function dissipateGhost() {
+        ghostState.active = false;
+        particles.forEach(p => p.target = null);
+        
+        document.getElementById('system-status').innerText = "ENTITY LOST - RESUME SCAN";
+        document.getElementById('system-status').classList.remove('danger-bg');
+    }
+
+    /* --- INPUT HANDLING --- */
+    function handleOrientation(e) {
+        // Gamma: L/R (-90 to 90) -> Map to X offset
+        // Beta: F/B (-180 to 180) -> Map to Y offset
+        
+        // Smoothing
+        const targetX = e.gamma * 15; // Sensitivity
+        const targetY = (e.beta - 45) * 15; // -45 to center roughly at holding angle
+
+        physics.tiltX += (targetX - physics.tiltX) * 0.1;
+        physics.tiltY += (targetY - physics.tiltY) * 0.1;
+
+        // Update Camera
+        camX = physics.tiltX;
+        camY = physics.tiltY;
+
+        document.getElementById('gyro-coords').innerText = 
+            `P:${e.beta.toFixed(0)}° R:${e.gamma.toFixed(0)}°`;
+    }
+
+    function handleMotion(e) {
+        if (!e.acceleration) return;
+        
+        const acc = Math.abs(e.acceleration.x) + Math.abs(e.acceleration.y) + Math.abs(e.acceleration.z);
+        physics.accel = acc;
+        
+        // Scan Logic: Only charge if ghost not active
+        if (!ghostState.active && isRunning) {
+            if (acc > 0.5) { // filter noise
+                physics.scanProgress += acc * 0.5;
+            }
+            if (physics.scanProgress > CONFIG.scanThreshold) {
+                spawnGhost();
+            }
+        }
+    }
+
+    /* --- MAIN LOOP --- */
     function loop() {
         if(!isRunning) return;
         requestAnimationFrame(loop);
 
-        // Clear
         ctx.clearRect(0,0,width,height);
 
-        // 1. Update UI from Sensors
-        // Rotate Radar
-        document.getElementById('radar-ring').style.transform = `translate(-50%, -50%) rotate(${sensorData.heading}deg)`;
-        
-        // Update Grid Numbers
-        document.getElementById('val-acc-x').innerText = sensorData.accX.toFixed(2);
-        document.getElementById('val-acc-y').innerText = sensorData.accY.toFixed(2);
-        document.getElementById('val-head').innerText = Math.round(sensorData.heading) + '°';
-        
-        // Fake Flux based on real motion + randomness
-        let flux = Math.floor(sensorData.motionIntensity * 100) + Math.floor(Math.random()*20);
-        document.getElementById('val-flux').innerText = flux + ' uT';
+        // 1. Update UI Bars
+        let emf = 0;
+        let dist = 999;
 
-        // GPS
-        if(sensorData.hasGPS) {
-            document.getElementById('gps-coords').innerText = 
-                `LAT: ${sensorData.lat.toFixed(5)} | LON: ${sensorData.lon.toFixed(5)}`;
+        if (ghostState.active) {
+            // Calculate distance between Camera (Phone look) and Ghost Anchor
+            const dx = (camX * 1.5) - ghostState.anchorX;
+            const dy = (camY * 1.5) - ghostState.anchorY;
+            dist = Math.sqrt(dx*dx + dy*dy);
+
+            // Inverse Distance Law for EMF
+            // Closer = Higher EMF
+            emf = Math.max(0, 1 - (dist / CONFIG.dissipateDistance));
+            
+            // If too far, ghost disappears
+            if (dist > CONFIG.dissipateDistance + 100) {
+                dissipateGhost();
+            }
+        } else {
+            // Scan Bar Logic
+            const scanPct = Math.min(100, (physics.scanProgress / CONFIG.scanThreshold) * 100);
+            document.getElementById('scan-bar').style.width = scanPct + '%';
+            if(scanPct > 90) document.getElementById('scan-bar').classList.add('ready-bg');
+            else document.getElementById('scan-bar').classList.remove('ready-bg');
+            
+            // Low background EMF
+            emf = Math.random() * 0.1;
         }
 
-        // EMF Bar Logic
-        // Base it on ghost mode OR high motion intensity
-        let emf = (sensorData.motionIntensity / 5); // 0 to 1 based on shaking
-        if (mode === 'FORM') emf = Math.max(emf, 0.9); // Spike during ghost
+        // EMF Bar
+        document.getElementById('emf-bar').style.width = (emf*100) + '%';
+        if(emf > 0.7) document.getElementById('emf-bar').classList.add('danger-bg');
+        else document.getElementById('emf-bar').classList.remove('danger-bg');
+
+        // Sensor Readouts
+        document.getElementById('val-motion').innerText = physics.accel.toFixed(1) + ' G';
+        document.getElementById('val-dist').innerText = ghostState.active ? Math.floor(dist) : "--";
         
-        const barW = Math.min(100, emf * 100);
-        const bar = document.getElementById('emf-bar');
-        bar.style.width = barW + '%';
-        if(emf > 0.6) bar.classList.add('danger-bg');
-        else bar.classList.remove('danger-bg');
-        document.getElementById('emf-val').innerText = emf.toFixed(1);
+        // Fake Temp drops if EMF high
+        let t = 72.4 - (emf * 30) + (Math.random());
+        document.getElementById('val-temp').innerText = t.toFixed(1) + '°F';
+        if(t < 60) document.getElementById('val-temp').classList.add('danger-text');
+        else document.getElementById('val-temp').classList.remove('danger-text');
 
         // Audio
-        if(audioSys) {
-            audioSys.click(emf);
-            audioSys.updateDrone(emf);
-        }
+        if (audio) audio.update(emf, physics.accel);
 
-        // 2. Game Logic
-        if (mode === 'SCAN') {
-            document.getElementById('system-status').innerText = "SCANNING LOCAL SECTOR...";
-            document.getElementById('system-status').classList.remove('danger-bg');
-            if(Math.random() < CONFIG.ghostChance) triggerGhost();
-        } else if (mode === 'FORM') {
-            eventTimer--;
-            if(eventTimer <= 0) {
-                mode = 'FADE';
-                setTimeout(() => mode = 'SCAN', 1500);
-            }
-        }
-
-        // 3. Draw
+        // Particles
         particles.forEach(p => {
             p.update();
             p.draw();
         });
     }
 
-    function resize() {
-        width = window.innerWidth;
-        height = window.innerHeight;
-        canvas.width = width; canvas.height = height;
-        shapeEngine = new ShapeEngine(width, height);
-    }
+    /* --- INITIALIZATION --- */
+    document.getElementById('btn-start').addEventListener('click', async () => {
+        // iOS Permission Request
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const response = await DeviceOrientationEvent.requestPermission();
+                if (response !== 'granted') {
+                    alert("Permission required for gyroscopic tracking.");
+                    return;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
 
-    window.addEventListener('resize', resize);
-    document.getElementById('btn-start').addEventListener('click', requestPermissions);
+        window.addEventListener('deviceorientation', handleOrientation);
+        window.addEventListener('devicemotion', handleMotion);
+
+        document.getElementById('start-screen').style.display = 'none';
+        isRunning = true;
+        resize();
+        initParticles();
+        audio = new AudioSystem();
+        
+        window.addEventListener('resize', resize);
+        loop();
+    });
 
 </script>
 </body>
