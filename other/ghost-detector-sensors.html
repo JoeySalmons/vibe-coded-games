@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P.K.E. Sensor Suite</title>
+    <style>
+        :root {
+            --primary: #00ff41;
+            --dim: #004d13;
+            --alert: #ff3333;
+            --bg: #000000;
+        }
+
+        @font-face {
+            font-family: 'HUD';
+            src: local('Courier New'), local('Courier'), monospace;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'HUD', monospace;
+            color: var(--primary);
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* VISUAL EFFECTS */
+        #scanlines {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none; z-index: 50;
+        }
+        
+        #vignette {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,1) 100%);
+            pointer-events: none; z-index: 51;
+        }
+
+        canvas {
+            display: block; position: absolute; top: 0; left: 0; z-index: 1;
+        }
+
+        /* UI ELEMENTS */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20; display: flex; flex-direction: column;
+            justify-content: space-between; pointer-events: none;
+            box-sizing: border-box; padding: 10px;
+        }
+
+        .top-bar {
+            display: flex; justify-content: space-between;
+            border-bottom: 1px solid var(--dim); padding-bottom: 5px;
+            background: rgba(0,0,0,0.5); font-size: 11px; letter-spacing: 1px;
+        }
+
+        .rec-blob { color: var(--alert); animation: blink 1s infinite; }
+
+        .center-hud {
+            flex-grow: 1; position: relative;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* Compass / Radar */
+        #radar-ring {
+            position: absolute; width: 250px; height: 250px;
+            border: 1px solid var(--dim); border-radius: 50%;
+            opacity: 0.8; transition: transform 0.1s linear;
+        }
+        #radar-ring::before {
+            content: 'N'; position: absolute;
+            top: -15px; left: 50%; transform: translateX(-50%);
+            color: var(--primary); font-weight: bold;
+        }
+        #radar-ring::after {
+            content: ''; position: absolute;
+            top: 50%; left: 50%; width: 50%; height: 1px;
+            background: var(--dim); transform-origin: left;
+            animation: radar-sweep 2s infinite linear;
+        }
+
+        @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .sensor-panel {
+            background: rgba(0, 10, 0, 0.9); border: 1px solid var(--primary);
+            padding: 5px; display: flex; flex-direction: column; gap: 5px;
+        }
+
+        .main-status {
+            font-size: 14px; text-align: center;
+            background: var(--dim); color: #fff; padding: 2px;
+        }
+
+        .emf-readout {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 5px;
+        }
+        .emf-track {
+            flex-grow: 1; height: 15px; background: #002200; border: 1px solid var(--dim);
+        }
+        #emf-bar {
+            height: 100%; width: 0%; background: var(--primary);
+            transition: width 0.1s linear;
+        }
+
+        .grid-readouts {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+        }
+        .sensor-box {
+            border: 1px solid var(--dim); padding: 4px;
+            display: flex; justify-content: space-between; align-items: baseline;
+        }
+        .sensor-box label { font-size: 10px; opacity: 0.7; }
+        .sensor-box span { font-size: 12px; font-weight: bold; }
+
+        /* START SCREEN */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 100;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            text-align: center; pointer-events: auto;
+        }
+
+        button {
+            background: #000; color: var(--primary);
+            border: 1px solid var(--primary); padding: 20px 40px;
+            font-family: inherit; font-size: 16px; letter-spacing: 2px;
+            cursor: pointer; margin-top: 30px; box-shadow: 0 0 10px var(--dim);
+        }
+
+        .debug-msg { color: #555; font-size: 10px; margin-top: 10px; max-width: 80%; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+        .danger-text { color: var(--alert) !important; text-shadow: 0 0 5px red; }
+        .danger-bg { background-color: var(--alert) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="scanlines"></div>
+    <div id="vignette"></div>
+
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div><span class="rec-blob">●</span> SENSOR LINK ESTABLISHED</div>
+            <div id="gps-coords">WAITING FOR GPS...</div>
+        </div>
+
+        <div class="center-hud">
+            <div id="radar-ring"></div>
+        </div>
+
+        <div class="sensor-panel">
+            <div class="main-status" id="system-status">INITIALIZING...</div>
+            
+            <div class="emf-readout">
+                <div class="emf-label" style="font-size:10px;">KINETIC</div>
+                <div class="emf-track"><div id="emf-bar"></div></div>
+                <div id="emf-val" style="font-size:12px; width:30px; text-align:right;">0.0</div>
+            </div>
+
+            <div class="grid-readouts">
+                <div class="sensor-box">
+                    <label>ACCEL X</label><span id="val-acc-x">0.00</span>
+                </div>
+                <div class="sensor-box">
+                    <label>ACCEL Y</label><span id="val-acc-y">0.00</span>
+                </div>
+                <div class="sensor-box">
+                    <label>HEADING</label><span id="val-head">0°</span>
+                </div>
+                <div class="sensor-box">
+                    <label>FLUX</label><span id="val-flux">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <div style="border: 1px solid var(--primary); padding: 20px;">
+            <h1 style="margin:0; font-size: 24px; letter-spacing: 4px;">ECTO-LINK</h1>
+            <p style="font-size: 10px; opacity: 0.7;">REAL-TIME SENSOR ARRAY</p>
+        </div>
+        <p style="margin-top: 20px; font-size: 12px; max-width: 300px;">
+            REQ: HTTPS or Localhost<br>
+            Allows Accelerometer, Gyroscope & GPS access.
+        </p>
+        <button id="btn-start">CONNECT SENSORS</button>
+        <div class="debug-msg">iOS Users: This button triggers permission prompt.</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+<script>
+    /**
+     * SENSOR VARIABLES
+     */
+    let sensorData = {
+        accX: 0, accY: 0, accZ: 0,
+        heading: 0,
+        lat: 0, lon: 0,
+        hasGPS: false,
+        motionIntensity: 0
+    };
+
+    /**
+     * VISUAL CONFIG
+     */
+    const CONFIG = {
+        particleCount: 2000,
+        baseColor: 'rgba(0, 255, 65, ',
+        alertColor: 'rgba(255, 50, 50, ',
+        ghostChance: 0.002
+    };
+
+    // State
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let particles = [];
+    let isRunning = false;
+    let mode = 'SCAN'; 
+    let eventTimer = 0;
+    let ghostPoints = [];
+    let audioSys;
+    let shapeEngine;
+
+    // Physics for particles (Gravity)
+    let gravityX = 0;
+    let gravityY = 0;
+
+    /**
+     * SENSOR HANDLING
+     */
+    function requestPermissions() {
+        // 1. Audio Context (Needs gesture)
+        audioSys = new AudioSystem();
+
+        // 2. iOS 13+ DeviceOrientation/Motion Permission
+        if (typeof DeviceOrientationEvent !== 'undefined' && 
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response == 'granted') {
+                        startSensors();
+                    } else {
+                        alert("Permission denied. Using fake data.");
+                        startFakeSensors();
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // Non-iOS or older devices
+            startSensors();
+        }
+
+        // 3. Geolocation
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(
+                (pos) => {
+                    sensorData.hasGPS = true;
+                    sensorData.lat = pos.coords.latitude;
+                    sensorData.lon = pos.coords.longitude;
+                },
+                (err) => { console.log("GPS denied"); },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        // Hide UI
+        document.getElementById('start-screen').style.display = 'none';
+        isRunning = true;
+        resize();
+        initParticles();
+        requestAnimationFrame(loop);
+    }
+
+    function startSensors() {
+        window.addEventListener('deviceorientation', (e) => {
+            // Compass heading (alpha) - Android uses absolute, iOS uses webkitCompassHeading
+            if(e.webkitCompassHeading) {
+                sensorData.heading = e.webkitCompassHeading;
+            } else if (e.alpha) {
+                sensorData.heading = 360 - e.alpha;
+            }
+        });
+
+        window.addEventListener('devicemotion', (e) => {
+            // Accelerometer with gravity
+            const acc = e.accelerationIncludingGravity;
+            if (acc) {
+                // Smoothing
+                sensorData.accX = sensorData.accX * 0.9 + (acc.x || 0) * 0.1;
+                sensorData.accY = sensorData.accY * 0.9 + (acc.y || 0) * 0.1;
+                sensorData.accZ = sensorData.accZ * 0.9 + (acc.z || 0) * 0.1;
+
+                // Calculate motion intensity (shaking)
+                // Use acceleration (without gravity) if available for shaking detection
+                const lin = e.acceleration;
+                if(lin && lin.x) {
+                    let totalMotion = Math.abs(lin.x) + Math.abs(lin.y) + Math.abs(lin.z);
+                    sensorData.motionIntensity = sensorData.motionIntensity * 0.9 + totalMotion * 0.1;
+                }
+            }
+        });
+    }
+
+    function startFakeSensors() {
+        // Fallback for desktop testing
+        setInterval(() => {
+            sensorData.heading += 0.5;
+            sensorData.motionIntensity = Math.random() * 2;
+        }, 100);
+    }
+
+    /**
+     * AUDIO SYSTEM
+     */
+    class AudioSystem {
+        constructor() {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AC();
+            this.nextClick = 0;
+            
+            // Background Drone
+            this.osc = this.ctx.createOscillator();
+            this.gain = this.ctx.createGain();
+            this.osc.frequency.value = 50;
+            this.gain.gain.value = 0.05;
+            this.osc.connect(this.gain);
+            this.gain.connect(this.ctx.destination);
+            this.osc.start();
+        }
+
+        click(intensity) {
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            const now = this.ctx.currentTime;
+            if (now < this.nextClick) return;
+
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.frequency.value = 1200 + Math.random()*500;
+            osc.type = 'square';
+            g.gain.setValueAtTime(0.1, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now+0.05);
+            osc.connect(g);
+            g.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now+0.05);
+
+            // Higher intensity = faster clicks
+            let rate = Math.max(0.05, 1.0 - (intensity * 0.8));
+            this.nextClick = now + (Math.random() * rate);
+        }
+        
+        updateDrone(intensity) {
+            // Pitch shifts with intensity
+            this.osc.frequency.setTargetAtTime(50 + (intensity * 200), this.ctx.currentTime, 0.1);
+        }
+    }
+
+    /**
+     * SHAPE ENGINE
+     */
+    class ShapeEngine {
+        constructor(w, h) {
+            this.w = w; this.h = h;
+            this.c = document.createElement('canvas');
+            this.c.width = w; this.c.height = h;
+            this.cx = this.c.getContext('2d');
+        }
+        getPoints(char) {
+            this.cx.clearRect(0,0,this.w,this.h);
+            this.cx.font = `bold ${Math.min(this.w,this.h)*0.5}px sans-serif`;
+            this.cx.textAlign = 'center'; this.cx.textBaseline = 'middle';
+            this.cx.fillStyle='white';
+            this.cx.fillText(char, this.w/2, this.h/2);
+            
+            let data = this.cx.getImageData(0,0,this.w,this.h).data;
+            let res = [];
+            for(let y=0; y<this.h; y+=8) {
+                for(let x=0; x<this.w; x+=8) {
+                    if(data[(y*this.w+x)*4+3]>128) res.push({x,y});
+                }
+            }
+            return res;
+        }
+    }
+
+    /**
+     * PARTICLE SYSTEM
+     */
+    class Particle {
+        constructor() {
+            this.reset();
+        }
+        reset() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.vx = 0; this.vy = 0;
+            this.size = Math.random() * 2;
+            this.target = null;
+        }
+        update() {
+            // Apply Accelerometer Gravity
+            // sensorData.accX acts on X axis, accY on Y axis
+            // Note: orientation might need flipping based on screen rotation, simplistic here
+            const gX = -sensorData.accX * 0.5; 
+            const gY = sensorData.accY * 0.5;
+
+            if (mode === 'SCAN' || mode === 'FADE') {
+                this.vx += (Math.random()-0.5)*0.5 + gX * 0.1;
+                this.vy += (Math.random()-0.5)*0.5 + gY * 0.1;
+                this.vx *= 0.95; this.vy *= 0.95;
+                this.x += this.vx; this.y += this.vy;
+
+                // Wrap around screen
+                if(this.x < 0) this.x = width;
+                if(this.x > width) this.x = 0;
+                if(this.y < 0) this.y = height;
+                if(this.y > height) this.y = 0;
+
+            } else if (mode === 'FORM') {
+                if(this.target) {
+                    this.x += (this.target.x - this.x) * 0.1;
+                    this.y += (this.target.y - this.y) * 0.1;
+                    // Jitter based on motion intensity (shaking breaks the ghost)
+                    this.x += (Math.random()-0.5) * (1 + sensorData.motionIntensity * 50);
+                    this.y += (Math.random()-0.5) * (1 + sensorData.motionIntensity * 50);
+                }
+            }
+        }
+        draw() {
+            ctx.fillStyle = mode === 'FORM' ? CONFIG.alertColor+'0.6)' : CONFIG.baseColor+'0.5)';
+            ctx.fillRect(this.x, this.y, this.size, this.size);
+        }
+    }
+
+    function initParticles() {
+        particles = [];
+        for(let i=0; i<CONFIG.particleCount; i++) particles.push(new Particle());
+    }
+
+    function triggerGhost() {
+        mode = 'FORM';
+        eventTimer = 300;
+        const shapes = ['💀','👽','👻','👹'];
+        const char = shapes[Math.floor(Math.random()*shapes.length)];
+        ghostPoints = shapeEngine.getPoints(char);
+        
+        // Randomize assignments
+        particles.sort(()=>Math.random()-0.5);
+        particles.forEach((p,i) => {
+            p.target = (i < ghostPoints.length) ? ghostPoints[i] : null;
+        });
+        
+        document.getElementById('system-status').innerText = "SPECTRAL ANOMALY DETECTED";
+        document.getElementById('system-status').classList.add('danger-bg');
+    }
+
+    function loop() {
+        if(!isRunning) return;
+        requestAnimationFrame(loop);
+
+        // Clear
+        ctx.clearRect(0,0,width,height);
+
+        // 1. Update UI from Sensors
+        // Rotate Radar
+        document.getElementById('radar-ring').style.transform = `translate(-50%, -50%) rotate(${sensorData.heading}deg)`;
+        
+        // Update Grid Numbers
+        document.getElementById('val-acc-x').innerText = sensorData.accX.toFixed(2);
+        document.getElementById('val-acc-y').innerText = sensorData.accY.toFixed(2);
+        document.getElementById('val-head').innerText = Math.round(sensorData.heading) + '°';
+        
+        // Fake Flux based on real motion + randomness
+        let flux = Math.floor(sensorData.motionIntensity * 100) + Math.floor(Math.random()*20);
+        document.getElementById('val-flux').innerText = flux + ' uT';
+
+        // GPS
+        if(sensorData.hasGPS) {
+            document.getElementById('gps-coords').innerText = 
+                `LAT: ${sensorData.lat.toFixed(5)} | LON: ${sensorData.lon.toFixed(5)}`;
+        }
+
+        // EMF Bar Logic
+        // Base it on ghost mode OR high motion intensity
+        let emf = (sensorData.motionIntensity / 5); // 0 to 1 based on shaking
+        if (mode === 'FORM') emf = Math.max(emf, 0.9); // Spike during ghost
+        
+        const barW = Math.min(100, emf * 100);
+        const bar = document.getElementById('emf-bar');
+        bar.style.width = barW + '%';
+        if(emf > 0.6) bar.classList.add('danger-bg');
+        else bar.classList.remove('danger-bg');
+        document.getElementById('emf-val').innerText = emf.toFixed(1);
+
+        // Audio
+        if(audioSys) {
+            audioSys.click(emf);
+            audioSys.updateDrone(emf);
+        }
+
+        // 2. Game Logic
+        if (mode === 'SCAN') {
+            document.getElementById('system-status').innerText = "SCANNING LOCAL SECTOR...";
+            document.getElementById('system-status').classList.remove('danger-bg');
+            if(Math.random() < CONFIG.ghostChance) triggerGhost();
+        } else if (mode === 'FORM') {
+            eventTimer--;
+            if(eventTimer <= 0) {
+                mode = 'FADE';
+                setTimeout(() => mode = 'SCAN', 1500);
+            }
+        }
+
+        // 3. Draw
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+    }
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width; canvas.height = height;
+        shapeEngine = new ShapeEngine(width, height);
+    }
+
+    window.addEventListener('resize', resize);
+    document.getElementById('btn-start').addEventListener('click', requestPermissions);
+
+</script>
+</body>
+</html>
