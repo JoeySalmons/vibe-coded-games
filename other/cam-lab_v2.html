@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 Web Camera Vision Lab</title>
+    <style>
+        :root {
+            --primary: #06b6d4;
+            --accent: #f59e0b;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0; padding: 15px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .container { max-width: 600px; width: 100%; }
+        
+        /* The Vision Display */
+        #display-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--primary);
+            margin-bottom: 10px;
+        }
+        video, canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 10px; left: 10px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Controls */
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 10px 5px;
+            border: none;
+            border-radius: 6px;
+            background: var(--card);
+            color: white;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border: 1px solid #334155;
+        }
+        button.active {
+            background: var(--primary);
+            font-weight: bold;
+        }
+
+        .edu-card {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        .edu-card h2 { margin-top: 0; color: var(--primary); font-size: 1.1rem; }
+        .stat { color: var(--accent); font-weight: bold; }
+        
+        #barcode-result {
+            position: absolute;
+            bottom: 10px; left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header style="text-align: center; margin-bottom: 15px;">
+        <h1 style="margin:0; font-size: 1.4rem;">Vision Processing Lab 🤖</h1>
+        <small>Android WebRTC + Canvas API Demo</small>
+    </header>
+
+    <div id="display-container">
+        <!-- Hidden video source -->
+        <video id="webcam" autoplay playsinline muted style="display:none;"></video>
+        <!-- Visible processing canvas -->
+        <canvas id="outputCanvas"></canvas>
+        
+        <div id="ui-overlay">
+            <div id="fps-display">FPS: --</div>
+            <div id="light-level">Light: --</div>
+        </div>
+        <div id="barcode-result">Detected: <span id="barcode-val"></span></div>
+    </div>
+
+    <div class="mode-grid">
+        <button onclick="setMode('raw')" id="btn-raw" class="active">1. Raw Feed</button>
+        <button onclick="setMode('grayscale')">2. Real-time Gray</button>
+        <button onclick="setMode('threshold')">3. Doc Scanner</button>
+        <button onclick="setMode('color-probe')">4. Color Probe</button>
+        <button onclick="setMode('blueprint')">5. Edge/Blueprint</button>
+        <button onclick="toggleQR()" id="btn-qr">6. AI QR Scan</button>
+    </div>
+
+    <div class="edu-card">
+        <h2 id="edu-title">Mode: Raw Feed</h2>
+        <p id="edu-desc">This is the direct stream from your camera. In 2026, browsers use hardware acceleration to render this with almost zero latency.</p>
+        <div id="tech-specs">
+            <b>API used:</b> <span class="stat">MediaDevices.getUserMedia()</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const fpsDisplay = document.getElementById('fps-display');
+    const lightDisplay = document.getElementById('light-level');
+    
+    let currentMode = 'raw';
+    let qrEnabled = false;
+    let lastFrameTime = 0;
+    let barcodeDetector = null;
+
+    // 1. Initialize Camera
+    async function initCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: 640, height: 480 },
+                audio: false
+            });
+            video.srcObject = stream;
+            video.play();
+            requestAnimationFrame(processFrame);
+            
+            // Initialize Hardware QR Detector (if supported)
+            if ('BarcodeDetector' in window) {
+                barcodeDetector = new BarcodeDetector({ formats: ['qr_code', 'code_128'] });
+            }
+        } catch (err) {
+            alert("Camera error: " + err.message);
+        }
+    }
+
+    // 2. Educational Content Mapping
+    const eduContent = {
+        'raw': {
+            title: "Mode: Raw Feed",
+            desc: "Direct stream. The browser creates a 'Stream' object and pipes it to a video element.",
+            tech: "navigator.mediaDevices"
+        },
+        'grayscale': {
+            title: "Mode: Luma Processing",
+            desc: "Every pixel's Red, Green, and Blue values are averaged ( (R+G+B)/3 ) in real-time to remove color data.",
+            tech: "Canvas ImageData manipulation"
+        },
+        'threshold': {
+            title: "Mode: Document Scanner",
+            desc: "If a pixel is brighter than 128, it becomes white; otherwise, black. This is how OCR apps prepare text for reading.",
+            tech: "Binary Thresholding"
+        },
+        'color-probe': {
+            title: "Mode: Center Color Probe",
+            desc: "We look at exactly 1 pixel in the center. Useful for digital levels or color-blind assistance tools.",
+            tech: "ctx.getImageData(center)"
+        },
+        'blueprint': {
+            title: "Mode: Blueprint (Inversion)",
+            desc: "We subtract the color value from 255. High contrast helps highlight physical edges and shapes.",
+            tech: "Bitwise Math"
+        }
+    };
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('edu-title').innerText = eduContent[mode].title;
+        document.getElementById('edu-desc').innerText = eduContent[mode].desc;
+        document.querySelector('.stat').innerText = eduContent[mode].tech;
+    }
+
+    function toggleQR() {
+        if (!barcodeDetector) return alert("Native Barcode API not supported in this browser version.");
+        qrEnabled = !qrEnabled;
+        document.getElementById('btn-qr').classList.toggle('active');
+        document.getElementById('barcode-result').style.display = qrEnabled ? 'block' : 'none';
+    }
+
+    // 3. The Processing Loop (The Heart of the App)
+    function processFrame(now) {
+        // Calculate FPS
+        const deltaTime = now - lastFrameTime;
+        lastFrameTime = now;
+        fpsDisplay.innerText = `FPS: ${Math.round(1000 / deltaTime)}`;
+
+        // Draw video to canvas first
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Analyze Light Level (Sub-sampling for performance)
+        if (now % 10 < 1) { // Only check every ~10th frame
+            const frame = ctx.getImageData(0, 0, 10, 10);
+            let total = 0;
+            for(let i=0; i<frame.data.length; i+=4) total += frame.data[i];
+            lightDisplay.innerText = `Light: ${Math.round(total/25)} lux (est)`;
+        }
+
+        // Apply Pixel Processing
+        if (currentMode !== 'raw') {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i+1], b = data[i+2];
+
+                if (currentMode === 'grayscale') {
+                    const avg = (r + g + b) / 3;
+                    data[i] = data[i+1] = data[i+2] = avg;
+                } 
+                else if (currentMode === 'threshold') {
+                    const v = (0.2126*r + 0.7152*g + 0.0722*b >= 128) ? 255 : 0;
+                    data[i] = data[i+1] = data[i+2] = v;
+                }
+                else if (currentMode === 'blueprint') {
+                    data[i] = 255 - r; // Invert Red
+                    data[i+1] = 255 - g; // Invert Green
+                    data[i+2] = 255;     // Keep Blue high for "Blueprint" feel
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // Overlay UI for Color Probe
+        if (currentMode === 'color-probe') {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const pixel = ctx.getImageData(centerX, centerY, 1, 1).data;
+            const rgb = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
+            
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(centerX-25, centerY-25, 50, 50);
+            ctx.fillStyle = rgb;
+            ctx.fillRect(centerX-20, centerY-20, 40, 40);
+        }
+
+        // QR Detection (Native AI Processing)
+        if (qrEnabled && barcodeDetector) {
+            barcodeDetector.detect(canvas).then(barcodes => {
+                if (barcodes.length > 0) {
+                    document.getElementById('barcode-val').innerText = barcodes[0].rawValue;
+                    // Draw box around QR
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 5;
+                    const b = barcodes[0].boundingBox;
+                    ctx.strokeRect(b.x, b.y, b.width, b.height);
+                }
+            });
+        }
+
+        requestAnimationFrame(processFrame);
+    }
+
+    initCamera();
+</script>
+
+</body>
+</html>
