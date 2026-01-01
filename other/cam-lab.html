@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2025 Android Camera Lab</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --text: #1e293b;
+        }
+        body {
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 8px; color: var(--primary); }
+        p { font-size: 0.9rem; color: #64748b; margin-bottom: 20px; }
+        
+        #video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:disabled { background: #cbd5e1; }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+        }
+
+        /* Educational Log Section */
+        .edu-section {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+        }
+        .log-entry { margin-bottom: 8px; border-left: 3px solid var(--primary); padding-left: 8px; }
+        .log-entry span { color: var(--primary); font-weight: bold; }
+        
+        canvas { display: none; }
+        #photo-preview {
+            width: 100%;
+            margin-top: 15px;
+            border-radius: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Camera Lab 🔬</h1>
+    <p>Educational Demo: Learning WebRTC & MediaDevices</p>
+
+    <div id="video-container">
+        <video id="webcam" autoplay playsinline></video>
+    </div>
+
+    <label for="cameraSelect">Available Hardware:</label>
+    <select id="cameraSelect">
+        <option value="">Detecting cameras...</option>
+    </select>
+
+    <div class="controls">
+        <button id="startBtn">Start Camera</button>
+        <button id="snapBtn" disabled>Take Photo</button>
+    </div>
+
+    <div class="edu-section" id="eduLog">
+        <div class="log-entry"><span>System:</span> Ready. Click "Start Camera" to trigger the browser's permission handshake.</div>
+    </div>
+
+    <img id="photo-preview" alt="Captured photo">
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+    const video = document.getElementById('webcam');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const startBtn = document.getElementById('startBtn');
+    const snapBtn = document.getElementById('snapBtn');
+    const eduLog = document.getElementById('eduLog');
+    const canvas = document.getElementById('canvas');
+    const photoPreview = document.getElementById('photo-preview');
+
+    function log(step, message) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = `<span>${step}:</span> ${message}`;
+        eduLog.prepend(div);
+    }
+
+    // 1. Detect and List Cameras
+    async function getConnectedDevices() {
+        // Updated for 2025: Checks if the browser supports mediaDevices
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            log("Error", "Your browser doesn't support MediaDevices API.");
+            return;
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        cameraSelect.innerHTML = '';
+        videoDevices.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Camera ${index + 1} (Request permission to see name)`;
+            cameraSelect.appendChild(option);
+        });
+        
+        log("API", `Found ${videoDevices.length} camera sources.`);
+    }
+
+    // 2. Start the Stream
+    async function startStream(deviceId) {
+        log("Permission", "Requesting access via getUserMedia()...");
+        
+        // 2025 Best Practice: Use 'ideal' constraints for high resolution 
+        // while allowing fallback for older Android hardware.
+        const constraints = {
+            video: {
+                deviceId: deviceId ? { exact: deviceId } : undefined,
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                facingMode: "environment" // Prefers back camera
+            },
+            audio: false
+        };
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            snapBtn.disabled = false;
+            log("Success", "Stream active. Resolution: " + 
+                stream.getVideoTracks()[0].getSettings().width + "px");
+            
+            // Refresh device list now that we have permission (to see labels)
+            getConnectedDevices();
+        } catch (error) {
+            log("Denied", "User rejected permission or hardware is busy.");
+            console.error(error);
+        }
+    }
+
+    // 3. Capture an Image
+    snapBtn.addEventListener('click', () => {
+        log("Canvas", "Drawing current video frame to <canvas> element.");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        const data = canvas.toDataURL('image/jpeg');
+        photoPreview.src = data;
+        photoPreview.style.display = 'block';
+        log("Process", "Frame converted to Base64 JPEG.");
+    });
+
+    startBtn.addEventListener('click', () => {
+        startStream(cameraSelect.value);
+    });
+
+    // Initial hardware check
+    getConnectedDevices();
+</script>
+
+</body>
+</html>
