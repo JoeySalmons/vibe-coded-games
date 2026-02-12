@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llama.cpp Logit Viewer - Educational Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .status {
+            padding: 15px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #6c757d;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #28a745;
+        }
+
+        .status-indicator.error {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .token-counter {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .token-counter h3 {
+            color: #495057;
+            font-size: 1.2em;
+        }
+
+        .token-count-display {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .token-count-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .input-section label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-label {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 26px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .input-section textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+            transition: border-color 0.3s;
+        }
+
+        .input-section textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .tokenized-input {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px solid #dee2e6;
+            min-height: 100px;
+            line-height: 1.8;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .tokenized-input.visible {
+            display: block;
+        }
+
+        .input-token {
+            display: inline-block;
+            padding: 3px 6px;
+            margin: 2px;
+            border-radius: 4px;
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-size: 0.9em;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .control-group input {
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: auto;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .output-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .output-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .output-section h3 {
+            color: #495057;
+        }
+
+        .generated-text {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px solid #dee2e6;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .token-display {
+            display: inline;
+            padding: 2px 4px;
+            margin: 0 1px;
+            border-radius: 3px;
+            cursor: help;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .token-display.colored {
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .token-display.new {
+            animation: tokenAppear 0.5s;
+        }
+
+        .token-display:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        /* Tooltip for hover */
+        .token-tooltip {
+            position: fixed;
+            background: #2c3e50;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            min-width: 250px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            line-height: 1.6;
+        }
+
+        .token-tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .tooltip-item:last-child {
+            border-bottom: none;
+        }
+
+        .tooltip-token {
+            font-family: 'Courier New', monospace;
+            color: #4fc3f7;
+            margin-right: 10px;
+        }
+
+        .tooltip-prob {
+            color: #66bb6a;
+            font-weight: 600;
+        }
+
+        .tooltip-chosen {
+            background: #66bb6a;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+
+        @keyframes tokenAppear {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .logits-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .logits-section h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .logits-display {
+            background: white;
+            border-radius: 6px;
+            padding: 15px;
+            border: 2px solid #dee2e6;
+        }
+
+        .logit-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .logit-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .logit-rank {
+            font-weight: 700;
+            color: #667eea;
+            min-width: 40px;
+        }
+
+        .logit-token {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            min-width: 100px;
+            color: #212529;
+            padding: 4px 8px;
+            background: white;
+            border-radius: 4px;
+            margin: 0 10px;
+        }
+
+        .logit-probability {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logit-bar {
+            flex: 1;
+            height: 24px;
+            background: #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .logit-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: white;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .logit-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .logit-id {
+            font-size: 0.85em;
+            color: #6c757d;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #212529;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .hint {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 LLM Token Explorer</h1>
+            <p>Interactive Educational Tool for Understanding Language Models</p>
+        </div>
+
+        <div class="status">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Connecting to server...</span>
+        </div>
+
+        <div class="token-counter">
+            <div>
+                <h3>Context Usage</h3>
+                <div class="token-count-label">Tokens in prompt / Total context</div>
+            </div>
+            <div class="token-count-display">
+                <span id="promptTokenCount">0</span> / <span id="contextSize">?</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <div class="input-section-header">
+                    <label for="promptInput">Your Prompt</label>
+                    <div class="toggle-container">
+                        <span class="toggle-label">Show Tokens</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="showTokensToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <textarea id="promptInput" placeholder="Enter your prompt here... Try typing and see it tokenized!">Once upon a time</textarea>
+                <div class="tokenized-input" id="tokenizedInput"></div>
+                <div class="hint">💡 Toggle "Show Tokens" to see how your text is broken into tokens!</div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="maxTokens">Max Tokens</label>
+                    <input type="number" id="maxTokens" value="10" min="1" max="1000">
+                </div>
+                <div class="control-group">
+                    <label for="temperature">Temperature</label>
+                    <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1">
+                </div>
+                <div class="control-group">
+                    <label for="topLogits">Top Logits</label>
+                    <input type="number" id="topLogits" value="10" min="1" max="20">
+                </div>
+                <button class="btn btn-primary" id="generateBtn" onclick="startGeneration()">
+                    🚀 Generate
+                </button>
+                <button class="btn btn-secondary" id="stopBtn" onclick="stopGeneration()" disabled>
+                    ⏸️ Stop
+                </button>
+                <button class="btn btn-secondary" onclick="clearOutput()">
+                    🗑️ Clear
+                </button>
+            </div>
+
+            <div class="output-section">
+                <div class="output-section-header">
+                    <h3>📝 Generated Text</h3>
+                    <div class="toggle-container">
+                        <span class="toggle-label">Color by Probability</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="colorByProbToggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="generated-text" id="generatedText"></div>
+                <div class="hint">💡 Hover over any generated token to see its probability distribution! Toggle coloring to visualize confidence.</div>
+            </div>
+
+            <div class="logits-section">
+                <h3>📊 Next Token Probabilities</h3>
+                <div class="logits-display" id="logitsDisplay">
+                    <div class="loading">Generate text to see token probabilities...</div>
+                </div>
+                <div class="hint">💡 Click any token below to add it to your prompt and see what comes next!</div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-label">Tokens Generated</div>
+                    <div class="stat-value" id="tokenCount">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Tokens/Second</div>
+                    <div class="stat-value" id="tokensPerSec">0.0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Time</div>
+                    <div class="stat-value" id="totalTime">0.0s</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip element for hover -->
+    <div class="token-tooltip" id="tokenTooltip"></div>
+
+    <script>
+        // Configuration
+        const SERVER_URL = 'http://127.0.0.1:8080';
+        
+        // State
+        let isGenerating = false;
+        let tokenCount = 0;
+        let startTime = 0;
+        let currentController = null;
+        let contextSize = 2048; // Default, will be updated from server
+        let generatedTokens = []; // Store all generated tokens with their data
+        let currentTokenIndex = 0;
+
+        // Initialize
+        window.addEventListener('load', () => {
+            checkServerStatus();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Input tokenization
+            const promptInput = document.getElementById('promptInput');
+            const showTokensToggle = document.getElementById('showTokensToggle');
+            
+            promptInput.addEventListener('input', () => {
+                if (showTokensToggle.checked) {
+                    tokenizeInput();
+                }
+                updatePromptTokenCount();
+            });
+
+            showTokensToggle.addEventListener('change', (e) => {
+                const tokenizedInput = document.getElementById('tokenizedInput');
+                if (e.target.checked) {
+                    tokenizedInput.classList.add('visible');
+                    tokenizeInput();
+                } else {
+                    tokenizedInput.classList.remove('visible');
+                }
+            });
+
+            // Color by probability toggle
+            const colorToggle = document.getElementById('colorByProbToggle');
+            colorToggle.addEventListener('change', () => {
+                updateTokenColors();
+            });
+
+            // Token hover
+            document.addEventListener('mouseover', handleTokenHover);
+            document.addEventListener('mouseout', handleTokenHoverOut);
+        }
+
+        // Check server status
+        async function checkServerStatus() {
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/health`);
+                if (response.ok) {
+                    statusIndicator.classList.add('connected');
+                    statusText.textContent = 'Connected to llama.cpp server';
+                    
+                    // Try to get context size from props endpoint
+                    try {
+                        const propsResponse = await fetch(`${SERVER_URL}/props`);
+                        if (propsResponse.ok) {
+                            const data = await propsResponse.json();
+                            contextSize = data.default_generation_settings?.n_ctx || 2048;
+                            document.getElementById('contextSize').textContent = contextSize;
+                        }
+                    } catch (e) {
+                        console.log('Could not fetch props, using default context size');
+                        document.getElementById('contextSize').textContent = contextSize;
+                    }
+                } else {
+                    throw new Error('Server not responding');
+                }
+            } catch (error) {
+                statusIndicator.classList.add('error');
+                statusText.textContent = 'Server connection failed. Is llama.cpp running?';
+                console.error('Connection error:', error);
+            }
+        }
+
+        // Tokenize input (simple approximation)
+        async function tokenizeInput() {
+            const promptInput = document.getElementById('promptInput');
+            const tokenizedInput = document.getElementById('tokenizedInput');
+            const text = promptInput.value;
+
+            try {
+                // Try to use the server's detokenize endpoint to get actual token strings
+                const tokenizeResponse = await fetch(`${SERVER_URL}/tokenize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: text })
+                });
+
+                if (tokenizeResponse.ok) {
+                    const tokenizeData = await tokenizeResponse.json();
+                    const tokenIds = tokenizeData.tokens || [];
+                    
+                    // Try to detokenize each token to get its string representation
+                    const tokenStrings = [];
+                    for (const tokenId of tokenIds) {
+                        try {
+                            const detokenizeResponse = await fetch(`${SERVER_URL}/detokenize`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ tokens: [tokenId] })
+                            });
+                            
+                            if (detokenizeResponse.ok) {
+                                const detokenizeData = await detokenizeResponse.json();
+                                const tokenText = detokenizeData.content || '';
+                                tokenStrings.push({
+                                    id: tokenId,
+                                    text: tokenText,
+                                    display: tokenText ? `${tokenText} [${tokenId}]` : `[${tokenId}]`
+                                });
+                            } else {
+                                tokenStrings.push({ 
+                                    id: tokenId, 
+                                    text: '', 
+                                    display: `[${tokenId}]` 
+                                });
+                            }
+                        } catch (e) {
+                            tokenStrings.push({ 
+                                id: tokenId, 
+                                text: '', 
+                                display: `[${tokenId}]` 
+                            });
+                        }
+                    }
+                    
+                    // Display tokens with both text and ID
+                    tokenizedInput.innerHTML = tokenStrings.map(token => 
+                        `<span class="input-token" title="Token ID: ${token.id}">${escapeHtml(token.display)}</span>`
+                    ).join('');
+                } else {
+                    // Fallback: simple word-based tokenization
+                    fallbackTokenize(text);
+                }
+            } catch (error) {
+                // Fallback: simple word-based tokenization
+                fallbackTokenize(text);
+            }
+        }
+
+        function fallbackTokenize(text) {
+            const tokenizedInput = document.getElementById('tokenizedInput');
+            // Better approximation: split by word boundaries, spaces, and punctuation
+            // This regex captures words, spaces, and individual punctuation marks
+            const tokens = text.match(/[\w']+|[^\w\s]|\s+/g) || [];
+            tokenizedInput.innerHTML = tokens.map((token, idx) => 
+                `<span class="input-token" title="Approximate token #${idx}">${escapeHtml(token)} [~${idx}]</span>`
+            ).join('');
+        }
+
+        // Update prompt token count
+        async function updatePromptTokenCount() {
+            const promptInput = document.getElementById('promptInput');
+            const text = promptInput.value;
+
+            try {
+                const response = await fetch(`${SERVER_URL}/tokenize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: text })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const tokenCount = data.tokens ? data.tokens.length : 0;
+                    document.getElementById('promptTokenCount').textContent = tokenCount;
+                }
+            } catch (error) {
+                // Fallback: rough estimate (1 token ≈ 4 characters)
+                const estimate = Math.ceil(text.length / 4);
+                document.getElementById('promptTokenCount').textContent = `~${estimate}`;
+            }
+        }
+
+        // Start generation
+        async function startGeneration() {
+            const prompt = document.getElementById('promptInput').value;
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const topLogits = parseInt(document.getElementById('topLogits').value);
+            
+            if (!prompt.trim()) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            // Reset state
+            isGenerating = true;
+            tokenCount = 0;
+            currentTokenIndex = 0;
+            generatedTokens = [];
+            startTime = Date.now();
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('generatedText').innerHTML = '';
+            document.getElementById('logitsDisplay').innerHTML = '<div class="loading">Generating...</div>';
+            
+            // Create abort controller
+            currentController = new AbortController();
+
+            try {
+                const response = await fetch(`${SERVER_URL}/completion`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        n_predict: maxTokens,
+                        temperature: temperature,
+                        n_probs: topLogits,
+                        stream: true,
+                    }),
+                    signal: currentController.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (isGenerating) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.substring(6).trim();
+                            
+                            if (jsonStr === '[DONE]') {
+                                stopGeneration();
+                                break;
+                            }
+
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                processToken(data);
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e, jsonStr);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log('Generation stopped by user');
+                } else {
+                    console.error('Generation error:', error);
+                    document.getElementById('logitsDisplay').innerHTML = `
+                        <div class="error">Error: ${error.message}</div>
+                    `;
+                }
+            } finally {
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                isGenerating = false;
+            }
+        }
+
+        // Process each token from the stream
+        function processToken(data) {
+            const generatedTextDiv = document.getElementById('generatedText');
+            const logitsDisplay = document.getElementById('logitsDisplay');
+
+            // Store token data
+            let tokenData = {
+                content: data.content || '',
+                probabilities: null,
+                chosenProb: null, // Will be set properly below
+                index: currentTokenIndex++
+            };
+
+            // Extract probability data
+            if (data.completion_probabilities || data.probs) {
+                const probs = data.completion_probabilities || data.probs;
+                tokenData.probabilities = extractProbabilities(probs);
+                
+                // Find chosen token probability
+                if (tokenData.probabilities && tokenData.probabilities.length > 0) {
+                    const chosenToken = tokenData.probabilities.find(p => 
+                        p.token === tokenData.content
+                    );
+                    if (chosenToken) {
+                        tokenData.chosenProb = chosenToken.probability;
+                    }
+                }
+            }
+            
+            // Try to extract chosen token probability from other possible fields
+            if (tokenData.chosenProb === null) {
+                // Check if there's a direct probability field for the chosen token
+                if (data.prob !== undefined) {
+                    tokenData.chosenProb = data.prob;
+                } else if (data.logprob !== undefined) {
+                    tokenData.chosenProb = Math.exp(data.logprob);
+                } else if (data.probability !== undefined) {
+                    tokenData.chosenProb = data.probability;
+                } else {
+                    // If we still can't find it, use a neutral value
+                    tokenData.chosenProb = 0.5; // Default to medium probability for visualization
+                }
+            }
+
+            // Store token data
+            generatedTokens.push(tokenData);
+
+            // Update generated text
+            if (data.content) {
+                const tokenSpan = document.createElement('span');
+                tokenSpan.className = 'token-display new';
+                tokenSpan.textContent = data.content;
+                tokenSpan.dataset.tokenIndex = tokenData.index;
+                generatedTextDiv.appendChild(tokenSpan);
+                
+                setTimeout(() => {
+                    tokenSpan.classList.remove('new');
+                }, 500);
+
+                tokenCount++;
+                updateStats();
+                updateTokenColors();
+            }
+
+            // Display logits/probabilities
+            if (tokenData.probabilities) {
+                displayLogits(tokenData.probabilities);
+            }
+        }
+
+        // Extract probabilities from various formats
+        function extractProbabilities(probs) {
+            let topLogprobs = [];
+            
+            if (Array.isArray(probs) && probs.length > 0) {
+                const latestProb = probs[probs.length - 1];
+                if (latestProb.top_logprobs) {
+                    topLogprobs = latestProb.top_logprobs;
+                } else if (latestProb.probs) {
+                    topLogprobs = latestProb.probs;
+                }
+            } else if (probs.top_logprobs) {
+                topLogprobs = probs.top_logprobs;
+            } else if (Array.isArray(probs)) {
+                topLogprobs = probs;
+            }
+
+            if (!topLogprobs || topLogprobs.length === 0) {
+                return null;
+            }
+
+            // Convert to standard format
+            const items = topLogprobs.map(item => {
+                let prob = item.prob;
+                
+                if (prob === undefined && item.logprob !== undefined) {
+                    prob = Math.exp(item.logprob);
+                }
+                
+                return {
+                    token: item.token || item.tok_str || '?',
+                    probability: prob || 0,
+                    id: item.id || '?'
+                };
+            });
+
+            items.sort((a, b) => b.probability - a.probability);
+            return items;
+        }
+
+        // Display logits for next token prediction
+        function displayLogits(probs) {
+            const logitsDisplay = document.getElementById('logitsDisplay');
+            
+            if (!probs || probs.length === 0) {
+                return;
+            }
+
+            logitsDisplay.innerHTML = probs.map((item, index) => {
+                const percentage = (item.probability * 100).toFixed(2);
+                return `
+                    <div class="logit-item" onclick="addTokenToPrompt('${escapeHtml(item.token).replace(/'/g, "\\'")}')">
+                        <div class="logit-rank">#${index + 1}</div>
+                        <div class="logit-token">${escapeHtml(item.token)}</div>
+                        <div class="logit-probability">
+                            <div class="logit-bar">
+                                <div class="logit-bar-fill" style="width: ${percentage}%"></div>
+                            </div>
+                            <div class="logit-value">${percentage}%</div>
+                        </div>
+                        <div class="logit-id">ID: ${item.id}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Add clicked token to prompt
+        function addTokenToPrompt(token) {
+            const promptInput = document.getElementById('promptInput');
+            const generatedTextDiv = document.getElementById('generatedText');
+            
+            // Get all generated token elements
+            const allTokenSpans = generatedTextDiv.querySelectorAll('.token-display');
+            
+            // Add all tokens EXCEPT the last one (N-1 tokens)
+            // The clicked token represents an alternative for the last generated token
+            let textToAdd = '';
+            for (let i = 0; i < allTokenSpans.length - 1; i++) {
+                textToAdd += allTokenSpans[i].textContent;
+            }
+            
+            // Add the clicked token (which replaces the last generated token)
+            promptInput.value = promptInput.value + textToAdd + token;
+            
+            // Update token count and visualization
+            updatePromptTokenCount();
+            if (document.getElementById('showTokensToggle').checked) {
+                tokenizeInput();
+            }
+            
+            // Clear generated text and generate one more token
+            generatedTokens = [];
+            currentTokenIndex = 0;
+            tokenCount = 0;
+            document.getElementById('generatedText').innerHTML = '';
+            
+            // Set max tokens to 1 and generate
+            const originalMaxTokens = document.getElementById('maxTokens').value;
+            document.getElementById('maxTokens').value = '1';
+            
+            // Start generation
+            startGeneration().then(() => {
+                // Restore original max tokens setting
+                document.getElementById('maxTokens').value = originalMaxTokens;
+            });
+        }
+
+        // Update token colors based on probability
+        function updateTokenColors() {
+            const colorToggle = document.getElementById('colorByProbToggle');
+            const tokens = document.querySelectorAll('.token-display');
+            
+            tokens.forEach(tokenSpan => {
+                const index = parseInt(tokenSpan.dataset.tokenIndex);
+                const tokenData = generatedTokens[index];
+                
+                if (colorToggle.checked && tokenData) {
+                    const prob = tokenData.chosenProb;
+                    // Only apply color if we have a valid probability
+                    if (prob !== null) {
+                        const color = probabilityToColor(prob);
+                        tokenSpan.style.backgroundColor = color;
+                        tokenSpan.classList.add('colored');
+                    } else {
+                        // Unknown probability - use neutral gray
+                        tokenSpan.style.backgroundColor = '#e9ecef';
+                        tokenSpan.classList.add('colored');
+                    }
+                } else {
+                    tokenSpan.style.backgroundColor = '#e3f2fd';
+                    tokenSpan.classList.remove('colored');
+                }
+            });
+        }
+
+        // Convert probability to color (green = high, red = low)
+        function probabilityToColor(prob) {
+            // Handle the default/unknown case
+            if (prob === 0.5) {
+                // Neutral yellow for tokens where we don't have exact probability
+                return 'hsl(50, 70%, 85%)';
+            }
+            
+            // Map probability to hue (0 = red, 120 = green)
+            const hue = prob * 120;
+            const saturation = 70;
+            const lightness = 85;
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        // Handle token hover
+        function handleTokenHover(e) {
+            const token = e.target.closest('.token-display');
+            if (!token) return;
+
+            const index = parseInt(token.dataset.tokenIndex);
+            const tokenData = generatedTokens[index];
+            
+            if (!tokenData) return;
+
+            const tooltip = document.getElementById('tokenTooltip');
+            const rect = token.getBoundingClientRect();
+            
+            let tooltipHTML = '';
+            
+            // Check if we have probability data
+            if (tokenData.probabilities && tokenData.probabilities.length > 0) {
+                // Show top 5 probabilities
+                const top5 = tokenData.probabilities.slice(0, 5);
+                const chosenToken = tokenData.content;
+                
+                // Check if chosen token is in top 5
+                const chosenInTop5 = top5.some(p => p.token === chosenToken);
+                
+                tooltipHTML = '<div style="margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">Token Probabilities:</div>';
+                
+                top5.forEach((item, i) => {
+                    const isChosen = item.token === chosenToken;
+                    const percentage = (item.probability * 100).toFixed(2);
+                    tooltipHTML += `
+                        <div class="tooltip-item">
+                            <span class="tooltip-token">"${escapeHtml(item.token)}"</span>
+                            <span>
+                                <span class="tooltip-prob">${percentage}%</span>
+                                ${isChosen ? '<span class="tooltip-chosen">✓ CHOSEN</span>' : ''}
+                            </span>
+                        </div>
+                    `;
+                });
+                
+                // If chosen token not in top 5, add it at the bottom
+                if (!chosenInTop5) {
+                    const chosenData = generatedTokens[index];
+                    let percentage = '?';
+                    let note = '';
+                    
+                    if (chosenData.chosenProb !== null && chosenData.chosenProb !== 0.5) {
+                        percentage = (chosenData.chosenProb * 100).toFixed(2);
+                    } else {
+                        note = ' (not in top probabilities)';
+                    }
+                    
+                    tooltipHTML += `
+                        <div class="tooltip-item" style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 8px;">
+                            <span class="tooltip-token">"${escapeHtml(chosenToken)}"</span>
+                            <span>
+                                <span class="tooltip-prob">${percentage}%${note}</span>
+                                <span class="tooltip-chosen">✓ CHOSEN</span>
+                            </span>
+                        </div>
+                    `;
+                }
+            } else {
+                // No probability data available
+                tooltipHTML = `
+                    <div style="margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">Token: "${escapeHtml(tokenData.content)}"</div>
+                    <div style="color: #aaa; font-style: italic;">No probability data available for this token.</div>
+                `;
+            }
+            
+            tooltip.innerHTML = tooltipHTML;
+            
+            // Position tooltip BELOW the token to not block it
+            // Calculate position
+            const tooltipWidth = 250; // min-width from CSS
+            
+            // Position below the token with some spacing
+            let left = rect.left + (rect.width / 2) - (tooltipWidth / 2); // Removed scrollX
+            let top = rect.bottom + 10; // Removed scrollY
+            
+            // Ensure tooltip stays within viewport horizontally
+            const viewportWidth = window.innerWidth;
+            if (left < 10) left = 10;
+            if (left + tooltipWidth > viewportWidth - 10) {
+                left = viewportWidth - tooltipWidth - 10;
+            }
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function handleTokenHoverOut(e) {
+            const token = e.target.closest('.token-display');
+            if (!token) {
+                const tooltip = document.getElementById('tokenTooltip');
+                tooltip.classList.remove('visible');
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const tokensPerSec = tokenCount / elapsed;
+
+            document.getElementById('tokenCount').textContent = tokenCount;
+            document.getElementById('tokensPerSec').textContent = tokensPerSec.toFixed(2);
+            document.getElementById('totalTime').textContent = elapsed.toFixed(1) + 's';
+        }
+
+        // Stop generation
+        function stopGeneration() {
+            isGenerating = false;
+            if (currentController) {
+                currentController.abort();
+            }
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        // Clear output
+        function clearOutput() {
+            document.getElementById('generatedText').innerHTML = '';
+            document.getElementById('logitsDisplay').innerHTML = '<div class="loading">Generate text to see token probabilities...</div>';
+            generatedTokens = [];
+            currentTokenIndex = 0;
+            tokenCount = 0;
+            document.getElementById('tokenCount').textContent = '0';
+            document.getElementById('tokensPerSec').textContent = '0.0';
+            document.getElementById('totalTime').textContent = '0.0s';
+        }
+
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initial token count update
+        updatePromptTokenCount();
+    </script>
+</body>
+</html>
