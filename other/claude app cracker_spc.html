@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keebler Cracker Thickness — SPC Analysis</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #141720;
+    --panel:   #1a1e2a;
+    --border:  #252b3b;
+    --amber:   #f5a623;
+    --amber2:  #ffcc55;
+    --teal:    #3dd9c2;
+    --red:     #ff4d6a;
+    --green:   #4ade80;
+    --muted:   #5a6380;
+    --text:    #d4daf0;
+    --dim:     #8892a8;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Barlow Condensed', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 16px; min-height: 100vh; overflow-x: hidden; }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 22px;
+    display: flex; align-items: flex-end; gap: 24px;
+    background: linear-gradient(135deg, #0d0f14 0%, #131824 100%);
+    position: relative; overflow: hidden;
+  }
+  header::before {
+    content: ''; position: absolute; top: -60px; right: -60px;
+    width: 240px; height: 240px;
+    background: radial-gradient(circle, rgba(245,166,35,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-icon { font-size: 42px; line-height: 1; }
+  .header-text h1 { font-family: var(--sans); font-weight: 900; font-size: 2rem; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; line-height: 1; }
+  .header-text p  { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: 5px; letter-spacing: 0.08em; }
+  .header-badge {
+    margin-left: auto; background: rgba(245,166,35,0.12); border: 1px solid rgba(245,166,35,0.3);
+    color: var(--amber); font-family: var(--mono); font-size: 0.68rem;
+    padding: 6px 12px; letter-spacing: 0.1em; text-transform: uppercase; align-self: center;
+  }
+
+  nav { display: flex; border-bottom: 1px solid var(--border); padding: 0 40px; background: var(--surface); }
+  .tab-btn {
+    font-family: var(--sans); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted); background: none; border: none;
+    padding: 14px 22px; cursor: pointer; border-bottom: 2px solid transparent;
+    transition: color .2s, border-color .2s; white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  main { padding: 32px 40px 60px; max-width: 1400px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 36px; }
+  .stat-card {
+    background: var(--panel); border: 1px solid var(--border); padding: 18px 20px 16px;
+    position: relative; overflow: hidden;
+  }
+  .stat-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--accent, var(--amber)); }
+  .stat-label { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-value { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--accent, var(--amber2)); letter-spacing: -0.02em; }
+  .stat-unit  { font-family: var(--mono); font-size: 0.7rem; color: var(--dim); margin-top: 3px; }
+
+  .section-title {
+    font-family: var(--sans); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .chart-wrap { background: var(--panel); border: 1px solid var(--border); padding: 24px 28px 20px; margin-bottom: 20px; }
+  .chart-label { font-family: var(--mono); font-size: 0.68rem; color: var(--amber); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 14px; }
+  .chart-canvas-wrap { position: relative; height: 260px; }
+
+  .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.76rem; }
+  thead tr { background: rgba(245,166,35,0.08); border-bottom: 1px solid var(--border); }
+  th { padding: 11px 14px; text-align: right; font-weight: 700; letter-spacing: 0.06em; color: var(--amber); text-transform: uppercase; font-size: 0.65rem; white-space: nowrap; }
+  th:first-child { text-align: left; }
+  td { padding: 9px 14px; text-align: right; color: var(--text); border-bottom: 1px solid rgba(37,43,59,0.5); }
+  td:first-child { text-align: left; color: var(--dim); }
+  tr:last-child td { border-bottom: none; }
+  tr.pack-header td { background: rgba(255,255,255,0.03); color: var(--amber2); font-weight: 700; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border); padding: 8px 14px; }
+  .ooc-cell { color: var(--red) !important; font-weight: 700; }
+  .ooc-row td { background: rgba(255,77,106,0.07); }
+
+  .formula-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .formula-card { background: var(--panel); border: 1px solid var(--border); padding: 16px 18px; border-left: 3px solid var(--teal); }
+  .formula-card .f-label { font-family: var(--mono); font-size: 0.62rem; color: var(--teal); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+  .formula-card .f-eq   { font-family: var(--mono); font-size: 0.83rem; color: var(--text); line-height: 1.8; }
+  .formula-card .f-res  { font-family: var(--mono); font-size: 1.15rem; color: var(--amber2); font-weight: 700; margin-top: 6px; }
+
+  .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 8px; }
+  .analysis-card { background: var(--panel); border: 1px solid var(--border); padding: 20px 22px; }
+  .analysis-card h3 { font-family: var(--sans); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .analysis-card li { font-family: var(--sans); font-size: 1rem; color: var(--dim); line-height: 1.6; margin-bottom: 7px; list-style: none; }
+  .analysis-card ul { padding: 0; }
+  .hl  { color: var(--amber2); font-weight: 600; }
+  .bad { color: var(--red);    font-weight: 600; }
+  .ok  { color: var(--green);  font-weight: 600; }
+
+  .cap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .cap-card { background: var(--panel); border: 1px solid var(--border); padding: 18px 20px; text-align: center; }
+  .cap-card .cap-lbl { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .cap-card .cap-val { font-family: var(--mono); font-size: 1.8rem; font-weight: 700; color: var(--amber2); }
+  .cap-card .cap-sub { font-family: var(--sans); font-size: 0.85rem; color: var(--dim); margin-top: 6px; }
+
+  .scroll-hint { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); text-align: right; margin-bottom: 6px; }
+
+  @media (max-width: 700px) {
+    .analysis-grid { grid-template-columns: 1fr; }
+    nav, main, header { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-icon">📏</div>
+  <div class="header-text">
+    <h1>Cracker Thickness SPC</h1>
+    <p id="headerSub">KEEBLER TOAST &amp; PEANUT BUTTER · LOADING…</p>
+  </div>
+  <div class="header-badge">X̄-R Control Charts</div>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="data">Raw Data</button>
+  <button class="tab-btn" data-tab="xbar">X̄ Chart</button>
+  <button class="tab-btn" data-tab="range">R Chart</button>
+  <button class="tab-btn" data-tab="analysis">Analysis</button>
+</nav>
+
+<main>
+  <div class="tab-panel active" id="tab-overview">
+    <div class="stat-row" id="overviewStats"></div>
+    <div class="section-title">Combined Control Charts</div>
+    <div class="chart-wrap"><div class="chart-label">X̄ Chart — Subgroup Means</div><div class="chart-canvas-wrap"><canvas id="cvXbarOverview"></canvas></div></div>
+    <div class="chart-wrap"><div class="chart-label">R Chart — Subgroup Ranges</div><div class="chart-canvas-wrap"><canvas id="cvROverview"></canvas></div></div>
+    <div class="section-title">Key Formulas &amp; Computed Values</div>
+    <div class="formula-row" id="formulaRow"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-data">
+    <div class="section-title">All Measurements</div>
+    <div class="scroll-hint">← scroll if needed →</div>
+    <div class="table-wrap"><table id="tblRaw"></table></div>
+    <div class="section-title" style="margin-top:28px">Subgroup Summary</div>
+    <div class="table-wrap"><table id="tblSummary"></table></div>
+  </div>
+
+  <div class="tab-panel" id="tab-xbar">
+    <div class="stat-row" id="xbarStats"></div>
+    <div class="chart-wrap"><div class="chart-label" id="xbarChartLabel"></div><div class="chart-canvas-wrap" style="height:340px"><canvas id="cvXbarFull"></canvas></div></div>
+    <div class="section-title" style="margin-top:28px">X̄ Per-Subgroup Detail</div>
+    <div class="table-wrap"><table id="tblXbar"></table></div>
+  </div>
+
+  <div class="tab-panel" id="tab-range">
+    <div class="stat-row" id="rStats"></div>
+    <div class="chart-wrap"><div class="chart-label" id="rChartLabel"></div><div class="chart-canvas-wrap" style="height:340px"><canvas id="cvRFull"></canvas></div></div>
+    <div class="section-title" style="margin-top:28px">R Per-Subgroup Detail</div>
+    <div class="table-wrap"><table id="tblR"></table></div>
+  </div>
+
+  <div class="tab-panel" id="tab-analysis">
+    <div class="section-title">Process Capability Estimates</div>
+    <div class="cap-grid" id="capGrid"></div>
+    <div class="section-title">Pack-by-Pack Comparison</div>
+    <div class="chart-wrap"><div class="chart-label">Mean &amp; Average Range per Pack</div><div class="chart-canvas-wrap" style="height:280px"><canvas id="cvPackCompare"></canvas></div></div>
+    <div class="section-title" style="margin-top:8px">Findings &amp; Interpretation</div>
+    <div class="analysis-grid">
+      <div class="analysis-card"><h3>Process Center (X̄)</h3><ul id="findXbar"></ul></div>
+      <div class="analysis-card"><h3>Process Spread (R)</h3><ul id="findR"></ul></div>
+      <div class="analysis-card"><h3>Pack Comparison</h3><ul id="findPack"></ul></div>
+      <div class="analysis-card"><h3>Statistical Summary</h3><ul id="findStat"></ul></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ════════════════════════════════════════════
+   RAW DATA — the only source of truth
+════════════════════════════════════════════ */
+const RAW = [
+  { pack:1, cracker:1, m:[10.0, 9.5, 9.3, 9.8] },
+  { pack:1, cracker:2, m:[9.6, 9.4, 9.4, 9.7] },
+  { pack:1, cracker:3, m:[9.6,  9.3, 9.7, 9.7] },
+  { pack:1, cracker:4, m:[9.7,  9.1, 9.7, 9.7] },
+  { pack:1, cracker:5, m:[9.5,  9.8, 9.5, 9.8] },
+  { pack:1, cracker:6, m:[10.1, 9.5, 9.7, 9.7] },
+  { pack:2, cracker:1, m:[9.2,  9.5, 9.2, 9.7] },
+  { pack:2, cracker:2, m:[10.0, 9.2, 9.7, 9.6] },
+  { pack:2, cracker:3, m:[9.8,  9.6, 9.6, 9.6] },
+  { pack:2, cracker:4, m:[9.3,  9.6, 9.5, 9.7] },
+  { pack:2, cracker:5, m:[9.5,  9.5, 9.0, 9.5] },
+  { pack:2, cracker:6, m:[9.2,  9.6, 9.3, 8.9] },
+  { pack:3, cracker:1, m:[9.7,  9.8, 9.7, 9.5] },
+  { pack:3, cracker:2, m:[9.6,  9.8, 9.8, 9.8] },
+  { pack:3, cracker:3, m:[9.7,  9.7, 9.6, 9.9] },
+  { pack:3, cracker:4, m:[9.7,  9.5, 9.7, 9.9] },
+  { pack:3, cracker:5, m:[9.6,  9.9, 10.0, 9.3] },
+  { pack:3, cracker:6, m:[9.8,  9.3, 10.0, 9.6] },
+];
+
+/* ════════════════════════════════════════════
+   X-BAR & R CHART CONSTANTS — keyed by n
+════════════════════════════════════════════ */
+const CTRL_CONSTANTS = {
+  2:  { A2:1.880, D3:null,  D4:3.267, d2:1.128 },
+  3:  { A2:1.023, D3:null,  D4:2.575, d2:1.693 },
+  4:  { A2:0.729, D3:null,  D4:2.282, d2:2.059 },
+  5:  { A2:0.577, D3:null,  D4:2.115, d2:2.326 },
+  6:  { A2:0.483, D3:null,  D4:2.004, d2:2.534 },
+  7:  { A2:0.419, D3:0.076, D4:1.924, d2:2.704 },
+  8:  { A2:0.373, D3:0.136, D4:1.864, d2:2.847 },
+  9:  { A2:0.337, D3:0.184, D4:1.816, d2:2.970 },
+  10: { A2:0.308, D3:0.223, D4:1.777, d2:3.078 },
+};
+
+/* ════════════════════════════════════════════
+   DERIVED — everything computed from RAW
+════════════════════════════════════════════ */
+const n = RAW[0].m.length;
+const k = RAW.length;
+const C = CTRL_CONSTANTS[n];
+
+const SG = RAW.map((d, i) => {
+  const mean  = d.m.reduce((a, b) => a + b, 0) / n;
+  const range = Math.max(...d.m) - Math.min(...d.m);
+  return { ...d, sg: i + 1, mean, range };
+});
+
+const grandMean = SG.reduce((a, s) => a + s.mean,  0) / k;
+const rBar      = SG.reduce((a, s) => a + s.range, 0) / k;
+const sigmaEst  = rBar / C.d2;
+
+const xUCL = grandMean + C.A2 * rBar;
+const xLCL = grandMean - C.A2 * rBar;
+const rUCL = C.D4 * rBar;
+const rLCL = C.D3 !== null ? C.D3 * rBar : 0;
+
+const xOOC = SG.filter(s => s.mean > xUCL || s.mean < xLCL);
+const rOOC = SG.filter(s => s.range > rUCL);
+
+const packIDs   = [...new Set(RAW.map(d => d.pack))];
+const packStats = packIDs.map(p => {
+  const subs = SG.filter(s => s.pack === p);
+  return {
+    pack:  p,
+    mean:  subs.reduce((a, s) => a + s.mean,  0) / subs.length,
+    rMean: subs.reduce((a, s) => a + s.range, 0) / subs.length,
+    count: subs.length,
+  };
+});
+
+const sgLabels = SG.map(s => `P${s.pack}-C${s.cracker}`);
+const means    = SG.map(s => s.mean);
+const ranges   = SG.map(s => s.range);
+
+/* ════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════ */
+const fmt = (v, d = 3) => Number(v).toFixed(d);
+const li  = (html) => `<li>${html}</li>`;
+
+function statCard(label, value, unit, accent) {
+  return `<div class="stat-card" style="--accent:${accent}">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value">${value}</div>
+    <div class="stat-unit">${unit}</div>
+  </div>`;
+}
+
+Chart.defaults.color = '#8892a8';
+Chart.defaults.font.family = "'Space Mono', monospace";
+Chart.defaults.font.size = 11;
+const GRID  = { color: 'rgba(37,43,59,0.8)', lineWidth: 1 };
+const TICKS = { color: '#5a6380', font: { size: 10 } };
+
+function controlChart(ctx, labels, data, cl, ucl, lcl, color, seriesLabel) {
+  const ptColors = data.map(v => (v > ucl || v < lcl) ? '#ff4d6a' : color);
+  const ptRadii  = data.map(v => (v > ucl || v < lcl) ? 7 : 4);
+  const datasets = [
+    { label: seriesLabel, data, borderColor: color, backgroundColor: color + '22',
+      pointBackgroundColor: ptColors, pointBorderColor: ptColors,
+      pointRadius: ptRadii, pointHoverRadius: 9,
+      borderWidth: 2, tension: 0.1, fill: false, order: 1 },
+    { label: 'UCL', data: Array(k).fill(ucl), borderColor: '#ff4d6a',
+      borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 2 },
+    { label: 'CL',  data: Array(k).fill(cl),  borderColor: '#f5a623',
+      borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 3 },
+  ];
+  if (lcl > 0) datasets.push(
+    { label: 'LCL', data: Array(k).fill(lcl), borderColor: '#ff4d6a',
+      borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false, order: 4 }
+  );
+  return new Chart(ctx, {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#141720', borderColor: '#252b3b', borderWidth: 1,
+          titleColor: '#f5a623', bodyColor: '#d4daf0',
+          callbacks: {
+            title: items => `Subgroup ${items[0].label}`,
+            label: item  => ` ${item.dataset.label}: ${Number(item.raw).toFixed(3)} mm`
+          }
+        }
+      },
+      scales: {
+        x: { grid: GRID, ticks: TICKS, title: { display: true, text: 'Subgroup', color: '#5a6380', font: { size: 10 } } },
+        y: { grid: GRID, ticks: { ...TICKS, callback: v => v.toFixed(2) },
+             title: { display: true, text: 'mm', color: '#5a6380', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+/* ════════════════════════════════════════════
+   BUILD OVERVIEW
+════════════════════════════════════════════ */
+function buildOverview() {
+  // Update header subtitle dynamically
+  document.getElementById('headerSub').textContent =
+    `KEEBLER TOAST & PEANUT BUTTER · ${packIDs.length} PACKS · ${k} SUBGROUPS · n = ${n}`;
+
+  document.getElementById('overviewStats').innerHTML = [
+    statCard('Grand Mean X̄̄', fmt(grandMean), 'mm', '#f5a623'),
+    statCard('Avg Range R̄',   fmt(rBar),      'mm', '#3dd9c2'),
+    statCard('UCL (X̄)',       fmt(xUCL),      'mm', '#b47fff'),
+    statCard('LCL (X̄)',       fmt(xLCL),      'mm', '#ff6b8a'),
+    statCard('UCL (R)',        fmt(rUCL),      `mm · D₄ = ${C.D4}`, '#4ade80'),
+    statCard('LCL (R)',        C.D3 !== null ? fmt(rLCL) : '0',
+             C.D3 !== null ? `mm · D₃ = ${C.D3}` : `D₃ undefined (n=${n})`, '#5a6380'),
+  ].join('');
+
+  const sumMeans  = fmt(SG.reduce((a, s) => a + s.mean,  0), 4);
+  const sumRanges = fmt(SG.reduce((a, s) => a + s.range, 0), 4);
+
+  document.getElementById('formulaRow').innerHTML = `
+    <div class="formula-card">
+      <div class="f-label">X̄ Centerline</div>
+      <div class="f-eq">X̄̄ = Σ X̄ᵢ / k<br>= ${sumMeans} / ${k}</div>
+      <div class="f-res">= ${fmt(grandMean)} mm</div>
+    </div>
+    <div class="formula-card">
+      <div class="f-label">Average Range</div>
+      <div class="f-eq">R̄ = Σ Rᵢ / k<br>= ${sumRanges} / ${k}</div>
+      <div class="f-res">= ${fmt(rBar)} mm</div>
+    </div>
+    <div class="formula-card">
+      <div class="f-label">UCL / LCL (X̄)</div>
+      <div class="f-eq">X̄̄ ± A₂ · R̄<br>${fmt(grandMean)} ± ${C.A2} × ${fmt(rBar)}</div>
+      <div class="f-res">${fmt(xUCL)} / ${fmt(xLCL)} mm</div>
+    </div>
+    <div class="formula-card">
+      <div class="f-label">UCL / LCL (R)</div>
+      <div class="f-eq">D₄ · R̄ = ${C.D4} × ${fmt(rBar)}<br>${C.D3 !== null ? `D₃ · R̄ = ${C.D3} × ${fmt(rBar)}` : `D₃ undefined (n=${n})`}</div>
+      <div class="f-res">${fmt(rUCL)} / ${C.D3 !== null ? fmt(rLCL) : '0'} mm</div>
+    </div>
+    <div class="formula-card">
+      <div class="f-label">Process σ̂</div>
+      <div class="f-eq">σ̂ = R̄ / d₂<br>= ${fmt(rBar)} / ${C.d2}</div>
+      <div class="f-res">= ${fmt(sigmaEst)} mm</div>
+    </div>`;
+
+  controlChart(document.getElementById('cvXbarOverview'), sgLabels, means, grandMean, xUCL, xLCL, '#f5a623', 'X̄');
+  controlChart(document.getElementById('cvROverview'),    sgLabels, ranges, rBar, rUCL, rLCL, '#3dd9c2', 'R');
+}
+
+/* ════════════════════════════════════════════
+   BUILD DATA TABLES
+════════════════════════════════════════════ */
+function buildData() {
+  // Raw measurements table
+  const rt = document.getElementById('tblRaw');
+  const mHeaders = Array.from({ length: n }, (_, i) => `<th>Meas ${i + 1}</th>`).join('');
+  rt.innerHTML = `<thead><tr><th>Pack</th><th>Cracker</th>${mHeaders}<th>Mean</th><th>Range</th></tr></thead>`;
+  const rb = document.createElement('tbody');
+  let lastPack = null;
+  SG.forEach(s => {
+    if (s.pack !== lastPack) {
+      const hr = document.createElement('tr'); hr.className = 'pack-header';
+      hr.innerHTML = `<td colspan="${3 + n + 1}">PACK ${s.pack}</td>`;
+      rb.appendChild(hr); lastPack = s.pack;
+    }
+    const xBad = s.mean > xUCL || s.mean < xLCL;
+    const rBad = s.range > rUCL;
+    const tr = document.createElement('tr'); if (xBad || rBad) tr.classList.add('ooc-row');
+    const mCells = s.m.map(v => `<td>${fmt(v, 1)}</td>`).join('');
+    tr.innerHTML = `<td>Pack ${s.pack}</td><td>#${s.cracker}</td>${mCells}
+      <td class="${xBad ? 'ooc-cell' : ''}">${fmt(s.mean)}</td>
+      <td class="${rBad ? 'ooc-cell' : ''}">${fmt(s.range)}</td>`;
+    rb.appendChild(tr);
+  });
+  rt.appendChild(rb);
+
+  // Subgroup summary table
+  const st = document.getElementById('tblSummary');
+  st.innerHTML = `<thead><tr>
+    <th>SG</th><th>Pack</th><th>Cracker</th>
+    <th>Mean (mm)</th><th>Range (mm)</th>
+    <th>X̄ vs UCL (${fmt(xUCL)})</th>
+    <th>X̄ vs LCL (${fmt(xLCL)})</th>
+    <th>R vs UCL (${fmt(rUCL)})</th>
+    <th>Status</th>
+  </tr></thead>`;
+  const sb = document.createElement('tbody');
+  SG.forEach(s => {
+    const xU = s.mean > xUCL, xL = s.mean < xLCL, rU = s.range > rUCL;
+    const bad = xU || xL || rU;
+    const tr = document.createElement('tr'); if (bad) tr.classList.add('ooc-row');
+    tr.innerHTML = `
+      <td>${s.sg}</td><td>Pack ${s.pack}</td><td>#${s.cracker}</td>
+      <td class="${(xU || xL) ? 'ooc-cell' : ''}">${fmt(s.mean)}</td>
+      <td class="${rU ? 'ooc-cell' : ''}">${fmt(s.range)}</td>
+      <td>${xU ? '⚠ ABOVE' : '✓'}</td>
+      <td>${xL ? '⚠ BELOW' : '✓'}</td>
+      <td>${rU ? '⚠ ABOVE' : '✓'}</td>
+      <td style="color:${bad ? 'var(--red)' : 'var(--green)'};font-weight:700">${bad ? 'OOC' : 'IN'}</td>`;
+    sb.appendChild(tr);
+  });
+  st.appendChild(sb);
+}
+
+/* ════════════════════════════════════════════
+   BUILD X-BAR TAB
+════════════════════════════════════════════ */
+function buildXbar() {
+  document.getElementById('xbarStats').innerHTML = [
+    statCard('Centerline (X̄̄)', fmt(grandMean), 'mm', '#f5a623'),
+    statCard('UCL',             fmt(xUCL),      `A₂(${C.A2}) × R̄ + X̄̄`, '#b47fff'),
+    statCard('LCL',             fmt(xLCL),      'mm', '#ff6b8a'),
+    statCard('Out of Control',  xOOC.length,    `of ${k} subgroups`, xOOC.length ? '#ff4d6a' : '#4ade80'),
+  ].join('');
+
+  document.getElementById('xbarChartLabel').textContent =
+    `X̄ Control Chart — n=${n}, k=${k}, A₂=${C.A2}, R̄=${fmt(rBar)}, UCL=${fmt(xUCL)}, LCL=${fmt(xLCL)}`;
+
+  controlChart(document.getElementById('cvXbarFull'), sgLabels, means, grandMean, xUCL, xLCL, '#f5a623', 'X̄');
+
+  const t = document.getElementById('tblXbar');
+  t.innerHTML = `<thead><tr>
+    <th>SG</th><th>Pack</th><th>Cracker</th>
+    <th>Mean (mm)</th><th>Dev from X̄̄ (${fmt(grandMean)})</th>
+    <th>UCL (${fmt(xUCL)})</th><th>LCL (${fmt(xLCL)})</th><th>Status</th>
+  </tr></thead>`;
+  const tb = document.createElement('tbody');
+  SG.forEach(s => {
+    const bad = s.mean > xUCL || s.mean < xLCL;
+    const dev = s.mean - grandMean;
+    const tr = document.createElement('tr'); if (bad) tr.classList.add('ooc-row');
+    tr.innerHTML = `
+      <td>${s.sg}</td><td>Pack ${s.pack}</td><td>#${s.cracker}</td>
+      <td class="${bad ? 'ooc-cell' : ''}">${fmt(s.mean)}</td>
+      <td style="color:${Math.abs(dev) > 0.2 ? '#ffcc55' : '#8892a8'}">${dev >= 0 ? '+' : ''}${fmt(dev)}</td>
+      <td>${fmt(xUCL)}</td><td>${fmt(xLCL)}</td>
+      <td style="color:${bad ? 'var(--red)' : 'var(--green)'};font-weight:700">${bad ? '⚠ OOC' : '✓ IC'}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+/* ════════════════════════════════════════════
+   BUILD R TAB
+════════════════════════════════════════════ */
+function buildRange() {
+  document.getElementById('rStats').innerHTML = [
+    statCard('Centerline (R̄)', fmt(rBar),  'mm', '#3dd9c2'),
+    statCard('UCL',            fmt(rUCL),  `D₄(${C.D4}) × R̄`, '#4ade80'),
+    statCard('LCL',            C.D3 !== null ? fmt(rLCL) : '0',
+             C.D3 !== null ? `D₃(${C.D3}) × R̄` : `D₃ undefined (n=${n})`, '#5a6380'),
+    statCard('Out of Control', rOOC.length, `of ${k} subgroups`, rOOC.length ? '#ff4d6a' : '#4ade80'),
+  ].join('');
+
+  document.getElementById('rChartLabel').textContent =
+    `R Control Chart — n=${n}, k=${k}, D₄=${C.D4}, R̄=${fmt(rBar)}, UCL=${fmt(rUCL)}`;
+
+  controlChart(document.getElementById('cvRFull'), sgLabels, ranges, rBar, rUCL, rLCL, '#3dd9c2', 'R');
+
+  const t = document.getElementById('tblR');
+  t.innerHTML = `<thead><tr>
+    <th>SG</th><th>Pack</th><th>Cracker</th>
+    <th>Max</th><th>Min</th><th>Range (mm)</th>
+    <th>R̄ (${fmt(rBar)})</th><th>UCL (${fmt(rUCL)})</th><th>Status</th>
+  </tr></thead>`;
+  const tb = document.createElement('tbody');
+  SG.forEach(s => {
+    const bad = s.range > rUCL;
+    const tr = document.createElement('tr'); if (bad) tr.classList.add('ooc-row');
+    tr.innerHTML = `
+      <td>${s.sg}</td><td>Pack ${s.pack}</td><td>#${s.cracker}</td>
+      <td>${fmt(Math.max(...s.m), 1)}</td><td>${fmt(Math.min(...s.m), 1)}</td>
+      <td class="${bad ? 'ooc-cell' : ''}">${fmt(s.range)}</td>
+      <td>${fmt(rBar)}</td><td>${fmt(rUCL)}</td>
+      <td style="color:${bad ? 'var(--red)' : 'var(--green)'};font-weight:700">${bad ? '⚠ OOC' : '✓ IC'}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+/* ════════════════════════════════════════════
+   BUILD ANALYSIS TAB
+════════════════════════════════════════════ */
+function buildAnalysis() {
+  const naturalTol = 6 * sigmaEst;
+  const cv = (sigmaEst / grandMean) * 100;
+
+  document.getElementById('capGrid').innerHTML = [
+    `<div class="cap-card"><div class="cap-lbl">σ̂ = R̄ / d₂</div>
+      <div class="cap-val">${fmt(sigmaEst)}</div>
+      <div class="cap-sub">d₂ = ${C.d2} (n=${n})</div></div>`,
+    `<div class="cap-card"><div class="cap-lbl">Natural Tolerance</div>
+      <div class="cap-val">${fmt(naturalTol)}</div>
+      <div class="cap-sub">6σ̂ (mm)</div></div>`,
+    `<div class="cap-card"><div class="cap-lbl">3σ Half-Width</div>
+      <div class="cap-val">±${fmt(3 * sigmaEst)}</div>
+      <div class="cap-sub">mm from center</div></div>`,
+    `<div class="cap-card"><div class="cap-lbl">Coeff. of Variation</div>
+      <div class="cap-val">${fmt(cv, 2)}%</div>
+      <div class="cap-sub">σ̂ / X̄̄ × 100</div></div>`,
+    `<div class="cap-card"><div class="cap-lbl">X̄ Control Width</div>
+      <div class="cap-val">${fmt(xUCL - xLCL)}</div>
+      <div class="cap-sub">UCL − LCL (mm)</div></div>`,
+    `<div class="cap-card"><div class="cap-lbl">Total Measurements</div>
+      <div class="cap-val">${k * n}</div>
+      <div class="cap-sub">${k} subgroups × n=${n}</div></div>`,
+  ].join('');
+
+  // Pack comparison chart
+  new Chart(document.getElementById('cvPackCompare'), {
+    type: 'bar',
+    data: {
+      labels: packStats.map(p => `Pack ${p.pack}`),
+      datasets: [
+        { label: 'Mean Thickness (mm)', data: packStats.map(p => p.mean),
+          backgroundColor: ['#f5a62344','#3dd9c244','#b47fff44'],
+          borderColor: ['#f5a623','#3dd9c2','#b47fff'], borderWidth: 2, yAxisID: 'y' },
+        { label: 'Avg Range (mm)', data: packStats.map(p => p.rMean), type: 'line',
+          pointRadius: 7, borderColor: '#ffcc55', backgroundColor: 'transparent',
+          pointBackgroundColor: ['#f5a623','#3dd9c2','#b47fff'], yAxisID: 'y2' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#8892a8', usePointStyle: true } },
+        tooltip: { backgroundColor: '#141720', borderColor: '#252b3b', borderWidth: 1, titleColor: '#f5a623', bodyColor: '#d4daf0' }
+      },
+      scales: {
+        x:  { grid: GRID, ticks: TICKS },
+        y:  { grid: GRID, ticks: TICKS, title: { display: true, text: 'Mean (mm)',      color: '#5a6380' } },
+        y2: { position: 'right', grid: { display: false }, ticks: TICKS,
+              title: { display: true, text: 'Avg Range (mm)', color: '#5a6380' }, min: 0 }
+      }
+    }
+  });
+
+  // Findings — all dynamic
+  const maxPackMean = packStats.reduce((a, p) => p.mean  > a.mean  ? p : a);
+  const minPackMean = packStats.reduce((a, p) => p.mean  < a.mean  ? p : a);
+  const minPackR    = packStats.reduce((a, p) => p.rMean < a.rMean ? p : a);
+  const maxPackR    = packStats.reduce((a, p) => p.rMean > a.rMean ? p : a);
+
+  document.getElementById('findXbar').innerHTML = [
+    xOOC.length === 0
+      ? li(`<span class="ok">✓ All ${k} subgroup means fall within control limits.</span>`)
+      : li(`<span class="bad">⚠ ${xOOC.length} subgroup(s) OOC: ${xOOC.map(s=>`P${s.pack}C${s.cracker} (${fmt(s.mean)})`).join(', ')}</span>`),
+    li(`Control band: <span class="hl">${fmt(xLCL)} – ${fmt(xUCL)} mm</span> (width = ${fmt(xUCL - xLCL)} mm)`),
+    li(`Grand mean X̄̄ = <span class="hl">${fmt(grandMean)} mm</span>`),
+    li(`Highest pack center: <span class="hl">Pack ${maxPackMean.pack} (${fmt(maxPackMean.mean)} mm)</span>`),
+    li(`Lowest pack center:  <span class="hl">Pack ${minPackMean.pack} (${fmt(minPackMean.mean)} mm)</span>`),
+    li(`Pack mean spread: <span class="hl">${fmt(maxPackMean.mean - minPackMean.mean)} mm</span>`),
+  ].join('');
+
+  document.getElementById('findR').innerHTML = [
+    rOOC.length === 0
+      ? li(`<span class="ok">✓ All ${k} subgroup ranges are within UCL = ${fmt(rUCL)} mm.</span>`)
+      : li(`<span class="bad">⚠ ${rOOC.length} range(s) exceed UCL ${fmt(rUCL)} mm: ${rOOC.map(s=>`P${s.pack}C${s.cracker} (R=${fmt(s.range)})`).join(', ')}</span>`),
+    li(`R̄ = <span class="hl">${fmt(rBar)} mm</span> · UCL = D₄ × R̄ = ${C.D4} × ${fmt(rBar)} = <span class="hl">${fmt(rUCL)} mm</span>`),
+    li(`Estimated σ̂ = R̄/d₂ = ${fmt(rBar)}/${C.d2} = <span class="hl">${fmt(sigmaEst)} mm</span>`),
+    li(`Tightest pack (min R̄): <span class="hl">Pack ${minPackR.pack} (R̄ = ${fmt(minPackR.rMean)} mm)</span>`),
+    li(`Most variable (max R̄): <span class="hl">Pack ${maxPackR.pack} (R̄ = ${fmt(maxPackR.rMean)} mm)</span>`),
+  ].join('');
+
+  document.getElementById('findPack').innerHTML = [
+    ...packStats.map(p => li(
+      `Pack ${p.pack}: mean = <span class="hl">${fmt(p.mean)} mm</span>, R̄ = <span class="hl">${fmt(p.rMean)} mm</span>`
+    )),
+    li(`Pack-to-pack mean range: <span class="hl">${fmt(maxPackMean.mean - minPackMean.mean)} mm</span>`),
+    li(`<span class="ok">Most consistent:</span> Pack ${minPackR.pack} (lowest avg range)`),
+  ].join('');
+
+  document.getElementById('findStat').innerHTML = [
+    li(`k = <span class="hl">${k}</span> subgroups, n = <span class="hl">${n}</span>`),
+    li(`Total measurements: <span class="hl">${k * n}</span>`),
+    li(`Constants: A₂=${C.A2}, D₃=${C.D3 ?? 'N/A'}, D₄=${C.D4}, d₂=${C.d2}`),
+    li(`σ̂ = <span class="hl">${fmt(sigmaEst)} mm</span> | CV = <span class="hl">${fmt(cv, 2)}%</span>`),
+    li(`6σ natural tolerance = <span class="hl">${fmt(naturalTol)} mm</span>`),
+    li(`X̄ OOC: <span class="${xOOC.length ? 'bad' : 'ok'}">${xOOC.length}/${k}</span> · R OOC: <span class="${rOOC.length ? 'bad' : 'ok'}">${rOOC.length}/${k}</span>`),
+  ].join('');
+}
+
+/* ════════════════════════════════════════════
+   TAB SWITCHING
+════════════════════════════════════════════ */
+const BUILDERS = { data: buildData, xbar: buildXbar, range: buildRange, analysis: buildAnalysis };
+const BUILT    = {};
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (!BUILT[tab] && BUILDERS[tab]) { BUILDERS[tab](); BUILT[tab] = true; }
+  });
+});
+
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
+buildOverview();
+</script>
+</body>
+</html>
