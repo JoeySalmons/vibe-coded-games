@@ -199,6 +199,7 @@ canvas {
           <input type="password" id="inp-pass" placeholder="both devices enter this same phrase" autocomplete="off">
           <button class="pass-toggle" id="btn-show-pass" title="Toggle visibility">Show</button>
         </div>
+        <p class="muted" style="font-size:0.78rem; line-height:1.5;">Use a long, unique passphrase — it's the only thing protecting your session. Anyone who guesses it can find your room and read everything you draw.</p>
       </div>
       <button class="btn" id="btn-connect">Connect</button>
       <div class="info-box">
@@ -322,17 +323,44 @@ function setSysMsg(text) {
 async function deriveAll(password) {
   const enc  = new TextEncoder();
   const date = new Date().toISOString().slice(0, 10);
-  const tb  = await crypto.subtle.digest('SHA-256', enc.encode(password + ':t:' + date));
-  const hex = Array.from(new Uint8Array(tb)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0, 24);
 
-  const raw = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  // ── Step 1: ONE slow PBKDF2 pass → 256-bit master secret ──────────────
+  // Both the rendezvous topic AND the encryption key are derived from this.
+  // Because deriving the topic now costs the full 100k iterations, an
+  // attacker can no longer cheaply confirm a passphrase guess by checking
+  // whether its topic exists on ntfy — finding a room is as expensive as
+  // attacking the key.
+  const pwKey = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']
+  );
+  const masterBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode('p2p:master:' + date), iterations: 100_000, hash: 'SHA-256' },
+    pwKey, 256
+  );
+
+  // ── Step 2: HKDF-expand the master into two INDEPENDENT outputs ───────
+  // Different salt+info labels => topic and key are cryptographically
+  // separated. Learning the public topic reveals nothing about the key.
+  const hk = await crypto.subtle.importKey(
+    'raw', masterBits, 'HKDF', false, ['deriveBits', 'deriveKey']
+  );
+
+  // Topic: 96 bits -> 24 hex chars (same length/format as before)
+  const topicBits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('p2p:topic:' + date), info: enc.encode('rendezvous-topic') },
+    hk, 96
+  );
+  const hex = Array.from(new Uint8Array(topicBits)).map(b => b.toString(16).padStart(2,'0')).join('');
+
+  // Encryption key: independent expansion under a separate label
   const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('p2p:' + date), iterations: 100_000, hash: 'SHA-256' },
-    raw,
+    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('p2p:enc:' + date), info: enc.encode('aes-gcm-256') },
+    hk,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt', 'decrypt']
   );
+
   return { hex, key };
 }
 
@@ -415,7 +443,13 @@ function wireChannel(ch) {
     setSysMsg('🔒 Direct E2EE Channel Open');
   };
   ch.onclose   = () => setSysMsg('⚠ Channel closed.');
-  ch.onmessage = e => handleNetworkMessage(JSON.parse(e.data));
+  ch.onmessage = e => {
+    let data;
+    try { data = JSON.parse(e.data); }
+    catch { return; }                 // ignore malformed frames
+    if (!data || typeof data !== 'object') return;
+    handleNetworkMessage(data);
+  };
 }
 
 async function runConnect(password) {
@@ -496,6 +530,11 @@ let activeStrokes = new Map(); // Currently in-progress strokes (local & remote)
 let isDrawing = false;
 let myCurrentStrokeId = null;
 
+// Memory bounds: a peer holds the passphrase and is "trusted", but a buggy
+// or malicious peer could otherwise grow these collections without limit.
+const MAX_STROKE_HISTORY = 5000;  // completed strokes retained
+const MAX_ACTIVE_STROKES = 64;    // concurrent in-progress strokes
+
 // Normalize coordinates so different screen sizes draw in the same relative spot
 function getNormPos(e) {
   const rect = canvas.getBoundingClientRect();
@@ -550,6 +589,8 @@ function redrawAll() {
 
 // State Handlers
 function handleStartStroke(id, color, size, nx, ny) {
+  // Guard against a peer spamming start events that never end.
+  if (activeStrokes.size >= MAX_ACTIVE_STROKES && !activeStrokes.has(id)) return;
   activeStrokes.set(id, { id, color, size, points: [{ x: nx, y: ny }] });
 }
 
@@ -566,6 +607,10 @@ function handleEndStroke(id) {
   if (!stroke) return;
   strokeHistory.push(stroke);
   activeStrokes.delete(id);
+  // Drop the oldest strokes once we exceed the cap.
+  if (strokeHistory.length > MAX_STROKE_HISTORY) {
+    strokeHistory.splice(0, strokeHistory.length - MAX_STROKE_HISTORY);
+  }
 }
 
 function doUndo() {
