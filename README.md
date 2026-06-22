@@ -66,9 +66,13 @@ Click any link to play or use the app instantly in your browser.
 *   **Use Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/Todo%20App%20Demo%20v3.1.html)
 *   **Description:** A personal interactive dashboard featuring a to-do list, a weekly habit tracker, and a customizable flashcards quiz to test your knowledge.
 
-### Basic Chat App
+### Web-Chat App
 *   **Try Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/p2p-ntfy-autoconnect.html)
 *   **Description:** This is a single-file, serverless, ephemeral, peer-to-peer (P2P), end-to-end encrypted (E2EE) web chat application. Works on both mobile or desktop. Needs at least two devices (or browser tabs) to work!
+
+### Multiplayer Drawing App
+*   **Try Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/p2p-ntfy-drawing-app.html)
+*   **Description:** A simple multiplayer drawing app. Connect with two or more devices (or browser tabs) and start drawing! Works on both mobile or desktop.
 
 ---
 
