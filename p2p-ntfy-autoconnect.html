@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P2P Chat — Auto-Connect</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --card:     #1c2333;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --accent:   #388bfd;
+  --success:  #3fb950;
+  --warning:  #d29922;
+  --danger:   #f85149;
+  --mono:     ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.app { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 0; }
+
+/* ── Screens ── */
+.screen { display: none; flex-direction: column; gap: 16px; }
+.screen.active { display: flex; }
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+h1 { font-size: 1.25rem; font-weight: 700; }
+h2 { font-size: 1rem; font-weight: 600; }
+p.muted { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+
+/* ── Field ── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+label {
+  font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted); font-weight: 600;
+}
+.pass-wrap { position: relative; }
+.pass-wrap input { padding-right: 44px; }
+.pass-toggle {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 0.8rem; padding: 4px;
+}
+.pass-toggle:hover { color: var(--text); }
+input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  width: 100%;
+}
+input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,139,253,0.15); }
+
+/* ── Buttons ── */
+.btn {
+  background: var(--accent); color: #fff; border: none;
+  padding: 12px; border-radius: 8px;
+  font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  width: 100%; transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); padding: 8px 14px; border-radius: 8px;
+  font-size: 0.85rem; cursor: pointer; width: 100%;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+/* ── Status pill ── */
+.pill {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; font-size: 0.875rem;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
+@keyframes throb {
+  0%,100% { opacity:1; transform:scale(1); }
+  50% { opacity:0.35; transform:scale(0.75); }
+}
+.dot.spin { animation: throb 1.1s ease-in-out infinite; background: var(--accent); }
+.dot.ok   { background: var(--success); }
+.dot.warn { background: var(--warning); }
+.dot.err  { background: var(--danger); }
+
+/* ── Role badge ── */
+.badge {
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 100px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  background: rgba(56,139,253,0.15); color: var(--accent);
+}
+
+/* ── Chat ── */
+.chat-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.messages {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; height: 340px;
+  overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  scroll-behavior: smooth;
+}
+.msg {
+  max-width: 78%; padding: 9px 13px;
+  border-radius: 14px; font-size: 0.9rem; line-height: 1.4;
+  word-break: break-word;
+}
+.msg.me   { background: var(--accent); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.msg.them { background: var(--card); color:var(--text); align-self:flex-start; border-bottom-left-radius:4px; }
+.msg.sys  {
+  align-self: center; background: none; color: var(--muted);
+  font-size: 0.75rem; padding: 2px; max-width: 100%; text-align: center;
+}
+.input-row { display: flex; gap: 8px; }
+.input-row input { flex: 1; }
+.send-btn {
+  background: var(--accent); border: none; color: #fff;
+  padding: 10px 18px; border-radius: 8px;
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.send-btn:hover { opacity: 0.85; }
+
+/* ── Debug log ── */
+details { font-size: 0.75rem; }
+summary { cursor: pointer; color: var(--muted); user-select: none; }
+summary:hover { color: var(--text); }
+.dbg {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px;
+  font-family: var(--mono); max-height: 140px;
+  overflow-y: auto; display: flex; flex-direction: column;
+  gap: 3px; margin-top: 8px;
+}
+.dbg span { font-size: 0.7rem; }
+.d-i { color: #60a5fa; } .d-o { color: var(--success); }
+.d-w { color: var(--warning); } .d-e { color: var(--danger); }
+
+/* ── Info box ── */
+.info-box {
+  background: rgba(56,139,253,0.07); border: 1px solid rgba(56,139,253,0.25);
+  border-radius: 8px; padding: 12px 14px;
+  font-size: 0.8rem; color: var(--muted); line-height: 1.5;
+}
+.info-box strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ SCREEN 1: SETUP ══ -->
+  <div class="screen active" id="sc-setup">
+    <div class="card">
+      <div>
+        <h1>P2P Chat</h1>
+        <p class="muted" style="margin-top:4px">Auto-connects via ntfy.sh. No accounts, no server — just a shared passphrase on any network.</p>
+      </div>
+      <div class="field">
+        <label>Shared Passphrase</label>
+        <div class="pass-wrap">
+          <input type="password" id="inp-pass" placeholder="both devices enter this same phrase" autocomplete="off">
+          <button class="pass-toggle" id="btn-show-pass" title="Toggle visibility">Show</button>
+        </div>
+      </div>
+      <button class="btn" id="btn-connect">Connect</button>
+      <div class="info-box">
+        <strong>How it works:</strong> The passphrase derives a private ntfy topic name and an AES-256 encryption key. ntfy carries the encrypted WebRTC handshake; all chat traffic flows directly peer-to-peer and is never relayed. The topic resets each UTC day — start a new session with the same passphrase tomorrow and you'll get a fresh room.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SCREEN 2: CONNECTING ══ -->
+  <div class="screen" id="sc-connecting">
+    <div class="card">
+      <div>
+        <h2 id="conn-title">Looking for a peer…</h2>
+        <p class="muted" style="margin-top:4px" id="conn-sub">Checking ntfy for an existing offer.</p>
+      </div>
+      <div class="pill">
+        <div class="dot spin" id="conn-dot"></div>
+        <span id="conn-txt">Initializing</span>
+      </div>
+      <button class="btn-ghost" id="btn-cancel">Cancel</button>
+      <details>
+        <summary>Debug log</summary>
+        <div class="dbg" id="dbg-log"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ══ SCREEN 3: CHAT ══ -->
+  <div class="screen" id="sc-chat">
+    <div class="card">
+      <div class="chat-header">
+        <h2>Direct P2P Channel</h2>
+        <span class="badge" id="role-badge">—</span>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="input-row">
+        <input type="text" id="inp-msg" placeholder="Type a message…" autocomplete="off">
+        <button class="send-btn" id="btn-send">Send</button>
+      </div>
+      <button class="btn-ghost" id="btn-disconnect">Disconnect</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════
+   CONFIG
+════════════════════════════════════════════════════ */
+const NTFY        = 'https://ntfy.sh/';
+const STUN_CFG    = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const OFFER_TTL   = 90 * 60;   // seconds — ignore offers older than 90 min
+const ANSWER_TTL  = 30 * 60;   // seconds — ignore answers older than 30 min
+const POLL_MS     = 2500;       // polling interval
+const ICE_WAIT    = 4500;       // ms cap for ICE gathering
+const STEPDOWN_MS = 3800;       // ms to wait before race-condition re-check
+
+/* ════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════ */
+let aesKey, offerTopic, answerTopic;
+let pc, channel;
+let mySessionId = null;
+let pollTimer   = null;
+let role        = null;   // 'initiator' | 'joiner'
+let cancelled   = false;
+
+/* ════════════════════════════════════════════════════
+   UI
+════════════════════════════════════════════════════ */
+const $  = id => document.getElementById(id);
+
+function showScreen(name) {
+  ['setup','connecting','chat'].forEach(s => {
+    $('sc-'+s).classList.toggle('active', s === name);
+  });
+}
+
+function setConnStatus(txt, dotClass = 'spin') {
+  $('conn-txt').textContent = txt;
+  $('conn-dot').className = 'dot ' + dotClass;
+}
+
+function dbg(level, msg) {
+  const cls = { i:'d-i', o:'d-o', w:'d-w', e:'d-e' }[level] || 'd-i';
+  const el = document.createElement('span');
+  el.className = cls;
+  el.textContent = new Date().toISOString().slice(11,19) + '  ' + msg;
+  $('dbg-log').appendChild(el);
+  $('dbg-log').scrollTop = 9999;
+}
+
+function addMsg(who, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.textContent = text;
+  $('messages').appendChild(d);
+  $('messages').scrollTop = 9999;
+}
+
+/* ════════════════════════════════════════════════════
+   CRYPTO
+════════════════════════════════════════════════════ */
+async function deriveAll(password) {
+  const enc  = new TextEncoder();
+  const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+
+  // Topic = first 24 hex chars of SHA-256(pass + ':t:' + date)
+  // — hashed so the actual passphrase isn't in the URL/network request
+  const tb  = await crypto.subtle.digest('SHA-256', enc.encode(password + ':t:' + date));
+  const hex = Array.from(new Uint8Array(tb)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0, 24);
+
+  // AES-GCM-256 key via PBKDF2(pass, salt='p2p:'+date, 100k iters, SHA-256)
+  const raw = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('p2p:' + date), iterations: 100_000, hash: 'SHA-256' },
+    raw,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { hex, key };
+}
+
+// Encrypt JSON-stringifiable data → base64 blob
+async function aesEnc(key, data) {
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const ct  = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+  const buf = new Uint8Array(12 + ct.byteLength);
+  buf.set(iv);
+  buf.set(new Uint8Array(ct), 12);
+  // Use loop instead of spread to avoid stack overflow on large SDPs
+  let s = '';
+  buf.forEach(b => s += String.fromCharCode(b));
+  return btoa(s);
+}
+
+// Decrypt base64 blob → parsed object (or null on failure)
+async function aesDec(key, b64) {
+  try {
+    const raw   = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: raw.slice(0,12) }, key, raw.slice(12));
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch { return null; }
+}
+
+/* ════════════════════════════════════════════════════
+   NTFY  (corrected NDJSON reader)
+════════════════════════════════════════════════════ */
+async function ntfyPost(topic, payload) {
+  const body = await aesEnc(aesKey, payload);
+  const r = await fetch(NTFY + topic, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body
+  });
+  if (!r.ok) throw new Error('ntfy POST ' + r.status);
+}
+
+// Returns array of decrypted payload objects from our key; ignores foreign/stale messages
+async function ntfyPoll(topic, ttl) {
+  // Use unix timestamp so we only ask ntfy for messages within our window
+  const since = Math.floor(Date.now() / 1000) - ttl;
+  const r = await fetch(`${NTFY}${topic}/json?poll=1&since=${since}`);
+  if (!r.ok) throw new Error('ntfy GET ' + r.status);
+  const text = await r.text();
+
+  const results = [];
+  for (const line of text.trim().split('\n')) {
+    if (!line) continue;
+    let envelope;
+    try { envelope = JSON.parse(line); } catch { continue; }
+    if (envelope.event !== 'message') continue;          // skip keepalives etc.
+    const payload = await aesDec(aesKey, envelope.message);
+    if (!payload) continue;                               // wrong key / not ours
+    payload._ts = envelope.time;                          // attach ntfy server timestamp
+    results.push(payload);
+  }
+  return results;
+}
+
+/* ════════════════════════════════════════════════════
+   WEBRTC
+════════════════════════════════════════════════════ */
+function randId() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(5)))
+    .map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function waitIce(p) {
+  return new Promise(res => {
+    if (p.iceGatheringState === 'complete') return res();
+    const h = () => { if (p.iceGatheringState === 'complete') { p.removeEventListener('icegatheringstatechange', h); res(); } };
+    p.addEventListener('icegatheringstatechange', h);
+    setTimeout(res, ICE_WAIT);
+  });
+}
+
+function newPC() {
+  const p = new RTCPeerConnection(STUN_CFG);
+  p.onconnectionstatechange = () => {
+    dbg('i', 'connectionState → ' + p.connectionState);
+    if (p.connectionState === 'failed') addMsg('sys', '⚠ Connection lost.');
+  };
+  return p;
+}
+
+function wireChannel(ch) {
+  channel = ch;
+  ch.onopen = () => {
+    dbg('o', 'DataChannel open  role=' + role);
+    $('role-badge').textContent = role === 'initiator' ? 'Initiator ✦' : 'Joiner ✧';
+    showScreen('chat');
+    addMsg('sys', '🔒 Direct encrypted channel open. Messages go peer-to-peer.');
+  };
+  ch.onclose   = () => addMsg('sys', '— Channel closed.');
+  ch.onmessage = e => addMsg('them', e.data);
+}
+
+/* ════════════════════════════════════════════════════
+   CONNECTION FLOWS
+════════════════════════════════════════════════════ */
+async function runConnect(password) {
+  cancelled = false;
+  $('dbg-log').innerHTML = '';
+  $('conn-title').textContent = 'Deriving keys…';
+  $('conn-sub').textContent   = 'PBKDF2 running — takes ~0.5 s';
+  showScreen('connecting');
+  setConnStatus('Deriving key (PBKDF2)');
+
+  dbg('i', 'Starting key derivation…');
+  const t0 = Date.now();
+  const { hex, key } = await deriveAll(password);
+  aesKey = key;
+  offerTopic  = 'p2pchat-' + hex + '-o';
+  answerTopic = 'p2pchat-' + hex + '-a';
+  dbg('o', `Keys ready in ${Date.now()-t0}ms  topic-prefix: p2pchat-${hex.slice(0,8)}…`);
+
+  $('conn-title').textContent = 'Scanning for peer…';
+  $('conn-sub').textContent   = 'Checking ntfy for an existing offer.';
+  setConnStatus('Polling ntfy for offers…');
+  dbg('i', 'Polling ' + offerTopic);
+
+  let offers;
+  try { offers = await ntfyPoll(offerTopic, OFFER_TTL); }
+  catch (e) { throw new Error('ntfy unreachable: ' + e.message); }
+
+  const now = Math.floor(Date.now() / 1000);
+  // Pick the most recent fresh offer that isn't our own leftover
+  const storedMyId = sessionStorage.getItem('p2p-my-offer-' + hex);
+  const freshOffer = offers
+    .filter(o => o.type === 'offer' && o.sid !== storedMyId && (now - o._ts) < OFFER_TTL)
+    .sort((a,b) => b._ts - a._ts)[0];
+
+  if (freshOffer) {
+    dbg('o', `Found offer sid=${freshOffer.sid} age=${now-freshOffer._ts}s → Joining`);
+    await joinFlow(freshOffer);
+  } else {
+    dbg('i', 'No offer found → starting as Initiator');
+    await initiatorFlow(hex);
+  }
+}
+
+/* ── INITIATOR ── */
+async function initiatorFlow(hex) {
+  role = 'initiator';
+  mySessionId = randId();
+
+  $('conn-title').textContent = 'Waiting for peer…';
+  $('conn-sub').textContent   = 'Offer posted. Share the passphrase with the other device.';
+  setConnStatus('Offer live — polling for answer');
+
+  pc = newPC();
+  wireChannel(pc.createDataChannel('chat'));
+  await pc.setLocalDescription(await pc.createOffer());
+  await waitIce(pc);
+
+  const offerPayload = {
+    type: 'offer',
+    sid:  mySessionId,
+    t:    Math.floor(Date.now() / 1000),
+    sdp:  { type: pc.localDescription.type, sdp: pc.localDescription.sdp }
+  };
+  await ntfyPost(offerTopic, offerPayload);
+  // Remember our own offer so we skip it if we reload with the same passphrase today
+  sessionStorage.setItem('p2p-my-offer-' + hex, mySessionId);
+  dbg('o', 'Posted offer sid=' + mySessionId);
+
+  // ── Race-condition step-down ─────────────────────────────
+  // If two initiators both posted simultaneously, the one with the
+  // lexicographically smaller sessionId defers and becomes the joiner.
+  await sleep(STEPDOWN_MS);
+  if (cancelled) return;
+  const rivals = (await ntfyPoll(offerTopic, 60).catch(()=>[]))
+    .filter(o => o.type === 'offer' && o.sid !== mySessionId);
+  if (rivals.length > 0 && rivals[0].sid < mySessionId) {
+    dbg('w', `Race collision: rival ${rivals[0].sid} < mine → stepping down to Joiner`);
+    pc.close(); pc = null;
+    await joinFlow(rivals[0]);
+    return;
+  }
+
+  // ── Poll for a matching answer ───────────────────────────
+  pollTimer = setInterval(async () => {
+    if (cancelled) return clearPoll();
+    let answers;
+    try { answers = await ntfyPoll(answerTopic, ANSWER_TTL); }
+    catch { return; }
+
+    const match = answers
+      .filter(a => a.type === 'answer' && a.target === mySessionId)
+      .sort((a,b) => b._ts - a._ts)[0];
+
+    if (match) {
+      clearPoll();
+      dbg('o', 'Got matching answer — setting remote description');
+      setConnStatus('Answer received — finalizing…', 'ok');
+      try {
+        await pc.setRemoteDescription(match.sdp);
+      } catch (e) {
+        dbg('e', 'setRemoteDescription failed: ' + e.message);
+        addMsg('sys', '⚠ Handshake error — try reconnecting.');
+      }
+    }
+  }, POLL_MS);
+}
+
+/* ── JOINER ── */
+async function joinFlow(offer) {
+  role = 'joiner';
+  $('conn-title').textContent = 'Peer found!';
+  $('conn-sub').textContent   = 'Generating answer — connecting…';
+  setConnStatus('Answering offer', 'ok');
+
+  pc = newPC();
+  pc.ondatachannel = e => wireChannel(e.channel);
+
+  try {
+    await pc.setRemoteDescription(offer.sdp);
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitIce(pc);
+  } catch (e) {
+    throw new Error('WebRTC answer generation failed: ' + e.message);
+  }
+
+  await ntfyPost(answerTopic, {
+    type:   'answer',
+    sid:    randId(),
+    target: offer.sid,
+    t:      Math.floor(Date.now() / 1000),
+    sdp:    { type: pc.localDescription.type, sdp: pc.localDescription.sdp }
+  });
+  dbg('o', 'Posted answer targeting offer ' + offer.sid);
+  setConnStatus('Answer posted — WebRTC handshake in progress…');
+  // Joiner is now done with signaling; WebRTC fires ondatachannel → wireChannel → showScreen('chat')
+}
+
+/* ════════════════════════════════════════════════════
+   SEND
+════════════════════════════════════════════════════ */
+function sendMsg() {
+  const v = $('inp-msg').value.trim();
+  if (!v || !channel || channel.readyState !== 'open') return;
+  channel.send(v);
+  addMsg('me', v);
+  $('inp-msg').value = '';
+}
+
+/* ════════════════════════════════════════════════════
+   RESET
+════════════════════════════════════════════════════ */
+function reset() {
+  cancelled = true;
+  clearPoll();
+  if (pc) { pc.close(); pc = null; }
+  channel = null; mySessionId = null; role = null; aesKey = null;
+  $('messages').innerHTML   = '';
+  $('dbg-log').innerHTML    = '';
+  $('inp-pass').value       = '';
+  $('conn-title').textContent = 'Looking for a peer…';
+  $('conn-sub').textContent   = '';
+  setConnStatus('Initializing');
+  showScreen('setup');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function clearPoll() { clearInterval(pollTimer); pollTimer = null; }
+
+/* ════════════════════════════════════════════════════
+   EVENT WIRING
+════════════════════════════════════════════════════ */
+$('btn-connect').onclick = () => {
+  const pw = $('inp-pass').value.trim();
+  if (!pw) { $('inp-pass').focus(); return; }
+  $('btn-connect').disabled = true;
+  runConnect(pw)
+    .catch(err => {
+      dbg('e', err.message);
+      setConnStatus('Error: ' + err.message, 'err');
+      $('conn-title').textContent = 'Connection failed';
+      $('conn-sub').textContent   = 'Check the debug log. Tap Cancel to try again.';
+    })
+    .finally(() => { $('btn-connect').disabled = false; });
+};
+
+$('btn-show-pass').onclick = () => {
+  const inp = $('inp-pass');
+  const showing = inp.type === 'text';
+  inp.type = showing ? 'password' : 'text';
+  $('btn-show-pass').textContent = showing ? 'Show' : 'Hide';
+};
+
+$('inp-pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-connect').click(); });
+$('btn-cancel').onclick     = reset;
+$('btn-disconnect').onclick = reset;
+$('btn-send').onclick       = sendMsg;
+$('inp-msg').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+</script>
+</body>
+</html>
