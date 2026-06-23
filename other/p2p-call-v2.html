@@ -331,6 +331,7 @@ const S = {
   ctrlWindowStart:0, ctrlCount:0,
   prevStats:{}, noMediaSince:0, overInbound:0,
   logLines:[], role:"", offerPayload:null, repost:null, watch:null,
+  chunkBuf:{}, answerTimer:null, last429:false,
 };
 
 /* ============================================================
@@ -371,55 +372,117 @@ async function deriveKeys(pass, dateStr){
 }
 
 /* ============================================================
-   NTFY SIGNALING
+   NTFY SIGNALING  (compressed + chunked to stay under 4 KB)
    ============================================================ */
-async function postSignal(topic, obj){
-  const pt = enc.encode(JSON.stringify(obj));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, S.aesKey, pt));
-  const buf = new Uint8Array(iv.length+ct.length); buf.set(iv); buf.set(ct, iv.length);
-  await fetch(`${NTFY}/${topic}`, {method:"POST", body:b64enc(buf)});
+const WIRE_CHUNK = 3500;   // keep each ntfy message a normal message, not an attachment
+
+async function deflateRaw(str){
+  if(typeof CompressionStream==="undefined") return null;
+  try{
+    const cs=new CompressionStream("deflate-raw");
+    const w=cs.writable.getWriter(); w.write(enc.encode(str)); w.close();
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  }catch(e){ return null; }
 }
+async function inflateRaw(bytes){
+  const ds=new DecompressionStream("deflate-raw");
+  const w=ds.writable.getWriter(); w.write(bytes); w.close();
+  return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+}
+
+function ntfyPost(topic, body){ return fetch(`${NTFY}/${topic}`, {method:"POST", body}); }
+
+async function postSignal(topic, obj){
+  const json = JSON.stringify(obj);
+  const comp = await deflateRaw(json);
+  const dataBytes = comp || enc.encode(json);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, S.aesKey, dataBytes));
+  const buf = new Uint8Array(1+iv.length+ct.length);
+  buf[0] = comp ? 1 : 0;                       // compression flag
+  buf.set(iv,1); buf.set(ct,1+iv.length);
+  const payload = b64enc(buf);
+
+  if(payload.length <= WIRE_CHUNK){
+    const r = await ntfyPost(topic, "1|"+payload);
+    dbg("post "+topic.slice(-2)+" "+payload.length+"B"+(r.status===429?" [429!]":""));
+  }else{
+    const mid = randSid(), n = Math.ceil(payload.length/WIRE_CHUNK);
+    dbg("post "+topic.slice(-2)+" "+payload.length+"B in "+n+" chunks");
+    for(let i=0;i<n;i++){
+      await ntfyPost(topic, "2|"+mid+"|"+i+"|"+n+"|"+payload.slice(i*WIRE_CHUNK,(i+1)*WIRE_CHUNK));
+    }
+  }
+}
+
 async function decryptPayload(b64){
   try{
     const buf = b64dec(b64);
-    if(buf.length<13) return null;
-    const iv = buf.slice(0,12), ct = buf.slice(12);
-    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv}, S.aesKey, ct);
-    return new TextDecoder().decode(pt);
-  }catch(e){ return null; } // invalid decryption silently dropped
+    if(buf.length<14) return null;
+    const comp = buf[0]===1;
+    const iv = buf.slice(1,13), ct = buf.slice(13);
+    const pt = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv}, S.aesKey, ct));
+    return comp ? await inflateRaw(pt) : new TextDecoder().decode(pt);
+  }catch(e){ return null; }                    // wrong key / corrupt → silently dropped
 }
+
+// Returns {status, msgs}. Reassembles chunked payloads (across polls if needed).
 async function ntfyPoll(topic, sinceArg){
   let res;
   try{ res = await fetch(`${NTFY}/${topic}/json?poll=1&since=${sinceArg}`); }
-  catch(e){ dbg("poll error "+topic+": "+(e.message||e)); return []; }
-  if(!res.ok){ dbg("poll http "+res.status+" on "+topic); return []; }
+  catch(e){ dbg("poll error "+topic.slice(-2)+": "+(e.message||e)); return {status:0, msgs:[]}; }
+  if(res.status===429){ S.last429=true; return {status:429, msgs:[]}; }
+  if(!res.ok){ dbg("poll http "+res.status+" on "+topic.slice(-2)); return {status:res.status, msgs:[]}; }
+  S.last429=false;
   const text = await res.text();
-  const out = [];
+  const ready = [];                            // {b64, t} fully-assembled payloads
   let n=0;
   for(const ln of text.split("\n")){
     if(!ln) continue;
-    if(++n>300) break;
+    if(++n>400) break;
     let env; try{ env=JSON.parse(ln); }catch(e){ continue; }
-    if(env.event!=="message" || !env.message) continue;
-    const dec = await decryptPayload(env.message);
-    if(!dec) continue;                 // not for us / wrong key — drop
+    if(env.event!=="message" || typeof env.message!=="string") continue;
+    const raw = env.message;
+    if(raw.startsWith("1|")){
+      ready.push({b64:raw.slice(2), t:env.time});
+    }else if(raw.startsWith("2|")){
+      const p = raw.split("|");
+      const mid=p[1], i=+p[2], cnt=+p[3], slice=p.slice(4).join("|");
+      if(!mid||!(cnt>0)) continue;
+      const buf = (S.chunkBuf[mid] = S.chunkBuf[mid] || {n:cnt, parts:{}, t:env.time});
+      buf.parts[i]=slice; buf.t=Math.max(buf.t, env.time);
+      if(Object.keys(buf.parts).length>=buf.n){
+        let full=""; let ok=true;
+        for(let k=0;k<buf.n;k++){ if(buf.parts[k]==null){ok=false;break;} full+=buf.parts[k]; }
+        if(ok){ ready.push({b64:full, t:buf.t}); delete S.chunkBuf[mid]; }
+      }
+    }
+  }
+  // prune stale partial chunks
+  const cutoff = Math.floor(Date.now()/1000) - 120;
+  for(const k in S.chunkBuf){ if(S.chunkBuf[k].t < cutoff) delete S.chunkBuf[k]; }
+
+  const out = [];
+  for(const r of ready){
+    const dec = await decryptPayload(r.b64);
+    if(!dec) continue;
     let msg; try{ msg=JSON.parse(dec); }catch(e){ continue; }
     if(typeof msg!=="object" || !msg) continue;
-    msg._t = env.time;                 // broker (shared) clock, seconds
+    msg._t = r.t;                              // broker (shared) clock
     out.push(msg);
   }
-  return out;
+  return {status:200, msgs:out};
 }
 function mySids(){ try{return JSON.parse(sessionStorage.getItem("sids:"+S.topicHex)||"[]");}catch(e){return[];} }
 function rememberSid(sid){ const a=mySids(); a.push(sid); sessionStorage.setItem("sids:"+S.topicHex, JSON.stringify(a.slice(-20))); }
 
 async function pollOffers(excludeSid){
-  const msgs = await ntfyPoll(S.topicO, "90m");
+  const {status, msgs} = await ntfyPoll(S.topicO, "90m");
+  if(status===429) dbg("429 while checking for offers — slow down / wait a moment");
   const mine = mySids();
   const list = msgs
     .filter(m => m.type==="offer" && m.sdp && m.sid && !mine.includes(m.sid) && m.sid!==excludeSid)
-    .sort((a,b)=> b._t - a._t);        // freshest wins (handles stale leftovers)
+    .sort((a,b)=> b._t - a._t);                // freshest wins (handles stale leftovers)
   return list[0] || null;
 }
 
@@ -598,7 +661,8 @@ async function connect(pass, dateStr){
   dbg("local media: video="+(!!S.localStream.getVideoTracks().length)+" audio="+(!!S.localStream.getAudioTracks().length));
   if(S.cancelled)return;
 
-  const existing = await pollOffers();
+  let existing = await pollOffers();
+  if(!existing && S.last429){ dbg("rate-limited on first check — retrying in 4s before hosting"); await sleep(4000); if(S.cancelled)return; existing = await pollOffers(); }
   if(S.cancelled)return;
   if(existing){ S.role="joiner"; dbg("found offer "+existing.sid+" → joining"); await beJoiner(existing); }
   else { S.role="initiator"; dbg("no offer found → hosting"); await beInitiator(); }
@@ -636,12 +700,20 @@ async function beInitiator(){
 }
 
 function pollAnswers(sid){
+  let delay=3000;
   const tick=async ()=>{
     if(S.cancelled||!S.pc)return;
-    const msgs=await ntfyPoll(S.topicA, "30m");
+    const {status, msgs} = await ntfyPoll(S.topicA, "30m");
+    if(status===429){
+      delay=Math.min(Math.round(delay*1.7), 15000);
+      dbg("answers: 429, backing off to "+delay+"ms");
+      S.answerTimer=setTimeout(tick, delay);
+      return;
+    }
+    delay=3000;
     const ans=msgs.filter(m=>m.type==="answer" && m.target===sid && m.sdp).sort((a,b)=>b._t-a._t)[0];
-    if(!ans)return;
-    clearTimers(); stopRepost();
+    if(!ans){ S.answerTimer=setTimeout(tick, delay); return; }
+    stopRepost();
     try{
       await S.pc.setRemoteDescription(withBandwidth(ans.sdp));
       dbg("answer applied (from "+ans.sid+") → negotiating media");
@@ -649,7 +721,7 @@ function pollAnswers(sid){
       armWatchdog();
     }catch(e){ dbg("setRemoteDescription(answer) failed: "+(e.message||e)); showDisconnected("Failed to apply the peer's answer."); }
   };
-  const id=setInterval(tick,2000); S.pollTimers.push(id); tick();
+  tick();
 }
 
 async function beJoiner(off){
@@ -677,7 +749,7 @@ function startRepost(){
   S.repost=setInterval(()=>{
     if(S.offerPayload){ S.offerPayload.t=Math.floor(Date.now()/1000);
       postSignal(S.topicO, S.offerPayload).catch(()=>{}); }
-  }, 12000);
+  }, 25000);
 }
 function stopRepost(){ if(S.repost){ clearInterval(S.repost); S.repost=null; } }
 
@@ -832,7 +904,7 @@ async function switchDevice(kind, id){
 /* ============================================================
    TEARDOWN
    ============================================================ */
-function clearTimers(){ S.pollTimers.forEach(clearInterval); S.pollTimers=[]; }
+function clearTimers(){ S.pollTimers.forEach(clearInterval); S.pollTimers=[]; if(S.answerTimer){clearTimeout(S.answerTimer);S.answerTimer=null;} }
 function teardownPC(){
   clearTimers(); stopRepost(); clearWatchdog();
   if(S.statsTimer){clearInterval(S.statsTimer);S.statsTimer=null;}
