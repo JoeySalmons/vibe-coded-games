@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser Probe — what this page can learn about you</title>
+<style>
+  /* ============================================================
+     PALETTE — "diagnostic bench": deep ink, amber phosphor signal,
+     cyan trace. Chosen to read like vintage test equipment rather
+     than a hacker terminal. All system fonts so it runs offline
+     from file:// with no network dependency.
+     ============================================================ */
+  :root {
+    --ink:        #0b0e13;   /* page background      */
+    --ink-2:      #0f141c;   /* inset / raw blocks   */
+    --panel:      #141a24;   /* raised panels        */
+    --panel-2:    #182030;   /* hover / nested       */
+    --line:       #232c3a;   /* hairline borders     */
+    --line-soft:  #1a2230;
+
+    --text:       #e6e8ec;   /* primary text         */
+    --muted:      #8893a3;   /* secondary text       */
+    --faint:      #5c6678;   /* labels / captions    */
+
+    --amber:      #ffb84d;   /* primary signal       */
+    --amber-dim:  #c98a2e;
+    --cyan:       #5bd4e8;   /* trace / links        */
+    --cyan-dim:   #3a9eb0;
+
+    --ok:         #5ec98a;   /* worked               */
+    --partial:    #f0b429;   /* partial              */
+    --blocked:    #d06b7d;   /* failed / blocked     */
+    --na:         #9b8ce0;   /* unsupported / info   */
+
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --radius: 10px;
+    --maxw: 1320px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 600px at 78% -8%, rgba(255,184,77,0.06), transparent 60%),
+      radial-gradient(900px 520px at 10% 4%, rgba(91,212,232,0.05), transparent 55%),
+      var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  ::selection { background: rgba(255,184,77,0.25); }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11,14,19,0.86);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: var(--maxw); margin: 0 auto;
+    padding: 12px 22px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+  .brand .mark {
+    font-family: var(--mono); font-weight: 700; letter-spacing: 1px;
+    color: var(--amber); font-size: 15px;
+  }
+  .brand .mark .dot { color: var(--cyan); }
+  .brand .tag { color: var(--faint); font-size: 12.5px; }
+
+  .sig-readout {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 12px;
+  }
+  .sig-readout .lbl { color: var(--faint); text-transform: uppercase; letter-spacing: 1px; font-size: 10px; }
+  .sig-readout .val { color: var(--amber); }
+  .sig-readout .bits .val { color: var(--cyan); }
+
+  .btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.5px;
+    color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 7px 13px; cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+  }
+  .btn:hover { border-color: var(--amber-dim); color: var(--amber); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+  /* ---------- layout ---------- */
+  .shell {
+    max-width: var(--maxw); margin: 0 auto;
+    padding: 0 22px 90px;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 30px;
+  }
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+
+  /* ---------- index rail ---------- */
+  .rail {
+    position: sticky; top: 64px; align-self: start;
+    padding-top: 26px;
+    max-height: calc(100vh - 80px); overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .rail h2 {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--faint);
+    margin: 0 0 12px 8px; font-weight: 600;
+  }
+  .rail ol { list-style: none; margin: 0; padding: 0; }
+  .rail li a {
+    display: flex; align-items: center; gap: 9px;
+    padding: 5px 8px; border-radius: 6px;
+    color: var(--muted); font-size: 12.5px;
+    border-left: 2px solid transparent;
+    transition: background .12s, color .12s;
+  }
+  .rail li a:hover { background: var(--panel); color: var(--text); text-decoration: none; }
+  .rail .num { font-family: var(--mono); font-size: 11px; color: var(--faint); width: 16px; }
+  .rail .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--line); flex: none;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  .status-dot.pending { background: var(--faint); animation: pulse 1.4s ease-in-out infinite; }
+  .status-dot.ok       { background: var(--ok);      box-shadow: 0 0 7px rgba(94,201,138,0.6); }
+  .status-dot.partial  { background: var(--partial); box-shadow: 0 0 7px rgba(240,180,41,0.55); }
+  .status-dot.blocked  { background: var(--blocked); box-shadow: 0 0 7px rgba(208,107,125,0.5); }
+  .status-dot.na       { background: var(--na);      box-shadow: 0 0 7px rgba(155,140,224,0.5); }
+  @keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+
+  /* ---------- main column ---------- */
+  .main { min-width: 0; padding-top: 26px; }
+
+  .intro { margin: 0 0 26px; }
+  .intro h1 {
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(26px, 4.5vw, 40px); line-height: 1.08;
+    letter-spacing: -0.5px; margin: 0 0 14px;
+  }
+  .intro h1 .hl { color: var(--amber); }
+  .intro p { color: var(--muted); max-width: 70ch; margin: 0 0 10px; }
+  .intro .ctx-line {
+    font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+    margin-top: 14px; display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .intro .ctx-line b { color: var(--cyan); font-weight: 500; }
+
+  /* ---------- hero composite signature ---------- */
+  .hero {
+    background:
+      linear-gradient(180deg, rgba(255,184,77,0.04), transparent 40%),
+      var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 34px;
+    display: grid;
+    grid-template-columns: 168px 1fr;
+    gap: 26px;
+    align-items: center;
+  }
+  @media (max-width: 560px) { .hero { grid-template-columns: 1fr; } }
+
+  .sigil {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-auto-rows: 1fr;
+    gap: 3px;
+    width: 152px; height: 152px;
+    padding: 9px;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .cell {
+    border-radius: 2px;
+    background: #161d29;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity .5s ease, transform .5s ease, background .5s ease;
+  }
+  .cell.on  { background: var(--amber); opacity: 1; transform: scale(1); }
+  .cell.off { background: #1c2433;     opacity: 1; transform: scale(1); }
+  .cell.hot { background: var(--cyan); }
+
+  .hero-meta h3 {
+    margin: 0 0 4px; font-family: var(--mono);
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--faint);
+    font-weight: 600;
+  }
+  .hero-hash {
+    font-family: var(--mono); font-size: clamp(18px, 3vw, 26px);
+    color: var(--amber); word-break: break-all; letter-spacing: 1px;
+    margin: 2px 0 14px;
+  }
+  .meters { display: flex; gap: 30px; flex-wrap: wrap; }
+  .meter .k { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); }
+  .meter .v { font-family: var(--mono); font-size: 22px; color: var(--cyan); margin-top: 2px; }
+  .meter .v small { font-size: 12px; color: var(--muted); }
+  .progress-track {
+    margin-top: 16px; height: 5px; background: var(--ink-2);
+    border-radius: 3px; overflow: hidden; border: 1px solid var(--line-soft);
+  }
+  .progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+    transition: width .4s ease;
+  }
+  .hero-note { font-size: 12px; color: var(--faint); margin-top: 12px; max-width: 64ch; }
+
+  /* ---------- probe panels ---------- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 18px;
+    overflow: hidden;
+    scroll-margin-top: 70px;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .panel-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--amber); background: rgba(255,184,77,0.09);
+    border: 1px solid rgba(255,184,77,0.22);
+    border-radius: 6px; padding: 3px 8px; flex: none;
+  }
+  .panel-title { font-weight: 600; font-size: 15.5px; margin: 0; flex: 1; }
+  .panel-title .sub { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+  .badge {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.5px;
+    text-transform: uppercase; font-weight: 600;
+    padding: 4px 9px; border-radius: 20px; flex: none;
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid transparent;
+  }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.pending  { color: var(--faint);   border-color: var(--line); }
+  .badge.ok       { color: var(--ok);      border-color: rgba(94,201,138,0.3);  background: rgba(94,201,138,0.07); }
+  .badge.partial  { color: var(--partial); border-color: rgba(240,180,41,0.3);  background: rgba(240,180,41,0.07); }
+  .badge.blocked  { color: var(--blocked); border-color: rgba(208,107,125,0.3); background: rgba(208,107,125,0.07); }
+  .badge.na       { color: var(--na);      border-color: rgba(155,140,224,0.3); background: rgba(155,140,224,0.07); }
+
+  .panel-body { padding: 16px 18px; }
+  .what { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+
+  /* data rows */
+  .kv { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  .kv td { padding: 5px 10px; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+  .kv tr:last-child td { border-bottom: none; }
+  .kv .k { color: var(--cyan); white-space: nowrap; width: 1%; }
+  .kv .v { color: var(--text); word-break: break-word; }
+  .kv .v .interp { display: block; color: var(--faint); font-family: var(--sans); font-size: 12px; margin-top: 2px; }
+  .kv .v.dim { color: var(--faint); }
+
+  .raw {
+    font-family: var(--mono); font-size: 12px; line-height: 1.5;
+    background: var(--ink-2); border: 1px solid var(--line-soft);
+    border-radius: 8px; padding: 12px 14px; margin: 12px 0 0;
+    color: var(--muted); white-space: pre-wrap; word-break: break-word;
+    max-height: 320px; overflow: auto;
+  }
+  .raw .hl { color: var(--amber); }
+
+  details.more { margin-top: 12px; }
+  details.more > summary {
+    cursor: pointer; font-family: var(--mono); font-size: 11.5px;
+    letter-spacing: 0.5px; color: var(--cyan); list-style: none;
+    padding: 6px 0; user-select: none;
+  }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::before { content: "▸ "; color: var(--faint); }
+  details.more[open] > summary::before { content: "▾ "; }
+
+  /* chip grid (fonts, features, media queries) */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip {
+    font-family: var(--mono); font-size: 11.5px;
+    padding: 3px 9px; border-radius: 5px;
+    border: 1px solid var(--line); color: var(--faint);
+    background: var(--ink-2);
+  }
+  .chip.yes { color: var(--ok);      border-color: rgba(94,201,138,0.28); }
+  .chip.no  { color: var(--faint);   opacity: 0.6; }
+  .chip.yes::before { content: "✓ "; }
+  .chip.no::before  { content: "· "; }
+
+  .group-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--faint); margin: 14px 0 6px;
+  }
+
+  .note {
+    margin-top: 14px; padding: 11px 13px;
+    background: rgba(91,212,232,0.05);
+    border-left: 2px solid var(--cyan-dim);
+    border-radius: 0 7px 7px 0;
+    font-size: 13px; color: var(--muted);
+  }
+  .note b { color: var(--cyan); font-weight: 600; }
+  .note.warn { background: rgba(208,107,125,0.06); border-left-color: var(--blocked); }
+  .note.warn b { color: var(--blocked); }
+
+  .inline-btn {
+    font-family: var(--mono); font-size: 11.5px;
+    color: var(--amber); background: rgba(255,184,77,0.08);
+    border: 1px solid rgba(255,184,77,0.25); border-radius: 6px;
+    padding: 5px 11px; cursor: pointer; margin-top: 10px;
+  }
+  .inline-btn:hover { background: rgba(255,184,77,0.16); }
+  .inline-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+  canvas.show { border: 1px solid var(--line); border-radius: 6px; background: #fff; margin-top: 6px; image-rendering: pixelated; }
+
+  /* footer */
+  .foot {
+    max-width: var(--maxw); margin: 0 auto; padding: 30px 22px 0;
+    color: var(--faint); font-size: 12.5px; border-top: 1px solid var(--line);
+  }
+  .foot table { border-collapse: collapse; margin: 14px 0; font-family: var(--mono); font-size: 12px; }
+  .foot th, .foot td { text-align: left; padding: 6px 14px 6px 0; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+  .foot th { color: var(--faint); font-weight: 600; }
+
+  .copied-toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--amber-dim);
+    color: var(--amber); font-family: var(--mono); font-size: 13px;
+    padding: 10px 18px; border-radius: 8px; z-index: 100;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .copied-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="mark">BROWSER<span class="dot">·</span>PROBE</span>
+      <span class="tag">a privacy diagnostic bench</span>
+    </div>
+    <div class="sig-readout">
+      <div><span class="lbl">signature</span> <span class="val" id="top-sig">—</span></div>
+      <div class="bits"><span class="lbl">est. bits</span> <span class="val" id="top-bits">—</span></div>
+    </div>
+    <button class="btn" id="copy-btn">Copy report</button>
+    <button class="btn" id="rescan-btn">Rescan</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Probe index">
+    <h2>System probes</h2>
+    <ol id="rail-list"></ol>
+  </nav>
+
+  <main class="main">
+    <section class="intro">
+      <h1>What this page can learn about you <span class="hl">without asking</span>.</h1>
+      <p>
+        Open a web page and it can quietly read dozens of facts about your device — your
+        screen, your GPU, your fonts, your timezone, your network — and combine them into
+        a <em>fingerprint</em> that follows you across sites, no cookies required. This page
+        runs those same checks <strong>on you, right now</strong>, and shows the raw values,
+        what they mean, and how identifying each one is. Nothing is sent anywhere except the
+        optional public-IP lookup, which is clearly marked.
+      </p>
+      <div class="ctx-line" id="ctx-line"></div>
+    </section>
+
+    <section class="hero" aria-label="Composite signature">
+      <div class="sigil" id="sigil" aria-hidden="true"></div>
+      <div class="hero-meta">
+        <h3>Composite device signature</h3>
+        <div class="hero-hash" id="hero-hash">assembling…</div>
+        <div class="meters">
+          <div class="meter">
+            <div class="k">Probes reporting</div>
+            <div class="v" id="m-probes">0<small> / 17</small></div>
+          </div>
+          <div class="meter">
+            <div class="k">Est. identifying bits</div>
+            <div class="v" id="m-bits">0<small> bits</small></div>
+          </div>
+          <div class="meter">
+            <div class="k">Rough 1-in-N</div>
+            <div class="v" id="m-uniq">—</div>
+          </div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progress"></div></div>
+        <p class="hero-note">
+          This signature is built only from the probes below, hashed together — it is not
+          stored or transmitted. The “bits” figure is an <strong>illustrative estimate</strong>
+          of how rare your configuration is, not a measured population statistic. Real
+          fingerprinting services compare against millions of visitors.
+        </p>
+      </div>
+    </section>
+
+    <div id="panels"></div>
+
+  </main>
+</div>
+
+<footer class="foot">
+  <p><b style="color:var(--amber)">How to read this:</b> Each probe shows a status —
+    <span style="color:var(--ok)">Worked</span>,
+    <span style="color:var(--partial)">Partial</span>,
+    <span style="color:var(--blocked)">Blocked / failed</span>, or
+    <span style="color:var(--na)">Unsupported</span> — plus raw data, a plain-English reading,
+    and a one-line note on what it reveals.</p>
+
+  <p style="margin-top:18px"><b style="color:var(--amber)">Why some checks differ when you open this as a local file</b> (<code>file://</code>)
+    versus host it (e.g. GitHub Pages over HTTPS):</p>
+  <table>
+    <tr><th>Check</th><th>Behaviour under file://</th></tr>
+    <tr><td>Public-IP fetch</td><td>Usually blocked — opaque origin / CORS</td></tr>
+    <tr><td>WebRTC STUN</td><td>May work or fail depending on OS firewall</td></tr>
+    <tr><td>Battery API</td><td>Needs a secure context (HTTPS) where supported</td></tr>
+    <tr><td>Service workers</td><td>Unavailable on file://</td></tr>
+    <tr><td>Permissions API</td><td>Partial — several names unsupported</td></tr>
+    <tr><td>Storage estimate</td><td>Works, but quota may read as 0 / undefined</td></tr>
+    <tr><td>Canvas / WebGL / Audio</td><td>Work normally</td></tr>
+  </table>
+
+  <p style="margin-top:18px; max-width:74ch">
+    Built as a teaching tool. To reduce your real-world fingerprint, the strongest moves are
+    using a browser that resists fingerprinting (Tor Browser normalises most of these values;
+    Brave and Firefox add noise to canvas/audio), keeping your browser updated, and being
+    cautious with permissions. Inspired by the techniques catalogued at
+    EFF’s Cover Your Tracks and BrowserLeaks.
+  </p>
+  <p style="margin:22px 0 0; color:var(--line-soft)">— end of report —</p>
+</footer>
+
+<div class="copied-toast" id="toast">copied</div>
+
+<script>
+/* ============================================================================
+   BROWSER PROBE  —  all logic, no dependencies.
+   Each probe returns { status, summary, render(node), sig } where:
+     status  : 'ok' | 'partial' | 'blocked' | 'na'
+     summary : short text for the rail / collapsed view
+     render  : fn that fills the panel body DOM
+     sig     : string contributed to the composite signature (may be '')
+   Probes run progressively; the UI updates as each resolves.
+   ============================================================================ */
+
+/* ---------- tiny DOM helpers ---------- */
+function el(tag, attrs, kids) {
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    if (k === 'class') n.className = attrs[k];
+    else if (k === 'html') n.innerHTML = attrs[k];
+    else if (k === 'text') n.textContent = attrs[k];
+    else if (k.startsWith('on') && typeof attrs[k] === 'function') n.addEventListener(k.slice(2), attrs[k]);
+    else n.setAttribute(k, attrs[k]);
+  }
+  if (kids != null) (Array.isArray(kids) ? kids : [kids]).forEach(c =>
+    n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+  return n;
+}
+function kvTable(rows) {
+  const t = el('table', { class: 'kv' });
+  rows.forEach(([k, v, interp, dim]) => {
+    const vc = el('td', { class: 'v' + (dim ? ' dim' : '') });
+    vc.appendChild(document.createTextNode(v == null ? '—' : String(v)));
+    if (interp) vc.appendChild(el('span', { class: 'interp', text: interp }));
+    t.appendChild(el('tr', null, [el('td', { class: 'k', text: k }), vc]));
+  });
+  return t;
+}
+function rawBlock(text) { return el('pre', { class: 'raw', text }); }
+function noteBlock(html, warn) { return el('div', { class: 'note' + (warn ? ' warn' : ''), html }); }
+function safe(fn, fallback) { try { return fn(); } catch (e) { return fallback; } }
+
+/* ---------- hashing (FNV-1a 32-bit, deterministic) ---------- */
+function fnv1a(str, seed) {
+  let h = (seed >>> 0) || 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  return h >>> 0;
+}
+function hashHex(str, seed) { return fnv1a(str, seed).toString(16).padStart(8, '0'); }
+
+/* ---------- environment context ---------- */
+const ENV = {
+  proto: location.protocol,
+  isFile: location.protocol === 'file:',
+  isSecure: !!window.isSecureContext,
+  https: location.protocol === 'https:',
+};
+
+/* ============================================================================
+   PROBE DEFINITIONS
+   ============================================================================ */
+const PROBES = [];
+function probe(def) { PROBES.push(def); }
+
+/* --- 01 Protocol / Origin -------------------------------------------------- */
+probe({
+  id: 'origin', title: 'Protocol & Origin', sub: 'where this page is running from',
+  what: 'Before anything else, the page knows whether it was opened as a local file or served from a real origin. That gates which other APIs are even allowed to run.',
+  async run() {
+    const proto = location.protocol, host = location.hostname || '(empty)',
+          origin = location.origin, href = location.href;
+    const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+    const status = 'ok';
+    return {
+      status,
+      summary: ENV.isFile ? 'file:// (opaque origin)' : (ENV.https ? 'HTTPS origin' : proto),
+      sig: proto + '|' + (host || ''),
+      render(b) {
+        b.appendChild(kvTable([
+          ['protocol', proto, ENV.isFile ? 'Local filesystem' : ENV.https ? 'Served over TLS' : 'Plain HTTP'],
+          ['hostname', host, host === '(empty)' ? 'No server host — local file' : (isLocal ? 'Loopback / dev server' : null)],
+          ['origin', origin, origin === 'null' ? 'Opaque origin — cannot share cookies/storage' : null],
+          ['secure context', String(ENV.isSecure), ENV.isSecure ? 'Secure-context APIs allowed' : 'Secure-context APIs blocked'],
+          ['href', href.length > 80 ? href.slice(0, 80) + '…' : href, null, true],
+        ]));
+        b.appendChild(noteBlock(ENV.isFile
+          ? 'A <b>file://</b> page has an opaque "null" origin: the browser treats it as unique and isolated. Several probes below will fail by design — and those failures are themselves a signal.'
+          : 'A real origin lets storage, cookies and most secure-context APIs work, so more of the probes below will return data.'));
+      }
+    };
+  }
+});
+
+/* --- 02 Navigator ---------------------------------------------------------- */
+probe({
+  id: 'navigator', title: 'Navigator — identity & hardware', sub: 'no prompt required',
+  what: 'The navigator object hands out your user-agent, platform, CPU core count, approximate RAM, touch support and automation flags — all instantly, with no permission.',
+  async run() {
+    const n = navigator;
+    let highEntropy = null;
+    if (n.userAgentData && n.userAgentData.getHighEntropyValues) {
+      highEntropy = await safe(() => n.userAgentData.getHighEntropyValues(
+        ['architecture', 'bitness', 'model', 'platformVersion', 'uaFullVersion', 'fullVersionList']), null);
+    }
+    const plugins = safe(() => Array.from(n.plugins).map(p => p.name), []);
+    const sig = [n.userAgent, n.platform, n.hardwareConcurrency, n.deviceMemory,
+                 n.maxTouchPoints, (n.languages || []).join(',')].join('|');
+    return {
+      status: 'ok',
+      summary: (n.platform || '?') + ' · ' + (n.hardwareConcurrency || '?') + ' cores',
+      sig,
+      render(b) {
+        b.appendChild(el('div', { class: 'group-label', text: 'User agent' }));
+        b.appendChild(rawBlock(n.userAgent));
+        if (n.userAgentData) {
+          b.appendChild(el('div', { class: 'group-label', text: 'Client hints (Chromium)' }));
+          b.appendChild(rawBlock(JSON.stringify({
+            brands: n.userAgentData.brands, mobile: n.userAgentData.mobile,
+            platform: n.userAgentData.platform, highEntropy
+          }, null, 2)));
+        }
+        b.appendChild(el('div', { class: 'group-label', text: 'Hardware & identity' }));
+        b.appendChild(kvTable([
+          ['platform', n.platform, 'Deprecated but still reported'],
+          ['vendor', n.vendor || '(empty)', n.vendor === '' ? 'Empty in Firefox' : null],
+          ['hardwareConcurrency', n.hardwareConcurrency, 'Logical CPU cores'],
+          ['deviceMemory', n.deviceMemory ?? 'undefined', n.deviceMemory ? 'GB of RAM, bucketed & capped at 8 — Chromium only' : 'Not exposed (Firefox / Safari)'],
+          ['maxTouchPoints', n.maxTouchPoints, n.maxTouchPoints > 0 ? 'Touch-capable' : 'Mouse / trackpad only'],
+          ['language(s)', (n.languages || [n.language]).join(', ')],
+          ['cookieEnabled', String(n.cookieEnabled)],
+          ['doNotTrack', n.doNotTrack ?? 'null'],
+          ['globalPrivacyControl', n.globalPrivacyControl ?? 'undefined'],
+          ['webdriver', String(n.webdriver), n.webdriver ? 'Automation detected (Selenium/Puppeteer)' : 'Normal (not automated)'],
+          ['onLine', String(n.onLine)],
+        ]));
+        b.appendChild(el('div', { class: 'group-label', text: 'Plugins (' + plugins.length + ')' }));
+        b.appendChild(rawBlock(plugins.length ? plugins.join('\n') : '(none)'));
+        b.appendChild(noteBlock('Since Chrome 91 the plugin list is a <b>fixed set of PDF entries</b> for every user — anti-fingerprinting hardening. <b>navigator.webdriver</b> exposes bot automation, and <b>deviceMemory</b> leaks an RAM bucket that Firefox and Safari refuse to provide.'));
+      }
+    };
+  }
+});
+
+/* --- 03 Screen & Display --------------------------------------------------- */
+probe({
+  id: 'screen', title: 'Screen & display geometry', sub: 'resolution, scaling, chrome size',
+  what: 'Screen size, colour depth, pixel ratio and the gap between window and viewport reveal your monitor, your OS scaling, and even your toolbar layout.',
+  async run() {
+    const s = screen, chromeW = window.outerWidth - window.innerWidth, chromeH = window.outerHeight - window.innerHeight;
+    const sig = [s.width, s.height, s.colorDepth, window.devicePixelRatio, s.availWidth, s.availHeight].join('x');
+    return {
+      status: 'ok',
+      summary: s.width + '×' + s.height + ' @' + window.devicePixelRatio + 'x',
+      sig,
+      render(b) {
+        b.appendChild(kvTable([
+          ['screen', s.width + ' × ' + s.height, 'Total display pixels'],
+          ['available', s.availWidth + ' × ' + s.availHeight, 'Minus taskbar / dock'],
+          ['colorDepth', s.colorDepth + '-bit'],
+          ['devicePixelRatio', window.devicePixelRatio, window.devicePixelRatio > 1 ? 'HiDPI / Retina or fractional scaling' : 'Standard density'],
+          ['window outer', window.outerWidth + ' × ' + window.outerHeight],
+          ['viewport inner', window.innerWidth + ' × ' + window.innerHeight],
+          ['browser chrome', chromeW + ' × ' + chromeH + ' px', 'Toolbar / scrollbar footprint'],
+          ['orientation', safe(() => screen.orientation.type, 'n/a'), safe(() => screen.orientation.angle + '°', '')],
+        ]));
+        b.appendChild(rawBlock(
+          '┌──────── screen ' + s.width + '×' + s.height + ' ────────┐\n' +
+          '│ ┌──── window ' + window.outerWidth + '×' + window.outerHeight + ' ────┐ │\n' +
+          '│ │ chrome ' + chromeW + '×' + chromeH + 'px            │ │\n' +
+          '│ │ ┌─ viewport ' + window.innerWidth + '×' + window.innerHeight + ' ─┐ │ │\n' +
+          '│ │ │  (page renders here)      │ │ │\n' +
+          '│ │ └───────────────────────────┘ │ │\n' +
+          '│ └───────────────────────────────┘ │\n' +
+          '└────────────────────────────────────┘'));
+        b.appendChild(noteBlock('Resolution × pixel-ratio × colour-depth is a surprisingly strong combination. The chrome gap even hints at which OS and which toolbars/extensions you run.'));
+      }
+    };
+  }
+});
+
+/* --- 04 CSS Media Queries -------------------------------------------------- */
+probe({
+  id: 'media', title: 'CSS media queries', sub: 'OS preferences, leaked passively',
+  what: 'JavaScript can ask the CSS engine about your colour scheme, contrast and motion settings, pointer type and display gamut — exposing OS accessibility choices with no prompt.',
+  async run() {
+    const mq = q => safe(() => matchMedia(q).matches, false);
+    const groups = {
+      'Colour capability': ['(color-gamut: srgb)', '(color-gamut: p3)', '(color-gamut: rec2020)', '(dynamic-range: high)'],
+      'User preferences (OS settings)': ['(prefers-color-scheme: dark)', '(prefers-color-scheme: light)', '(prefers-reduced-motion: reduce)', '(prefers-contrast: more)', '(prefers-reduced-transparency: reduce)', '(forced-colors: active)'],
+      'Input & pointer': ['(pointer: fine)', '(pointer: coarse)', '(hover: hover)', '(any-pointer: coarse)', '(any-hover: hover)'],
+      'Display mode': ['(display-mode: fullscreen)', '(display-mode: standalone)', '(display-mode: browser)'],
+    };
+    const results = {}; for (const g in groups) results[g] = groups[g].map(q => [q, mq(q)]);
+    const sig = Object.values(results).flat().map(([q, v]) => (v ? '1' : '0')).join('');
+    return {
+      status: 'ok',
+      summary: (mq('(prefers-color-scheme: dark)') ? 'dark' : 'light') + ' · ' + (mq('(pointer: coarse)') ? 'touch' : 'mouse'),
+      sig,
+      render(b) {
+        for (const g in results) {
+          b.appendChild(el('div', { class: 'group-label', text: g }));
+          const wrap = el('div', { class: 'chips' });
+          results[g].forEach(([q, v]) => wrap.appendChild(
+            el('span', { class: 'chip ' + (v ? 'yes' : 'no'), text: q.replace(/[()]/g, '') })));
+          b.appendChild(wrap);
+        }
+        b.appendChild(noteBlock('<b>prefers-color-scheme</b> and <b>prefers-reduced-motion</b> mirror your operating-system accessibility settings. A <b>p3</b> gamut points at modern Apple hardware; <b>forced-colors</b> means Windows High Contrast.'));
+      }
+    };
+  }
+});
+
+/* --- 05 Time, Locale, Timezone --------------------------------------------- */
+probe({
+  id: 'time', title: 'Time, locale & timezone', sub: 'a strong location proxy',
+  what: 'Your timezone and locale come straight from the OS clock and region settings. Combined, they place you geographically — and a mismatch with your IP is itself a flag.',
+  async run() {
+    const dtf = Intl.DateTimeFormat().resolvedOptions();
+    const offMin = new Date().getTimezoneOffset();
+    const offH = (-offMin / 60);
+    const offStr = (offH >= 0 ? '+' : '-') + String(Math.floor(Math.abs(offH))).padStart(2, '0') + ':' + String(Math.abs(offMin) % 60).padStart(2, '0');
+    const tzCount = safe(() => Intl.supportedValuesOf('timeZone').length, null);
+    window.__probeTZ = dtf.timeZone; // shared for cross-check
+    return {
+      status: 'ok',
+      summary: dtf.timeZone + ' (UTC' + offStr + ')',
+      sig: dtf.timeZone + '|' + dtf.locale + '|' + offStr,
+      render(b) {
+        b.appendChild(kvTable([
+          ['timeZone', dtf.timeZone, 'From OS region settings'],
+          ['UTC offset', 'UTC' + offStr, '(' + offMin + ' min)'],
+          ['local time', new Date().toLocaleString()],
+          ['UTC time', new Date().toISOString()],
+          ['locale', dtf.locale],
+          ['calendar', dtf.calendar],
+          ['numbering', dtf.numberingSystem],
+          ['hourCycle', dtf.hourCycle + ' (' + (dtf.hour12 ? '12h' : '24h') + ')'],
+          ['known timezones', tzCount == null ? 'n/a' : tzCount, tzCount ? 'Size of the Intl tz database' : null],
+        ]));
+        b.appendChild(noteBlock('Timezone + locale is one of the most location-revealing passive signals. Fingerprinting systems cross-check it against IP geolocation and treat disagreement (e.g. a VPN) as suspicious.'));
+      }
+    };
+  }
+});
+
+/* --- 06 Network & IP ------------------------------------------------------- */
+probe({
+  id: 'network', title: 'Network & public IP', sub: 'one optional external request',
+  what: 'A page can read your connection class locally, and can ask a third-party API for your public IP and rough location. This is the only probe here that talks to the network.',
+  async run() {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    const connData = conn ? {
+      effectiveType: conn.effectiveType, downlink: conn.downlink,
+      rtt: conn.rtt, saveData: conn.saveData, type: conn.type
+    } : null;
+
+    let ip = null, ipErr = null;
+    const APIS = ['https://api64.ipify.org?format=json', 'https://ipapi.co/json/'];
+    for (const url of APIS) {
+      try {
+        const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 4500);
+        const res = await fetch(url, { signal: ctl.signal }); clearTimeout(to);
+        if (res.ok) { ip = await res.json(); break; }
+      } catch (e) { ipErr = e.message; }
+    }
+    window.__probeIP = ip; // shared for WebRTC cross-check
+    const status = ip ? 'ok' : (connData ? 'partial' : 'blocked');
+    return {
+      status,
+      summary: ip ? (ip.ip || 'IP found') : 'IP fetch blocked',
+      sig: connData ? [connData.effectiveType, connData.downlink].join('|') : '',
+      render(b) {
+        if (ip) {
+          b.appendChild(el('div', { class: 'group-label', text: 'Public IP lookup' }));
+          b.appendChild(kvTable([
+            ['ip', ip.ip],
+            ['city', ip.city, ip.region],
+            ['country', ip.country_name || ip.country],
+            ['ISP / org', ip.org],
+            ['lat / lon', ip.latitude != null ? ip.latitude + ', ' + ip.longitude : 'n/a'],
+            ['IP timezone', ip.timezone, ip.timezone && window.__probeTZ ? (ip.timezone === window.__probeTZ ? 'matches your browser timezone ✓' : 'DIFFERS from browser tz (' + window.__probeTZ + ') — VPN?') : null],
+          ].filter(r => r[1] != null)));
+        } else {
+          b.appendChild(noteBlock('Public-IP fetch failed' + (ENV.isFile ? ' — expected on <b>file://</b> (opaque origin blocks the request).' : (ipErr ? ': ' + ipErr : '.')), true));
+        }
+        b.appendChild(el('div', { class: 'group-label', text: 'Connection API (Chromium only)' }));
+        if (connData) {
+          b.appendChild(kvTable([
+            ['effectiveType', connData.effectiveType, 'Estimated class, not measured'],
+            ['downlink', connData.downlink + ' Mbps', 'Rounded estimate'],
+            ['rtt', connData.rtt + ' ms', 'Rounded to 25 ms'],
+            ['saveData', String(connData.saveData), 'OS data-saver toggle'],
+            ['type', connData.type ?? 'unknown'],
+          ]));
+        } else {
+          b.appendChild(el('p', { class: 'what', text: 'navigator.connection not available (Firefox / Safari).' }));
+        }
+        b.appendChild(noteBlock('Your public IP is the single most direct location signal. Notice whether the IP-derived timezone agrees with the browser timezone from probe 05 — fingerprinters use that mismatch to spot VPNs.'));
+      }
+    };
+  }
+});
+
+/* --- 07 WebRTC ------------------------------------------------------------- */
+probe({
+  id: 'webrtc', title: 'WebRTC IP candidates', sub: 'the classic VPN leak',
+  what: 'Setting up a peer connection makes the browser gather network "candidates". Historically this leaked your real local and public IP even behind a VPN. Modern browsers hide the local one behind mDNS.',
+  async run() {
+    if (!('RTCPeerConnection' in window)) return { status: 'na', summary: 'WebRTC unavailable', sig: '', render(b) { b.appendChild(el('p', { class: 'what', text: 'RTCPeerConnection is not available in this browser.' })); } };
+    const cands = [];
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      pc.createDataChannel('probe');
+      await pc.setLocalDescription(await pc.createOffer());
+      await new Promise(resolve => {
+        const done = setTimeout(() => { try { pc.close(); } catch (e) {} resolve(); }, 4200);
+        pc.onicecandidate = e => {
+          if (!e.candidate) { clearTimeout(done); try { pc.close(); } catch (er) {} return resolve(); }
+          const c = e.candidate.candidate;
+          // SDP: candidate:<foundation> <comp> <transport> <priority> <ADDRESS> <port> typ <type> ...
+          const parts = c.split(' ');
+          const addr = parts[4] || '';
+          const typ = (c.match(/typ (\w+)/) || [])[1] || '?';
+          cands.push({ raw: c, addr, typ, proto: c.split(' ')[2] || '' });
+        };
+      });
+    } catch (e) { return { status: 'blocked', summary: 'WebRTC error', sig: '', render(b) { b.appendChild(noteBlock('WebRTC gathering failed: ' + e.message, true)); } }; }
+
+    function classify(a) {
+      if (!a) return '—';
+      if (a.endsWith('.local')) return 'mDNS-obfuscated (local IP hidden)';
+      if (/^192\.168\./.test(a) || /^10\./.test(a) || /^172\.(1[6-9]|2\d|3[01])\./.test(a)) return 'Private LAN IP (RFC 1918)';
+      if (/^127\./.test(a)) return 'Loopback';
+      if (a === '::1') return 'IPv6 loopback';
+      if (a.includes(':')) return 'IPv6 — possibly globally unique';
+      return 'Public IPv4';
+    }
+    const publicCand = cands.find(c => c.typ === 'srflx');
+    const status = cands.length ? 'ok' : 'partial';
+    return {
+      status,
+      summary: cands.length ? cands.length + ' candidate(s)' : 'no candidates',
+      sig: '',
+      render(b) {
+        if (!cands.length) { b.appendChild(noteBlock('No ICE candidates returned — STUN may be blocked by your firewall, or this is a restricted context.', true)); return; }
+        const t = el('table', { class: 'kv' });
+        cands.forEach(c => {
+          const vc = el('td', { class: 'v' });
+          vc.appendChild(document.createTextNode(c.addr || '(n/a)'));
+          vc.appendChild(el('span', { class: 'interp', text: classify(c.addr) }));
+          t.appendChild(el('tr', null, [el('td', { class: 'k', text: c.typ }), vc]));
+        });
+        b.appendChild(t);
+        if (publicCand && window.__probeIP) {
+          const match = publicCand.addr === window.__probeIP.ip;
+          b.appendChild(noteBlock('WebRTC public IP <b>' + publicCand.addr + '</b> ' + (match ? 'matches' : 'differs from') + ' the fetch-based IP <b>' + window.__probeIP.ip + '</b>.', !match));
+        }
+        const det = el('details', { class: 'more' });
+        det.appendChild(el('summary', { text: 'raw SDP candidate strings' }));
+        det.appendChild(rawBlock(cands.map(c => c.raw).join('\n')));
+        b.appendChild(det);
+        b.appendChild(noteBlock('A <b>host</b> candidate ending in <code>.local</code> means your browser hid your LAN IP behind mDNS — good. A <b>srflx</b> candidate always exposes your public IP regardless. Older browsers leaked the raw <code>192.168.x.x</code> here even through a VPN.'));
+      }
+    };
+  }
+});
+
+/* --- 08 Canvas ------------------------------------------------------------- */
+probe({
+  id: 'canvas', title: 'Canvas fingerprint', sub: 'pixels that betray your stack',
+  what: 'Draw the same text and shapes into a canvas and read back the pixels. Tiny differences in font rendering and anti-aliasing across GPU, driver and OS make the result a stable per-device hash.',
+  async run() {
+    let dataURL = '', hash = 'n/a', blank = false;
+    try {
+      const c = document.createElement('canvas'); c.width = 320; c.height = 64;
+      const x = c.getContext('2d');
+      x.textBaseline = 'top'; x.font = "16px 'Arial', sans-serif";
+      x.fillStyle = '#f60'; x.fillRect(0, 0, 320, 64);
+      x.fillStyle = '#069'; x.fillText('BrowserProbe \u2764\uFE0F \u{1F47E} \u0CA0_\u0CA0', 2, 2);
+      x.fillStyle = 'rgba(102,204,0,0.7)'; x.beginPath(); x.arc(52, 50, 28, 0, Math.PI * 2, true); x.fill();
+      x.globalCompositeOperation = 'multiply'; x.fillStyle = 'rgb(255,0,255)'; x.fillRect(110, 24, 90, 22);
+      dataURL = c.toDataURL('image/png');
+      hash = hashHex(dataURL);
+      const px = x.getImageData(0, 0, 320, 64).data;
+      blank = !px.some(v => v !== 0 && v !== 255);
+      window.__canvasEl = c;
+    } catch (e) { return { status: 'blocked', summary: 'canvas blocked', sig: '', render(b) { b.appendChild(noteBlock('Canvas read blocked: ' + e.message, true)); } }; }
+    return {
+      status: blank ? 'partial' : 'ok',
+      summary: 'hash ' + hash,
+      sig: dataURL,
+      render(b) {
+        if (window.__canvasEl) { window.__canvasEl.className = 'show'; b.appendChild(window.__canvasEl); }
+        b.appendChild(kvTable([['fnv-1a hash', hash, 'Same hardware → same hash'], ['data URL', dataURL.slice(0, 48) + '… (' + dataURL.length + ' chars)', null, true]]));
+        b.appendChild(noteBlock(blank
+          ? 'Pixels came back blank/uniform — a privacy browser (Brave/Firefox protection) is likely <b>blocking or noising</b> canvas readback. That itself narrows down your browser.'
+          : 'If two machines produce the <b>same</b> hash they share a hardware/driver/OS combo; if they differ, it is a tracking signal. Brave randomises this per session; Firefox’s protection can blank it.'));
+      }
+    };
+  }
+});
+
+/* --- 09 WebGL / GPU -------------------------------------------------------- */
+probe({
+  id: 'webgl', title: 'WebGL / GPU', sub: 'your exact graphics card',
+  what: 'The WebGL context can be asked for its unmasked GPU vendor and renderer — frequently the literal model name and graphics API — plus a long, hardware-specific extension list.',
+  async run() {
+    const c = document.createElement('canvas');
+    const gl = safe(() => c.getContext('webgl') || c.getContext('experimental-webgl'), null);
+    if (!gl) return { status: 'na', summary: 'no WebGL', sig: '', render(b) { b.appendChild(el('p', { class: 'what', text: 'WebGL is not available.' })); } };
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const info = {
+      vendor: gl.getParameter(gl.VENDOR),
+      renderer: gl.getParameter(gl.RENDERER),
+      version: gl.getParameter(gl.VERSION),
+      glsl: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+      unmaskedVendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : null,
+      unmaskedRenderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null,
+    };
+    const caps = {
+      MAX_TEXTURE_SIZE: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      MAX_VIEWPORT_DIMS: Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) || []),
+      MAX_VERTEX_ATTRIBS: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+      MAX_FRAGMENT_UNIFORM_VECTORS: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+    };
+    const exts = safe(() => gl.getSupportedExtensions(), []) || [];
+    const webgl2 = !!safe(() => document.createElement('canvas').getContext('webgl2'), null);
+    const sig = [info.unmaskedRenderer || info.renderer, exts.join(','), JSON.stringify(caps)].join('|');
+    return {
+      status: 'ok',
+      summary: (info.unmaskedRenderer || info.renderer || 'GPU').slice(0, 40),
+      sig,
+      render(b) {
+        b.appendChild(kvTable([
+          ['unmasked vendor', info.unmaskedVendor || '(masked)', info.unmaskedVendor ? 'Real GPU vendor' : 'Debug extension blocked'],
+          ['unmasked renderer', info.unmaskedRenderer || '(masked)', info.unmaskedRenderer ? 'Often the exact GPU + graphics API' : null],
+          ['reported vendor', info.vendor],
+          ['reported renderer', info.renderer],
+          ['GLSL version', info.glsl],
+          ['WebGL 2', String(webgl2)],
+          ['MAX_TEXTURE_SIZE', caps.MAX_TEXTURE_SIZE],
+          ['extensions', exts.length + ' supported'],
+        ]));
+        const det = el('details', { class: 'more' });
+        det.appendChild(el('summary', { text: 'full extension list (' + exts.length + ')' }));
+        det.appendChild(rawBlock(exts.join('\n')));
+        b.appendChild(det);
+        b.appendChild(noteBlock('The <b>unmasked renderer</b> often spells out your card and graphics backend — e.g. <code>ANGLE (NVIDIA GeForce RTX 4090 Direct3D11…)</code> — which pins down both GPU and OS. GPU fingerprints are extremely stable across sessions.'));
+      }
+    };
+  }
+});
+
+/* --- 10 AudioContext ------------------------------------------------------- */
+probe({
+  id: 'audio', title: 'AudioContext fingerprint', sub: 'noise that is not noise',
+  what: 'Render a tone through the audio pipeline offline (no speakers, no permission). Floating-point differences deep in the math encode your hardware and driver as a reproducible number.',
+  async run() {
+    const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AC) return { status: 'na', summary: 'no AudioContext', sig: '', render(b) { b.appendChild(el('p', { class: 'what', text: 'OfflineAudioContext unavailable.' })); } };
+    try {
+      const ctx = new AC(1, 44100, 44100);
+      const osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 10000;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -50; comp.knee.value = 40; comp.ratio.value = 12; comp.attack.value = 0; comp.release.value = 0.25;
+      osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+      const buf = await ctx.startRendering();
+      const data = buf.getChannelData(0);
+      let sum = 0; for (let i = 4500; i < 5000; i++) sum += Math.abs(data[i]);
+      const samples = Array.from(data.slice(4500, 4510));
+      const silent = sum === 0;
+      return {
+        status: silent ? 'partial' : 'ok',
+        summary: 'sum ' + sum.toFixed(6),
+        sig: sum.toString(),
+        render(b) {
+          b.appendChild(kvTable([
+            ['sum-hash', sum.toString()],
+            ['sampleRate', ctx.sampleRate + ' Hz'],
+            ['channels', buf.numberOfChannels],
+          ]));
+          b.appendChild(el('div', { class: 'group-label', text: 'raw samples [4500…4509]' }));
+          b.appendChild(rawBlock(samples.map(v => v.toExponential(12)).join('\n')));
+          b.appendChild(noteBlock(silent
+            ? 'Output is all zeros — a privacy browser is <b>blocking audio fingerprinting</b>, which is itself a recognisable signal.'
+            : 'These values look random but are <b>deterministic for your hardware/driver</b>. A different audio stack shifts the digits around the 12th decimal place — enough to tell devices apart.'));
+        }
+      };
+    } catch (e) { return { status: 'blocked', summary: 'audio blocked', sig: '', render(b) { b.appendChild(noteBlock('Audio render failed: ' + e.message, true)); } }; }
+  }
+});
+
+/* --- 11 Fonts -------------------------------------------------------------- */
+probe({
+  id: 'fonts', title: 'Installed fonts', sub: 'measured, not asked',
+  what: 'By measuring how wide a string renders in a candidate font versus a fallback, a page can detect which fonts you have installed — a strong hint at your OS and installed software.',
+  async run() {
+    const FONTS = ['Segoe UI', 'Consolas', 'Calibri', 'Cambria', 'Arial', 'Times New Roman', 'Tahoma', 'Verdana',
+      'Helvetica Neue', 'Geneva', 'Monaco', 'Lucida Grande', 'Gill Sans', 'Menlo',
+      'Ubuntu', 'DejaVu Sans', 'Liberation Sans', 'Noto Sans', 'Cantarell',
+      'Roboto', 'Open Sans', 'Lato',
+      'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro',
+      'Garamond', 'Palatino', 'Franklin Gothic Medium'];
+    const BASE = ['monospace', 'sans-serif', 'serif']; const STR = 'mmmmmmmmmmlli'; const SZ = '72px';
+    const c = document.createElement('canvas'); const x = c.getContext('2d');
+    const baseW = BASE.map(b => { x.font = SZ + ' ' + b; return x.measureText(STR).width; });
+    const found = [];
+    for (const f of FONTS) {
+      const hit = BASE.some((b, i) => { x.font = SZ + " '" + f + "', " + b; return x.measureText(STR).width !== baseW[i]; });
+      if (hit) found.push(f);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    const sig = FONTS.map(f => (found.includes(f) ? '1' : '0')).join('');
+    return {
+      status: 'ok',
+      summary: found.length + ' / ' + FONTS.length + ' detected',
+      sig,
+      render(b) {
+        b.appendChild(el('div', { class: 'group-label', text: 'Detected ' + found.length + ' of ' + FONTS.length + ' tested' }));
+        const wrap = el('div', { class: 'chips' });
+        FONTS.forEach(f => wrap.appendChild(el('span', { class: 'chip ' + (found.includes(f) ? 'yes' : 'no'), text: f })));
+        b.appendChild(wrap);
+        b.appendChild(noteBlock('Which fonts exist correlates strongly with your <b>OS</b> (Segoe→Windows, Helvetica Neue→macOS, DejaVu/Ubuntu→Linux) and installed software (Office, dev tools). The exact set is highly identifying.'));
+      }
+    };
+  }
+});
+
+/* --- 12 Battery ------------------------------------------------------------ */
+probe({
+  id: 'battery', title: 'Battery status', sub: 'a privacy cautionary tale',
+  what: 'The Battery API once returned precise charge level and drain time — enough to re-identify a device across sites for an hour. Browsers have since restricted or removed it.',
+  async run() {
+    if (!('getBattery' in navigator)) return { status: 'na', summary: 'API removed/absent', sig: '', render(b) { b.appendChild(noteBlock('No <b>getBattery</b> — Firefox removed it in 2017, Safari never shipped it, and it is absent on insecure/file:// contexts.')); } };
+    if (!ENV.isSecure) return { status: 'blocked', summary: 'needs HTTPS', sig: '', render(b) { b.appendChild(noteBlock('Battery API needs a secure context (HTTPS). Host this page over HTTPS to test it.', true)); } };
+    try {
+      const bat = await navigator.getBattery();
+      const looksDefault = bat.level === 1 && bat.charging === true &&
+        (bat.chargingTime === Infinity || bat.chargingTime === 0) &&
+        (bat.dischargingTime === Infinity || bat.dischargingTime === 0);
+      return {
+        status: 'ok',
+        summary: Math.round(bat.level * 100) + '% ' + (bat.charging ? '⚡' : ''),
+        sig: '',
+        render(b) {
+          b.appendChild(kvTable([
+            ['level', Math.round(bat.level * 100) + '%'],
+            ['charging', String(bat.charging)],
+            ['chargingTime', bat.chargingTime === Infinity ? '∞' : bat.chargingTime + ' s'],
+            ['dischargingTime', bat.dischargingTime === Infinity ? '∞' : bat.dischargingTime + ' s'],
+          ]));
+          b.appendChild(noteBlock(looksDefault
+            ? 'These read like <b>default values</b> (100% · charging · ∞). That is exactly what a desktop on AC power shows — and also what a browser returns when it reduces precision. Either way, little is leaked here today.'
+            : 'Real, granular battery values came back. Until ~2018 this was a genuine tracking vector: a phone draining from 72%→68% stayed identifiable across unrelated sites for 30–60 minutes. The API has since been deprecated and tightened.'));
+        }
+      };
+    } catch (e) { return { status: 'blocked', summary: 'denied', sig: '', render(b) { b.appendChild(noteBlock('getBattery rejected: ' + e.message, true)); } }; }
+  }
+});
+
+/* --- 13 Storage ------------------------------------------------------------ */
+probe({
+  id: 'storage', title: 'Storage estimate', sub: 'an indirect disk-size leak',
+  what: 'The browser tells a page its storage quota and current usage. Because quota is derived from free disk space, it indirectly hints at how big your drive is.',
+  async run() {
+    let est = null; if (navigator.storage && navigator.storage.estimate) est = await safe(() => navigator.storage.estimate(), null);
+    const avail = {
+      localStorage: safe(() => { localStorage.setItem('_p', '1'); localStorage.removeItem('_p'); return true; }, false),
+      sessionStorage: safe(() => { sessionStorage.setItem('_p', '1'); sessionStorage.removeItem('_p'); return true; }, false),
+      indexedDB: 'indexedDB' in window,
+      caches: 'caches' in window,
+      cookieStore: 'cookieStore' in window,
+    };
+    return {
+      status: est ? 'ok' : 'partial',
+      summary: est ? (est.quota / 1e9).toFixed(1) + ' GB quota' : 'no estimate',
+      sig: est ? String(Math.round((est.quota || 0) / 1e8)) : '',
+      render(b) {
+        if (est) b.appendChild(kvTable([
+          ['quota', (est.quota / 1e9).toFixed(2) + ' GB', 'Often ~60% of free disk'],
+          ['usage', (est.usage / 1e6).toFixed(2) + ' MB'],
+          ['% used', est.quota ? ((est.usage / est.quota) * 100).toFixed(3) + '%' : 'n/a'],
+        ]));
+        else b.appendChild(el('p', { class: 'what', text: 'storage.estimate() unavailable here.' }));
+        b.appendChild(el('div', { class: 'group-label', text: 'Storage mechanisms' }));
+        const wrap = el('div', { class: 'chips' });
+        Object.entries(avail).forEach(([k, v]) => wrap.appendChild(el('span', { class: 'chip ' + (v ? 'yes' : 'no'), text: k })));
+        b.appendChild(wrap);
+        b.appendChild(noteBlock('Quota scales with free disk, so a 2 TB drive and a 128 GB drive report very different numbers — a coarse hardware signal layered on top of everything else.'));
+      }
+    };
+  }
+});
+
+/* --- 14 Performance & timing ----------------------------------------------- */
+probe({
+  id: 'perf', title: 'Performance & timing', sub: 'timer resolution & memory',
+  what: 'How precisely the clock ticks reveals Spectre mitigations and cross-origin isolation. Chromium also leaks JS heap limits, hinting at device memory.',
+  async run() {
+    const samples = []; let last = performance.now();
+    for (let i = 0; i < 600; i++) { const t = performance.now(); const d = t - last; if (d > 0) samples.push(d); last = t; }
+    const minD = samples.length ? Math.min.apply(null, samples) : 0;
+    const avgD = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    const mem = performance.memory || null;
+    const nav = safe(() => performance.getEntriesByType('navigation')[0], null);
+    return {
+      status: 'ok',
+      summary: 'res ~' + minD.toFixed(3) + ' ms',
+      sig: '',
+      render(b) {
+        b.appendChild(kvTable([
+          ['timer resolution', minD.toFixed(4) + ' ms', minD >= 5 ? 'Coarse — fingerprint resistance on' : minD <= 0.01 ? 'Very fine — cross-origin isolated' : 'Normal (~0.1 ms Spectre clamp)'],
+          ['avg interval', avgD.toFixed(4) + ' ms'],
+          ['history.length', window.history.length, window.history.length === 1 ? 'Fresh tab / direct open' : 'Navigated here'],
+        ]));
+        if (mem) { b.appendChild(el('div', { class: 'group-label', text: 'JS heap (Chromium, deprecated)' }));
+          b.appendChild(kvTable([
+            ['jsHeapSizeLimit', (mem.jsHeapSizeLimit / 1e6).toFixed(0) + ' MB'],
+            ['totalJSHeapSize', (mem.totalJSHeapSize / 1e6).toFixed(1) + ' MB'],
+            ['usedJSHeapSize', (mem.usedJSHeapSize / 1e6).toFixed(1) + ' MB'],
+          ])); }
+        if (nav) { b.appendChild(el('div', { class: 'group-label', text: 'Navigation timing' }));
+          b.appendChild(kvTable([
+            ['type', nav.type],
+            ['DOMContentLoaded', (nav.domContentLoadedEventEnd - nav.startTime).toFixed(1) + ' ms'],
+            ['transferSize', nav.transferSize + ' B', nav.transferSize === 0 ? 'Served from cache' : null],
+          ])); }
+        b.appendChild(noteBlock('Browsers deliberately blur <code>performance.now()</code> to defeat timing attacks. Firefox’s resist-fingerprinting clamps it hard; a sub-microsecond reading implies cross-origin isolation headers are set.'));
+      }
+    };
+  }
+});
+
+/* --- 15 Media devices ------------------------------------------------------ */
+probe({
+  id: 'mediadev', title: 'Media devices', sub: 'counts without permission',
+  what: 'Even without camera/mic permission, a page can enumerate how many input and output devices you have. Labels stay hidden, but the counts shape a profile.',
+  async run() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices)
+      return { status: 'na', summary: 'unavailable', sig: '', render(b) { b.appendChild(el('p', { class: 'what', text: 'enumerateDevices not available.' })); } };
+    const devs = await safe(() => navigator.mediaDevices.enumerateDevices(), []);
+    const by = k => devs.filter(d => d.kind === k).length;
+    const sig = [by('audioinput'), by('audiooutput'), by('videoinput')].join('-');
+    return {
+      status: devs.length ? 'ok' : 'partial',
+      summary: by('audioinput') + ' mic · ' + by('videoinput') + ' cam',
+      sig,
+      render(b) {
+        b.appendChild(kvTable([
+          ['audio inputs', by('audioinput')],
+          ['audio outputs', by('audiooutput')],
+          ['video inputs', by('videoinput')],
+          ['labels visible', String(devs.some(d => d.label)), 'Hidden until you grant permission'],
+        ]));
+        b.appendChild(noteBlock('A desktop with 2 mics + 1 webcam profiles differently from a single-mic laptop. Grant camera/mic to any site and <code>enumerateDevices()</code> additionally reveals full device names like "USB3.0 HD Webcam" — this probe never requests that.'));
+      }
+    };
+  }
+});
+
+/* --- 16 Feature & codec detection ------------------------------------------ */
+probe({
+  id: 'features', title: 'Feature & codec support', sub: 'the shape of your browser',
+  what: 'Exactly which APIs and media codecs exist narrows your browser, version and OS. H.265 support, for instance, differs between Windows and Linux Chrome.',
+  async run() {
+    const F = {
+      WebAssembly: typeof WebAssembly !== 'undefined',
+      SharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+      serviceWorker: 'serviceWorker' in navigator,
+      Notification: 'Notification' in window,
+      PaymentRequest: 'PaymentRequest' in window,
+      bluetooth: 'bluetooth' in navigator,
+      usb: 'usb' in navigator,
+      serial: 'serial' in navigator,
+      hid: 'hid' in navigator,
+      WebXR: 'xr' in navigator,
+      WebGPU: 'gpu' in navigator,
+      indexedDB: 'indexedDB' in window,
+      WebSocket: 'WebSocket' in window,
+      WebRTC: 'RTCPeerConnection' in window,
+      SharedWorker: 'SharedWorker' in window,
+      BroadcastChannel: 'BroadcastChannel' in window,
+      trustedTypes: 'trustedTypes' in window,
+      documentPiP: 'documentPictureInPicture' in window,
+      idleDetection: 'IdleDetector' in window,
+      WebTransport: 'WebTransport' in window,
+    };
+    const v = document.createElement('video');
+    const CODECS = {
+      'H.264': 'video/mp4; codecs="avc1.42E01E"',
+      'H.265/HEVC': 'video/mp4; codecs="hev1.1.6.L93.90"',
+      'VP9': 'video/webm; codecs="vp9"',
+      'AV1': 'video/webm; codecs="av01.0.05M.08"',
+      'AAC': 'audio/mp4; codecs="mp4a.40.2"',
+      'Opus': 'audio/ogg; codecs="opus"',
+    };
+    const codecs = {}; for (const k in CODECS) codecs[k] = safe(() => v.canPlayType(CODECS[k]), '') || 'no';
+    const sig = Object.values(F).map(x => x ? '1' : '0').join('') + '|' + Object.values(codecs).join(',');
+    return {
+      status: 'ok',
+      summary: Object.values(F).filter(Boolean).length + ' APIs present',
+      sig,
+      render(b) {
+        b.appendChild(el('div', { class: 'group-label', text: 'JavaScript APIs' }));
+        const w1 = el('div', { class: 'chips' });
+        Object.entries(F).forEach(([k, val]) => w1.appendChild(el('span', { class: 'chip ' + (val ? 'yes' : 'no'), text: k })));
+        b.appendChild(w1);
+        b.appendChild(el('div', { class: 'group-label', text: 'Media codecs' }));
+        b.appendChild(kvTable(Object.entries(codecs).map(([k, val]) => [k, val, val === 'probably' ? 'Fully supported' : val === 'maybe' ? 'May play' : 'Not supported'])));
+        b.appendChild(noteBlock('The intersection of present features pins your engine and version. <b>H.265</b> often reads "probably" on Windows but empty on Linux Chrome — a quiet OS tell.'));
+      }
+    };
+  }
+});
+
+/* --- 17 Permissions -------------------------------------------------------- */
+probe({
+  id: 'permissions', title: 'Permissions state', sub: 'read-only, no prompts',
+  what: 'The Permissions API reports whether each capability is granted, denied, or still default — without ever prompting. A pre-granted permission means you visited and allowed it before.',
+  async run() {
+    if (!navigator.permissions || !navigator.permissions.query)
+      return { status: 'na', summary: 'unavailable', sig: '', render(b) { b.appendChild(el('p', { class: 'what', text: 'Permissions API not available.' })); } };
+    const NAMES = ['geolocation', 'notifications', 'camera', 'microphone', 'clipboard-read', 'clipboard-write',
+      'persistent-storage', 'push', 'screen-wake-lock', 'accelerometer', 'gyroscope', 'magnetometer', 'midi', 'payment-handler'];
+    const res = {};
+    for (const name of NAMES) {
+      try { const s = await navigator.permissions.query({ name }); res[name] = s.state; }
+      catch (e) { res[name] = 'unsupported'; }
+    }
+    const granted = Object.values(res).filter(v => v === 'granted').length;
+    return {
+      status: 'ok',
+      summary: granted + ' granted',
+      sig: '',
+      render(b) {
+        b.appendChild(kvTable(Object.entries(res).map(([k, v]) => [k, v,
+          v === 'granted' ? 'Previously allowed for this origin' : v === 'denied' ? 'Blocked' : v === 'prompt' ? 'Default — would ask' : null,
+          v === 'unsupported'])));
+        b.appendChild(el('button', { class: 'inline-btn', onclick(e) {
+          if (!navigator.geolocation) { e.target.textContent = '✗ geolocation unavailable'; e.target.disabled = true; return; }
+          e.target.disabled = true; e.target.textContent = 'requesting…';
+          navigator.geolocation.getCurrentPosition(
+            p => { e.target.textContent = '✓ ' + p.coords.latitude.toFixed(3) + ', ' + p.coords.longitude.toFixed(3); },
+            err => { e.target.textContent = '✗ ' + err.message; });
+        }, text: 'Request precise location (will prompt)' }));
+        b.appendChild(noteBlock('Reading state triggers <b>no</b> prompt. A "granted" entry means you allowed it here before — itself a returning-visitor signal. The button above is the only place this whole page actively asks you for anything.'));
+      }
+    };
+  }
+});
+
+/* ============================================================================
+   RENDER + ORCHESTRATION
+   ============================================================================ */
+const railList = document.getElementById('rail-list');
+const panelsWrap = document.getElementById('panels');
+const sigContribs = {};   // id -> sig string
+let reporting = 0;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function buildSkeleton() {
+  railList.innerHTML = ''; panelsWrap.innerHTML = '';
+  PROBES.forEach((p, i) => {
+    const num = pad2(i + 1);
+    // rail entry
+    const dot = el('span', { class: 'status-dot pending', id: 'dot-' + p.id });
+    railList.appendChild(el('li', null,
+      el('a', { href: '#panel-' + p.id }, [dot, el('span', { class: 'num', text: num }), el('span', { class: 'nm', text: p.title })])));
+    // panel
+    const badge = el('span', { class: 'badge pending', id: 'badge-' + p.id, text: 'probing' });
+    const head = el('div', { class: 'panel-head' }, [
+      el('span', { class: 'panel-num', text: num }),
+      el('h3', { class: 'panel-title' }, [document.createTextNode(p.title), el('span', { class: 'sub', text: p.sub })]),
+      badge,
+    ]);
+    const body = el('div', { class: 'panel-body', id: 'body-' + p.id }, el('p', { class: 'what', text: p.what }));
+    panelsWrap.appendChild(el('section', { class: 'panel', id: 'panel-' + p.id }, [head, body]));
+  });
+}
+
+const STATUS_TEXT = { ok: 'worked', partial: 'partial', blocked: 'blocked', na: 'unsupported' };
+
+function applyResult(p, r) {
+  const dot = document.getElementById('dot-' + p.id);
+  const badge = document.getElementById('badge-' + p.id);
+  const body = document.getElementById('body-' + p.id);
+  dot.className = 'status-dot ' + r.status;
+  badge.className = 'badge ' + r.status;
+  badge.textContent = STATUS_TEXT[r.status] || r.status;
+  try { r.render(body); } catch (e) { body.appendChild(noteBlock('render error: ' + e.message, true)); }
+  if (r.sig) sigContribs[p.id] = r.sig;
+  reporting++;
+  updateComposite();
+}
+
+/* ---- composite signature + sigil ---- */
+const sigil = document.getElementById('sigil');
+const CELLS = 64;
+let cellEls = [];
+function buildSigil() { sigil.innerHTML = ''; cellEls = []; for (let i = 0; i < CELLS; i++) { const c = el('div', { class: 'cell' }); sigil.appendChild(c); cellEls.push(c); } }
+
+function updateComposite() {
+  const combined = PROBES.map(p => sigContribs[p.id] || '').join('§');
+  const h1 = hashHex(combined, 0x811c9dc5);
+  const h2 = hashHex(combined, 0x1000193);
+  const full = (h1 + h2).toUpperCase();
+  document.getElementById('hero-hash').textContent = full.replace(/(.{4})/g, '$1 ').trim();
+  document.getElementById('top-sig').textContent = full.slice(0, 8);
+
+  // sigil cells: bit per (combined + index) hash
+  cellEls.forEach((c, i) => {
+    const on = (fnv1a(combined + '#' + i, 0x811c9dc5) & 1) === 1;
+    const hot = (fnv1a(combined + '@' + i, 0x1000193) % 11) === 0;
+    c.classList.remove('on', 'off', 'hot');
+    c.classList.add(on ? (hot ? 'hot' : 'on') : 'off');
+  });
+
+  // progress + entropy estimate
+  document.getElementById('m-probes').innerHTML = reporting + '<small> / ' + PROBES.length + '</small>';
+  document.getElementById('progress').style.width = (reporting / PROBES.length * 100) + '%';
+  const bits = estimateBits();
+  document.getElementById('m-bits').innerHTML = bits + '<small> bits</small>';
+  document.getElementById('top-bits').textContent = bits;
+  const oneIn = Math.pow(2, bits);
+  document.getElementById('m-uniq').textContent = bits >= 33 ? '> 8 billion' : ('1 in ' + Math.round(oneIn).toLocaleString());
+}
+
+/* Rough, illustrative entropy: sum approximate identifying bits for signals
+   that are present and non-default. NOT a population measurement. */
+function estimateBits() {
+  let bits = 0;
+  const s = sigContribs;
+  if (s.navigator) bits += 10;      // UA + cores + memory + langs
+  if (s.screen) bits += 4.8;        // resolution + dpr
+  if (s.canvas) bits += 8;          // canvas hash is high-entropy
+  if (s.webgl) bits += 9;           // GPU + extensions very identifying
+  if (s.audio) bits += 5.4;
+  if (s.fonts) bits += 6;
+  if (s.time) bits += 3.2;          // tz + locale
+  if (s.media) bits += 1.2;
+  if (s.features) bits += 4;
+  if (s.storage) bits += 1.5;
+  if (s.mediadev) bits += 1.5;
+  if (s.network) bits += 1;
+  return Math.round(bits * 10) / 10;
+}
+
+/* ---- context line ---- */
+function fillContext() {
+  const line = document.getElementById('ctx-line');
+  line.innerHTML =
+    'context: <b>' + (ENV.isFile ? 'local file://' : (ENV.https ? 'HTTPS' : ENV.proto)) + '</b>' +
+    ' · secure: <b>' + ENV.isSecure + '</b>' +
+    ' · ' + (PROBES.length) + ' probes' +
+    (ENV.isFile ? ' · <b style="color:var(--blocked)">some checks will be limited on file://</b>' : '');
+}
+
+/* ---- run everything ---- */
+async function runAll() {
+  reporting = 0; for (const k in sigContribs) delete sigContribs[k];
+  buildSkeleton(); buildSigil(); fillContext(); updateComposite();
+  // kick all probes; apply each as it resolves so UI fills progressively
+  PROBES.forEach(p => {
+    Promise.resolve().then(() => p.run()).then(r => applyResult(p, r))
+      .catch(e => applyResult(p, { status: 'blocked', sig: '', render(b) { b.appendChild(noteBlock('probe failed: ' + e.message, true)); } }));
+  });
+}
+
+/* ---- report export ---- */
+function buildReport() {
+  const lines = ['BROWSER PROBE REPORT', new Date().toISOString(),
+    'context: ' + ENV.proto + '  secure:' + ENV.isSecure, ''];
+  lines.push('composite signature: ' + document.getElementById('top-sig').textContent);
+  lines.push('est. identifying bits: ' + document.getElementById('top-bits').textContent, '');
+  PROBES.forEach((p, i) => {
+    const badge = document.getElementById('badge-' + p.id);
+    lines.push(pad2(i + 1) + '  ' + p.title + '  [' + (badge ? badge.textContent : '?') + ']');
+    const body = document.getElementById('body-' + p.id);
+    body.querySelectorAll('.kv tr').forEach(tr => {
+      const k = tr.querySelector('.k'), v = tr.querySelector('.v');
+      if (k && v) lines.push('    ' + k.textContent + ': ' + v.firstChild.textContent);
+    });
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+function toast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+document.getElementById('copy-btn').addEventListener('click', async () => {
+  const txt = buildReport();
+  try { await navigator.clipboard.writeText(txt); toast('report copied'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('report copied'); } catch (er) { toast('copy blocked — select manually'); }
+    ta.remove();
+  }
+});
+document.getElementById('rescan-btn').addEventListener('click', runAll);
+
+/* go */
+runAll();
+</script>
+</body>
+</html>
