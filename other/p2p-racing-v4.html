@@ -89,6 +89,16 @@
   .seg{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
   .seg button{flex:0 0 auto;padding:8px 12px;font-size:12px}
   .seg button.sel{border-color:var(--amber);color:var(--amber)}
+  .swatches button.swatch{width:34px;height:26px;padding:0;border-radius:7px;
+    border:2px solid var(--line);position:relative}
+  .swatches button.swatch.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--asphalt-2),0 0 0 4px var(--ink)}
+  .swatches button.swatch:disabled{opacity:1;cursor:not-allowed;filter:saturate(.5) brightness(.6)}
+  .swatches button.swatch:disabled::after{content:"";position:absolute;inset:0;border-radius:5px;
+    background:linear-gradient(135deg,transparent 44%,var(--asphalt-2) 46%,var(--asphalt-2) 54%,transparent 56%)}
+  .botchips button.botchip{display:flex;align-items:center;gap:7px;padding:7px 11px;font-size:12px}
+  .botchips button.botchip .dot{width:10px;height:10px}
+  .botchips button.botchip.sel{border-color:var(--ink);color:var(--ink)}
+  .botchips button.botchip:not(.sel){opacity:.55}
 
   /* race */
   #sc-race{padding:0;display:none;flex-direction:column;align-items:stretch;justify-content:flex-start}
@@ -144,9 +154,12 @@
       <button id="btn-host" class="primary">Host a race</button>
       <button id="btn-join">Join a race</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btn-solo">Solo / offline race &nbsp;·&nbsp; just you + bots</button>
+    </div>
     <p class="hint">The passphrase is the only key — it derives a private signaling
       channel and encrypts the handshake. Same phrase, same day, on each device.
-      Up to 6 cars. <a href="#" id="toggle-log" style="color:var(--cyan)">show log</a></p>
+      Up to 6 humans + 8 bots. <a href="#" id="toggle-log" style="color:var(--cyan)">show log</a></p>
   </div>
 </div>
 
@@ -162,6 +175,14 @@
     </div>
     <label>Drivers</label>
     <ul class="plist" id="lobby-list"></ul>
+    <div id="color-pick" style="display:none">
+      <label>Your car</label>
+      <div class="seg swatches" id="swatch-row"></div>
+    </div>
+    <div id="bot-pick" style="display:none">
+      <label>Bots <span id="bot-count" style="color:var(--ink-dim)"></span></label>
+      <div class="seg botchips" id="bot-seg"></div>
+    </div>
     <div class="row">
       <button id="btn-ready">Ready up</button>
       <button id="btn-start" class="primary" style="display:none" disabled>Start race</button>
@@ -195,11 +216,17 @@ const CFG = {
   STUN:        { iceServers:[{ urls:'stun:stun.l.google.com:19302' }] },
   // To support symmetric-NAT players, add a TURN entry here later.
   MAX_PLAYERS: 6,
+  MAX_BOTS:    8,                      // roster size
+  GRID_SLOTS:  16,                     // starting-grid positions (>= MAX_PLAYERS+MAX_BOTS)
+  BOT_GRACE:   8,                      // s bots may keep racing after the last human finishes
   ROOM_PREFIX: 'slipstream',          // ntfy topic namespace
   SIG_TTL:     60*60,                  // ignore signaling msgs older than this (s)
   POLL_MS:     1500,                   // ntfy poll cadence during handshake
   ICE_WAIT:    4500,                   // ms to wait for ICE gathering before sending SDP
   ANNOUNCE_MS: 2500,                   // host re-announces presence this often
+  ANNOUNCE_FRESH: 8,                   // ignore announces older than this (s) — drops stale/cached ghosts
+  JOIN_TIMEOUT: 9000,                  // ms to wait for a host's offer before re-picking
+  DEAD_HOST_MS: 30000,                 // skip an unresponsive host this long
   // ---- netcode rates ----
   PHYS_HZ:     60,                     // host simulation tick
   NET_HZ:      20,                     // host -> client snapshot rate
@@ -222,45 +249,90 @@ const PHYS_DT = 1/CFG.PHYS_HZ;
      boostPads     : {x,y,r} circles that add forward speed
      laps          : laps to finish
    =========================================================================== */
-const TRACKS = [
-  {
-    name:'Sunset Oval', laps:3, world:{w:1600,h:1000}, bg:'#191d24', tar:'#23272f',
-    outer:ring(800,500,720,440,40),
-    inner:ring(800,500,360,200,40),
-    checkpoints:[ {x:800,y:60,r:120},{x:1540,y:500,r:120},{x:800,y:940,r:120},{x:60,y:500,r:120} ],
-    spawns:gridSpawns(800,120,Math.PI/2,3,90,70),
-    boostPads:[ {x:800,y:790,r:46},{x:800,y:210,r:46} ],
-  },
-  {
-    name:'Coil', laps:3, world:{w:1600,h:1000}, bg:'#181b22', tar:'#222630',
-    // a peanut/figure-ish loop made of two offset rings stitched by hand-ish bounds
-    outer:ring(800,500,700,430,48),
-    inner:[].concat(ring(540,500,170,170,28), [[540+170,500]]).slice(0,28*4),
-    checkpoints:[ {x:800,y:70,r:120},{x:1500,y:500,r:120},{x:800,y:930,r:120},{x:300,y:500,r:120} ],
-    spawns:gridSpawns(800,130,Math.PI/2,3,90,70),
-    boostPads:[ {x:1300,y:760,r:46},{x:300,y:240,r:46} ],
-  },
-];
-// ---- track authoring helpers (kept beside the data they serve) ----
+// ---- track authoring helpers ----
 function ring(cx,cy,rx,ry,n){ const p=[]; for(let i=0;i<n;i++){const a=i/n*Math.PI*2;
   p.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]);} return p; }
-function gridSpawns(cx,cy,angle,cols,dx,dy){ const s=[]; for(let i=0;i<CFG.MAX_PLAYERS;i++){
-  const col=i%cols, rowi=Math.floor(i/cols);
-  s.push({x:cx+(col-(cols-1)/2)*dx, y:cy+rowi*dy, angle}); } return s; }
 function wallsOf(track){ // polylines -> flat list of segments {ax,ay,bx,by}
   const segs=[]; for(const loop of [track.outer,track.inner]){
     for(let i=0;i<loop.length;i++){ const a=loop[i], b=loop[(i+1)%loop.length];
       segs.push({ax:a[0],ay:a[1],bx:b[0],by:b[1]}); } } return segs; }
 
+// Oval factory: concentric outer/inner rings guarantee a well-defined lane
+// centerline, so checkpoints sit *where the car drives* and the start/finish
+// line spans the lane radially. Travel is clockwise (top -> right -> bottom -> left).
+//   oRX,oRY = outer radii   iRX,iRY = inner radii (hole)
+//   padOff  = boost-pad position across the lane (0 = centerline, 1 = outer wall)
+function ovalTrack(o){
+  const cx=o.cx??800, cy=o.cy??500;
+  const cRX=(o.oRX+o.iRX)/2, cRY=(o.oRY+o.iRY)/2;     // lane centerline radii
+  const cpR=o.cpR??160;
+  const checkpoints=[                                  // [0] = start/finish (top)
+    {x:cx,      y:cy-cRY, r:cpR},
+    {x:cx+cRX,  y:cy,     r:cpR},
+    {x:cx,      y:cy+cRY, r:cpR},
+    {x:cx-cRX,  y:cy,     r:cpR},
+  ];
+  const startLine={ x1:cx, y1:cy-o.oRY, x2:cx, y2:cy-o.iRY }; // across the lane at the top
+  // Starting grid: two columns trailing BACKWARD from the finish line along the lane
+  // centerline (so it follows the oval's curve and stays on tarmac even for ~14 cars).
+  // Forward travel is clockwise = increasing param angle; "behind" the line is smaller angle.
+  const spawns=[]; const startA=-Math.PI/2, angStep=0.135;
+  for(let i=0;i<CFG.GRID_SLOTS;i++){
+    const col=Math.floor(i/2), sideOff=(i%2===0?-1:1)*34;     // two abreast across the lane
+    const a=startA-(col+1)*angStep;                            // +1 keeps slot 0 behind the line
+    const bx=cx+cRX*Math.cos(a), by=cy+cRY*Math.sin(a);
+    const rx=Math.cos(a), ry=Math.sin(a);                      // ~radial (across-lane) offset
+    const angle=Math.atan2(cRY*Math.cos(a), -cRX*Math.sin(a)); // tangent in the travel direction
+    spawns.push({ x:bx+rx*sideOff, y:by+ry*sideOff, angle });
+  }
+  // boost pads on the top & bottom straights, pushed toward the outer wall.
+  const padR=o.padR??70, off=o.padOff??0.62;
+  const padTopY=cy-(cRY+(o.oRY-cRY)*off), padBotY=cy+(cRY+(o.oRY-cRY)*off);
+  const boostPads=[ {x:cx, y:padTopY, r:padR}, {x:cx, y:padBotY, r:padR} ];
+  return { name:o.name, laps:o.laps??3, world:{w:1600,h:1000},
+    bg:o.bg??'#191d24', tar:o.tar??'#23272f',
+    outer:ring(cx,cy,o.oRX,o.oRY,56), inner:ring(cx,cy,o.iRX,o.iRY,56),
+    // travel is clockwise, so at the top finish line the car moves in +x:
+    checkpoints, startLine, finishDir:{x:1,y:0}, spawns, boostPads };
+}
+
+const TRACKS = [
+  ovalTrack({ name:'Sunset Oval', laps:3, oRX:720, oRY:440, iRX:360, iRY:200,
+              bg:'#191d24', tar:'#23272f', padR:74, padOff:0.62 }),
+  // Speedway: a thinner, faster lane — distinct feel from the Oval.
+  ovalTrack({ name:'Speedway',    laps:3, oRX:745, oRY:460, iRX:470, iRY:250,
+              bg:'#181b22', tar:'#222630', cpR:150, padR:78, padOff:0.66 }),
+];
+
 /* ===========================================================================
    [VEHICLES]  — data-driven stat presets. Add a kind, reference it at spawn.
+   Longitudinal model is linear-drag: terminal speed = max, and the car rises to
+   ~90% of max in ~2*driveTau seconds (driveTau≈0.85 -> ~2s). `max` here is the
+   already-uplifted top speed (~25% above the old 430/400/440 values).
    =========================================================================== */
 const VEHICLES = {
-  balanced:{ power:780, brake:900, turn:3.1, grip:0.92, max:430, mass:1.0, radius:20 },
-  heavy:   { power:680, brake:760, turn:2.5, grip:0.94, max:400, mass:1.6, radius:23 },
-  nimble:  { power:760, brake:980, turn:3.8, grip:0.90, max:440, mass:0.8, radius:18 },
+  // max | driveTau(accel feel) | turn | sideGrip | driftGrip | brakeA | mass | radius
+  balanced:{ max:540, driveTau:0.85, turn:3.1, sideGrip:0.86, driftGrip:0.965, brakeA:1400, mass:1.0, radius:20 },
+  heavy:   { max:500, driveTau:1.05, turn:2.5, sideGrip:0.88, driftGrip:0.970, brakeA:1100, mass:1.6, radius:23 },
+  nimble:  { max:555, driveTau:0.75, turn:3.8, sideGrip:0.85, driftGrip:0.960, brakeA:1500, mass:0.8, radius:18 },
 };
-const CAR_COLORS = ['--p1','--p2','--p3','--p4','--p5','--p6'].map(v=>cssVar(v));
+// 8 distinct, high-chroma hues. Deliberately kept far from the dark navy track
+// background (#181-19x range) so no car ever blends into the asphalt.
+const CAR_COLORS = ['#ff7a1a','#27e0d8','#ffd23f','#ff5db0','#7c5cff','#5ad17a','#ff5d5d','#4d9bff'];
+// Bots get their OWN palette — muted/secondary tones, deliberately offset in hue
+// and chroma from the vivid player colors above (and far from the dark asphalt) so
+// a bot is never mistaken for a human car.
+const BOT_DEFS = [
+  { id:'b0', name:'Rusty',  color:'#d9603f', kind:'heavy'    },
+  { id:'b1', name:'Goldie', color:'#cf9a2b', kind:'balanced' },
+  { id:'b2', name:'Pickle', color:'#8fb83c', kind:'nimble'   },
+  { id:'b3', name:'Jade',   color:'#2bb38a', kind:'balanced' },
+  { id:'b4', name:'Sky',    color:'#2ba3c4', kind:'nimble'   },
+  { id:'b5', name:'Cobalt', color:'#5566cc', kind:'heavy'    },
+  { id:'b6', name:'Orchid', color:'#a85cc4', kind:'balanced' },
+  { id:'b7', name:'Rosa',   color:'#d6517a', kind:'nimble'   },
+];
+const BOT_BY_ID = Object.fromEntries(BOT_DEFS.map(b=>[b.id,b]));
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 
 /* ===========================================================================
@@ -323,7 +395,7 @@ async function sigRecv(){                          // -> array of decrypted msgs
     SIG.seen.add(m.id);
     if(now - m.time > CFG.SIG_TTL) continue;
     const dm = await aesDec(SIG.key, m.message);
-    if(dm && dm.from !== NET.myId) out.push(dm);
+    if(dm && !NET.myIds.has(dm.from)){ dm._age = now - m.time; out.push(dm); }
   }
   return out;
 }
@@ -335,11 +407,15 @@ async function sigRecv(){                          // -> array of decrypted msgs
 const NET = {
   role:null,            // 'host' | 'client'
   myId: randId(),
+  myIds:new Set(),      // every id THIS TAB has ever used (survives fullReset) — never join your own ghost
+  deadHosts:new Map(),  // hostId -> expiry(ms): announcers we couldn't reach, skip for a while
   hostId:null,          // client: id of the host it joined
   peers:new Map(),      // host: every client. client: just {hostId}
   hostCh:null,          // client: the single channel to host
   cancelled:false,
+  offline:false,        // solo mode (no ntfy/signaling)
 };
+NET.myIds.add(NET.myId);
 function randId(){ const b=crypto.getRandomValues(new Uint8Array(5));
   return [...b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 
@@ -376,7 +452,17 @@ async function pumpSignaling(){
       if(m.k==='join' && m.to===NET.myId) hostHandleJoin(m.from);
       else if(m.k==='answer' && m.to===NET.myId) hostHandleAnswer(m.from, m.sdp);
     }else if(NET.role==='client'){
-      if(m.k==='announce' && !NET.hostId) clientTryJoin(m.from);
+      if(m.k==='announce' && !NET.hostId){
+        if(m._age > CFG.ANNOUNCE_FRESH) continue;        // stale cached ghost — ignore
+        const until=NET.deadHosts.get(m.from);
+        if(until && until>Date.now()) continue;          // recently unreachable — skip
+        if(until) NET.deadHosts.delete(m.from);
+        clientTryJoin(m.from);
+      }
+      else if(m.k==='unannounce'){                        // host left — drop it immediately
+        NET.deadHosts.set(m.from, Date.now()+CFG.DEAD_HOST_MS);
+        if(NET.hostId===m.from && !NET.hostCh){ clearTimeout(joinTimer); NET.hostId=null; GAME.hostId=null; }
+      }
       else if(m.k==='offer' && m.to===NET.myId) clientHandleOffer(m.from, m.sdp);
     }
   }
@@ -391,6 +477,16 @@ function hostBegin(){
   announceTimer=setInterval(()=> sigSend({k:'announce', from:NET.myId, to:'*'}), CFG.ANNOUNCE_MS);
   sigSend({k:'announce', from:NET.myId, to:'*'});
   log('hosting — waiting for drivers');
+  broadcastLobby();
+}
+// Solo / offline: identical authoritative host sim, but no ntfy, no signaling, no
+// announce — just the local player (+ bots). The race loop already runs fine with
+// zero peers; hostBroadcast simply no-ops.
+function soloBegin(){
+  NET.role='host'; NET.offline=true;
+  GAME.hostId=NET.myId;
+  LOBBY.players.set(NET.myId,{ id:NET.myId, name:ME.name, ready:true, color:CAR_COLORS[0], slot:0 });
+  log('solo mode — no network');
   broadcastLobby();
 }
 async function hostHandleJoin(clientId){
@@ -410,14 +506,23 @@ async function hostHandleAnswer(clientId, sdp){
   await p.pc.setRemoteDescription({type:'answer', sdp});
 }
 // ---- client ----
+let joinTimer=null, joinFails={};
 function clientBegin(){ NET.role='client'; log('searching for a host…'); }
 async function clientTryJoin(hostId){
   if(NET.hostId) return;
   NET.hostId=hostId; GAME.hostId=hostId;
   log('found host '+hostId.slice(0,4)+' — requesting to join');
   await sigSend({k:'join', from:NET.myId, to:hostId});
-  // if no offer arrives, allow a retry by clearing after a beat
-  setTimeout(()=>{ if(!NET.hostCh) NET.hostId=null; }, 6000);
+  clearTimeout(joinTimer);
+  joinTimer=setTimeout(()=>{                              // no offer arrived — let go and re-pick
+    if(NET.hostCh) return;                                // connected after all
+    const p=NET.peers.get(hostId); if(p){ try{p.pc.close();}catch{} NET.peers.delete(hostId); }
+    joinFails[hostId]=(joinFails[hostId]||0)+1;
+    if(joinFails[hostId]>=2){ NET.deadHosts.set(hostId, Date.now()+CFG.DEAD_HOST_MS);
+      log('host '+hostId.slice(0,4)+' unresponsive — looking for another'); }
+    else log('no offer from '+hostId.slice(0,4)+' — retrying');
+    NET.hostId=null; GAME.hostId=null;                     // next fresh announce can re-trigger join
+  }, CFG.JOIN_TIMEOUT);
 }
 async function clientHandleOffer(hostId, sdp){
   if(NET.hostCh) return;
@@ -445,6 +550,7 @@ function onChannelOpen(ch, peerId){
   setNetDot('ok');
   if(NET.role==='client'){
     NET.hostCh=ch;
+    clearTimeout(joinTimer); NET.deadHosts.clear(); joinFails={};
     send(ch,{t:'hello', name:ME.name});
     showScreen('lobby');
   }else{ // host: a client connected; send current lobby snapshot
@@ -476,6 +582,7 @@ function onNetMessage(d, peerId){
     // ---- host side ----
     case 'hello': if(NET.role==='host'){ assignPlayer(peerId,d.name); } break;
     case 'ready': if(NET.role==='host'){ const pl=LOBBY.players.get(peerId); if(pl){pl.ready=d.val; broadcastLobby(); refreshStartBtn();} } break;
+    case 'color': if(NET.role==='host'){ hostSetColor(peerId, d.val); } break;
     case 'input': if(NET.role==='host'){ const c=GAME.cars.get(peerId); if(c) c.input=d; } break;
     // ---- client side ----
     case 'lobby': if(NET.role==='client'){ applyLobby(d); } break;
@@ -499,10 +606,12 @@ function startHeartbeat(ch, peerId){
    [STATE]  — lobby + game model
    =========================================================================== */
 const ME = { name:'Driver', pass:'' };
-const LOBBY = { players:new Map(), trackIdx:0 };   // host-authoritative
+const LOBBY = { players:new Map(), trackIdx:0, bots:[] };   // host-authoritative; bots = selected bot ids
 const GAME = {
   hostId:null, track:null, segs:[], laps:3,
   cars:new Map(),          // id -> car (host: authoritative; client: own predicted only)
+  idInfo:new Map(),        // id -> {color,name} for EVERY racer incl. bots (client render/leaderboard)
+  endDeadline:0,           // host: race auto-ends at this time once humans are done
   phase:'lobby',           // 'lobby'|'countdown'|'race'|'done'
   startAt:0, raceT0:0, tick:0,
   // client interpolation buffer:
@@ -512,9 +621,9 @@ function makeCar(id, slot, color, name, kind='balanced'){
   const sp = GAME.track.spawns[slot] || GAME.track.spawns[0];
   const v = VEHICLES[kind];
   return { id, name, color, kind, ...v,
-    x:sp.x, y:sp.y, angle:sp.angle, vx:0, vy:0,
+    x:sp.x, y:sp.y, angle:sp.angle, vx:0, vy:0, px:sp.x, py:sp.y,
     input:{s:0,th:0,b:0,d:0,seq:0},
-    lap:1, nextCp:0, place:0, finished:false, finishT:0,
+    lap:1, nextCp:1, place:0, finished:false, finishT:0, boost:0,
     // client-only render smoothing fields:
     rx:sp.x, ry:sp.y, ra:sp.angle };
 }
@@ -523,50 +632,81 @@ function assignPlayer(peerId, name){
   else{
     const used=new Set([...LOBBY.players.values()].map(p=>p.slot));
     let slot=0; while(used.has(slot)) slot++;
-    LOBBY.players.set(peerId,{ id:peerId, name, ready:false, color:CAR_COLORS[slot%6], slot });
+    const usedC=new Set([...LOBBY.players.values()].map(p=>p.color));
+    const color=CAR_COLORS.find(c=>!usedC.has(c)) || CAR_COLORS[slot%CAR_COLORS.length];
+    LOBBY.players.set(peerId,{ id:peerId, name, ready:false, color, slot });
   }
   broadcastLobby(); refreshStartBtn();
 }
 function broadcastLobby(){
   const d={ t:'lobby', host:NET.myId, trackIdx:LOBBY.trackIdx,
-    players:[...LOBBY.players.values()] };
+    players:[...LOBBY.players.values()], bots:LOBBY.bots.slice() };
   hostBroadcast(d); applyLobby(d);   // host renders its own lobby too
+}
+// ---- car colour selection (host-authoritative; colours stay unique) ----
+function hostSetColor(id, color){
+  if(!CAR_COLORS.includes(color)) return;
+  for(const p of LOBBY.players.values()) if(p.id!==id && p.color===color) return; // taken
+  const pl=LOBBY.players.get(id); if(pl && pl.color!==color){ pl.color=color; broadcastLobby(); }
+}
+function pickColor(color){
+  if(NET.role==='host') hostSetColor(NET.myId, color);
+  else send(NET.hostCh,{t:'color', val:color});      // host validates + echoes via lobby snapshot
 }
 function applyLobby(d){
   LOBBY.players.clear();
   for(const p of d.players) LOBBY.players.set(p.id,p);
   LOBBY.trackIdx=d.trackIdx;
+  LOBBY.bots = Array.isArray(d.bots) ? d.bots : [];
   renderLobby();
+}
+// ---- bot selection (host/solo only) ----
+function toggleBot(id){
+  if(NET.role!=='host') return;
+  const i=LOBBY.bots.indexOf(id);
+  if(i>=0) LOBBY.bots.splice(i,1);
+  else if(LOBBY.bots.length<CFG.MAX_BOTS) LOBBY.bots.push(id);
+  broadcastLobby();
 }
 
 /* ===========================================================================
    [PHYSICS]  — HOST ONLY. Integration + car/car + car/wall collision.
    =========================================================================== */
 function integrate(car, dt){
+  car.px=car.x; car.py=car.y;                 // remember last position (finish-line crossing test)
   const i=car.input;
-  // steering scales with speed so a parked car doesn't spin in place
-  const speed=Math.hypot(car.vx,car.vy);
-  car.angle += i.s * car.turn * dt * Math.min(1, speed/120 + 0.15);
-  const accel = i.th*car.power - i.b*car.brake;
-  car.vx += Math.cos(car.angle)*accel*dt;
-  car.vy += Math.sin(car.angle)*accel*dt;
-  // lateral grip: bleed sideways velocity relative to heading (gives drift feel)
-  const fwd={x:Math.cos(car.angle),y:Math.sin(car.angle)};
-  const fdot=car.vx*fwd.x+car.vy*fwd.y;
-  const fvx=fwd.x*fdot, fvy=fwd.y*fdot;            // forward component
-  const svx=car.vx-fvx, svy=car.vy-fvy;            // sideways component
-  const gripK = i.d ? car.grip*0.985 : car.grip;   // drifting keeps more side-slip
-  car.vx = fvx*car.grip + svx*gripK;
-  car.vy = fvy*car.grip + svy*gripK;
-  // clamp top speed
-  const sp=Math.hypot(car.vx,car.vy);
-  if(sp>car.max){ car.vx*=car.max/sp; car.vy*=car.max/sp; }
+  // decompose velocity into forward / lateral relative to current heading
+  const fwd={x:Math.cos(car.angle), y:Math.sin(car.angle)};
+  const side={x:-fwd.y, y:fwd.x};
+  let f = car.vx*fwd.x + car.vy*fwd.y;        // forward speed (signed)
+  let s = car.vx*side.x + car.vy*side.y;      // lateral speed
+  // longitudinal: engine accel sized so terminal == max; linear drag gives the
+  // ~2s ramp AND natural coast-down. engineA = max/driveTau, so f -> max.
+  if(car.boost>0) car.boost-=dt;
+  const engineA = car.max/car.driveTau;
+  f += i.th*engineA*dt;
+  f -= i.b*car.brakeA*dt;
+  f -= (f/car.driveTau)*dt;                    // drag toward 0 (terminal with throttle = max)
+  const cap = car.max*(car.boost>0?1.35:1);    // boost pads briefly lift the ceiling
+  if(f>cap) f=cap;
+  if(f<-car.max*0.45) f=-car.max*0.45;         // reverse is slower
+  // steering scales with speed so a parked car doesn't pivot in place
+  car.angle += i.s * car.turn * dt * Math.min(1, Math.abs(f)/120 + 0.12);
+  // lateral grip bleeds side-slip; drifting (space/shift) keeps more of it
+  s *= (i.d ? car.driftGrip : car.sideGrip);
+  // recombine along the (possibly rotated) heading for crisp arcade turning
+  const nf={x:Math.cos(car.angle), y:Math.sin(car.angle)}, ns={x:-nf.y, y:nf.x};
+  car.vx = nf.x*f + ns.x*s;
+  car.vy = nf.y*f + ns.y*s;
   car.x += car.vx*dt; car.y += car.vy*dt;
 }
 function boostPads(car){
   for(const b of GAME.track.boostPads||[]){
     if((car.x-b.x)**2+(car.y-b.y)**2 < (b.r+car.radius)**2){
-      const f=1.18; car.vx*=f; car.vy*=f;
+      car.boost=0.9;                            // hold the raised speed cap briefly
+      const fwd={x:Math.cos(car.angle), y:Math.sin(car.angle)};
+      const f=car.vx*fwd.x+car.vy*fwd.y, target=car.max*1.3;
+      if(f<target){ const add=target-f; car.vx+=fwd.x*add; car.vy+=fwd.y*add; } // instant kick
     }
   }
 }
@@ -605,27 +745,86 @@ function carCar(){   // O(n^2) elastic, fine for <=6
     }
   }
 }
-function progress(car){   // checkpoint + lap tracking
-  const cps=GAME.track.checkpoints, cp=cps[car.nextCp];
-  if((car.x-cp.x)**2+(car.y-cp.y)**2 < cp.r*cp.r){
-    car.nextCp++;
-    if(car.nextCp>=cps.length){ car.nextCp=0; car.lap++;
+// do segments p0->p1 and q0->q1 intersect? (used for finish-line crossing)
+function segHit(p0,p1,q0,q1){
+  const d=(p1.x-p0.x)*(q1.y-q0.y)-(p1.y-p0.y)*(q1.x-q0.x);
+  if(Math.abs(d)<1e-9) return false;
+  const t=((q0.x-p0.x)*(q1.y-q0.y)-(q0.y-p0.y)*(q1.x-q0.x))/d;
+  const u=((q0.x-p0.x)*(p1.y-p0.y)-(q0.y-p0.y)*(p1.x-p0.x))/d;
+  return t>=0&&t<=1&&u>=0&&u<=1;
+}
+// Lap model: checkpoints[1..n-1] are ordered gates the car must collect; checkpoints[0]
+// is the start/finish LINE (track.startLine). A lap only counts when the car has
+// collected every gate this lap AND then crosses the finish line moving forward
+// (positive dot with track.finishDir). This fixes both the early ("1/3 before the line")
+// trigger and the drive-backwards-to-finish exploit.
+function progress(car){
+  const tr=GAME.track, cps=tr.checkpoints, n=cps.length;
+  if(car.nextCp < n){                                  // still collecting ordered gates
+    const cp=cps[car.nextCp];
+    if((car.x-cp.x)**2+(car.y-cp.y)**2 < cp.r*cp.r) car.nextCp++;
+    return;
+  }
+  // armed (nextCp===n): watch for a forward crossing of the finish line
+  const sl=tr.startLine, p0={x:car.px,y:car.py}, p1={x:car.x,y:car.y};
+  if(segHit(p0,p1,{x:sl.x1,y:sl.y1},{x:sl.x2,y:sl.y2})){
+    const dot=(car.x-car.px)*tr.finishDir.x+(car.y-car.py)*tr.finishDir.y;
+    if(dot>0){                                         // crossed in the racing direction
+      car.nextCp=1; car.lap++;
       if(car.lap>GAME.laps && !car.finished){ car.finished=true; car.finishT=now()-GAME.raceT0; }
     }
   }
 }
 function rankCars(){
+  const tr=GAME.track, cps=tr.checkpoints, n=cps.length, sl=tr.startLine;
+  const fin={x:(sl.x1+sl.x2)/2, y:(sl.y1+sl.y2)/2};     // ranking target when armed
   const arr=[...GAME.cars.values()];
   arr.sort((a,b)=>{
-    if(a.finished||b.finished) return (a.finishT||1e12)-(b.finishT||1e12);
-    if(b.lap!==a.lap) return b.lap-a.lap;
+    if(a.finished!==b.finished) return a.finished? -1 : 1;       // finishers ahead of non-finishers
+    if(a.finished&&b.finished)  return a.finishT-b.finishT;      // both done: by time
+    if(b.lap!==a.lap) return b.lap-a.lap;                         // both racing: by progress
     if(b.nextCp!==a.nextCp) return b.nextCp-a.nextCp;
-    const cp=GAME.track.checkpoints;
-    const da=(a.x-cp[a.nextCp].x)**2+(a.y-cp[a.nextCp].y)**2;
-    const db=(b.x-cp[b.nextCp].x)**2+(b.y-cp[b.nextCp].y)**2;
+    const ta=a.nextCp<n?cps[a.nextCp]:fin, tb=b.nextCp<n?cps[b.nextCp]:fin;
+    const da=(a.x-ta.x)**2+(a.y-ta.y)**2, db=(b.x-tb.x)**2+(b.y-tb.y)**2;
     return da-db;
   });
   arr.forEach((c,i)=>c.place=i+1);
+}
+// where should this car be heading? (next ordered gate, or the finish line once armed)
+function carTarget(car){
+  const tr=GAME.track, cps=tr.checkpoints, n=cps.length, sl=tr.startLine;
+  return car.nextCp<n ? cps[car.nextCp] : {x:(sl.x1+sl.x2)*0.5, y:(sl.y1+sl.y2)*0.5};
+}
+/* ---------------------------------------------------------------------------
+   [BOTS]  — host-only. Each tick a bot's input is steered toward its next gate,
+   plus a smoothed random-walk "wander" and occasional derps, so it weaves around
+   imperfectly. Higher skill -> straighter line; higher chaos -> more shenanigans.
+   --------------------------------------------------------------------------- */
+function initBotState(car){
+  car.bot=true;
+  car.skill = 0.40 + Math.random()*0.45;   // 0.40 .. 0.85  (cornering competence)
+  car.chaos = 0.45 + Math.random()*0.95;   // 0.45 .. 1.40  (how much it misbehaves)
+  car.wander=0; car.wanderV=0; car.aiT=0; car.derpS=0; car.derpB=0;
+}
+function botThink(car, t){
+  const tgt=carTarget(car);
+  // re-roll brief "derp" intents a few times a second (held between rolls -> not jittery)
+  if(t - car.aiT > 0.25){
+    car.aiT=t;
+    car.derpS = (Math.random() < car.chaos*0.10) ? (Math.random()<0.5?-1:1) : 0;  // wrong-way flick
+    car.derpB = (Math.random() < car.chaos*0.08) ? 1 : 0;                          // random brake
+  }
+  // wander: a slow random walk on the desired heading (sloppier bots wander more)
+  car.wanderV = car.wanderV*0.92 + (Math.random()-0.5)*0.11*car.chaos;
+  car.wander  = Math.max(-1, Math.min(1, car.wander + car.wanderV));
+  const desired = Math.atan2(tgt.y-car.y, tgt.x-car.x) + car.wander*(1.1-car.skill);
+  const diff = Math.atan2(Math.sin(desired-car.angle), Math.cos(desired-car.angle));
+  const speed = Math.hypot(car.vx, car.vy);
+  let s = Math.max(-1, Math.min(1, diff*1.8*car.skill + car.derpS*0.8));
+  let th = car.derpB ? 0 : (Math.abs(diff) > 1.1 ? 0.55 : 1);   // ease off into hard turns
+  let b  = car.derpB;
+  let d  = (Math.abs(s) > 0.65 && speed > 240) ? 1 : 0;          // drift when whipping it around
+  car.input = { s, th, b, d };
 }
 
 /* ===========================================================================
@@ -645,6 +844,7 @@ function frame(){
     if(GAME.phase==='countdown' && t>=GAME.startAt){ GAME.phase='race'; GAME.raceT0=t; hideCountdown(); }
     if(GAME.phase==='race'){
       const meCar=GAME.cars.get(NET.myId); if(meCar && !meCar.finished) meCar.input=readInput();
+      for(const c of GAME.cars.values()){ if(c.bot && !c.finished) botThink(c, t); }
       acc+=dt;
       while(acc>=PHYS_DT){
         for(const c of GAME.cars.values()){ if(c.finished){ c.input={s:0,th:0,b:0,d:0}; }
@@ -653,7 +853,13 @@ function frame(){
         acc-=PHYS_DT; GAME.tick++;
       }
       rankCars();
-      if([...GAME.cars.values()].every(c=>c.finished)) hostEndRace();
+      // end when every human is done; give bots a short grace window to scramble in
+      const cars=[...GAME.cars.values()];
+      if(!GAME.endDeadline){
+        const humans=cars.filter(c=>!c.bot);
+        if(humans.length && humans.every(c=>c.finished)) GAME.endDeadline = t + CFG.BOT_GRACE;
+      }
+      if(GAME.endDeadline && (t>=GAME.endDeadline || cars.every(c=>c.finished))) hostEndRace();
     }
     // broadcast snapshots at NET_HZ
     snapAcc+=dt;
@@ -666,7 +872,7 @@ function frame(){
     if(inputAcc>=1/CFG.INPUT_HZ){ inputAcc=0; sendInput(); }
     // predict own car locally for responsiveness
     const me=GAME.cars.get(NET.myId);
-    if(me && GAME.phase==='race'){ me.input=readInput(); integrate(me, dt); carWall(me); }
+    if(me && GAME.phase==='race'){ me.input=readInput(); integrate(me, dt); carWall(me); boostPads(me); }
     const render=buildClientView(t);
     drawWorld(render, false);
   }
@@ -713,8 +919,8 @@ function buildClientView(t){
     for(const [id,ca] of a.cars){
       if(id===NET.myId) continue;
       const cb=b.cars.get(id)||ca;
-      const pl=LOBBY.players.get(id);
-      out.set(id,{ id, color:pl?pl.color:'#999', name:pl?pl.name:'', radius:VEHICLES.balanced.radius,
+      const inf=GAME.idInfo.get(id)||{};
+      out.set(id,{ id, color:inf.color||'#999', name:inf.name||'', radius:VEHICLES.balanced.radius,
         x:ca.x+(cb.x-ca.x)*f, y:ca.y+(cb.y-ca.y)*f, angle:lerpAng(ca.a,cb.a,f),
         lap:ca.l, place:ca.p, finished:!!ca.f });
     }
@@ -772,10 +978,10 @@ function drawWorld(cars, authoritative){
   // walls
   ctx.strokeStyle='#3a414c'; ctx.lineWidth=Math.max(2,ws(6)); ctx.lineJoin='round';
   strokePoly(tr.outer); strokePoly(tr.inner);
-  // start/finish gate
-  const sf=tr.checkpoints[0];
-  ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.setLineDash([ws(14),ws(10)]); ctx.lineWidth=ws(8);
-  ctx.beginPath(); ctx.moveTo(wx(sf.x-110),wy(sf.y)); ctx.lineTo(wx(sf.x+110),wy(sf.y)); ctx.stroke();
+  // start/finish gate — spans the lane radially (across the driving direction)
+  const sl=tr.startLine;
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.setLineDash([ws(16),ws(12)]); ctx.lineWidth=ws(10);
+  ctx.beginPath(); ctx.moveTo(wx(sl.x1),wy(sl.y1)); ctx.lineTo(wx(sl.x2),wy(sl.y2)); ctx.stroke();
   ctx.setLineDash([]);
   // cars (sorted so leader draws on top)
   const arr=[...cars.values()].sort((a,b)=>(b.place||0)-(a.place||0));
@@ -821,6 +1027,7 @@ $('btn-host').onclick=async()=>{
   $('lobby-role').textContent='You are hosting. Pick a circuit and start when everyone is ready.';
   showLobbyPass(true);
   $('track-pick').style.display='block'; $('btn-start').style.display='block'; $('btn-ready').style.display='none';
+  $('color-pick').style.display='block'; $('bot-pick').style.display='block';
   buildTrackSeg(); showScreen('lobby'); refreshStartBtn();
 };
 $('btn-join').onclick=async()=>{
@@ -831,8 +1038,20 @@ $('btn-join').onclick=async()=>{
   $('lobby-room').textContent='· '+roomShort();
   showLobbyPass(false);
   $('track-pick').style.display='none'; $('btn-start').style.display='none'; $('btn-ready').style.display='block';
+  $('color-pick').style.display='block'; $('bot-pick').style.display='none';
   $('lobby-hint').textContent='Waiting for the host to start the race.';
   showScreen('lobby');
+};
+$('btn-solo').onclick=()=>{
+  ME.name=($('inp-name').value||'Driver').trim().slice(0,14);
+  soloBegin();
+  $('lobby-room').textContent='· solo';
+  $('lobby-role').textContent='Solo race — pick a circuit, add some bots, choose your colour, and go.';
+  $('race-pass').innerHTML='offline';
+  $('lobby-pass').style.display='none';
+  $('track-pick').style.display='block'; $('btn-start').style.display='block'; $('btn-ready').style.display='none';
+  $('color-pick').style.display='block'; $('bot-pick').style.display='block';
+  buildTrackSeg(); showScreen('lobby'); refreshStartBtn();
 };
 // passphrase reminder — prominent for the host (who shares it), quiet for joiners
 function showLobbyPass(isHost){
@@ -864,7 +1083,8 @@ $('btn-quit').onclick=()=> leaveAll();
 
 // announce departure so others get immediate feedback, then tear down locally
 function leaveAll(){
-  if(NET.role==='host') hostBroadcast({t:'bye', who:NET.myId, host:true});
+  if(NET.role==='host'){ hostBroadcast({t:'bye', who:NET.myId, host:true});
+    if(!NET.offline && SIG.topic){ try{ sigSend({k:'unannounce', from:NET.myId, to:'*'}); }catch{} } }
   else send(NET.hostCh,{t:'bye', who:NET.myId});
   fullReset(); showScreen('setup');
   $('lobby-pass').style.display='none';
@@ -889,8 +1109,47 @@ function renderLobby(){
       <span class="pstat ${p.ready?'ready':''}">${p.ready?'ready':'…'}</span>`;
     ul.appendChild(li);
   }
+  for(const bid of LOBBY.bots){
+    const def=BOT_BY_ID[bid]; if(!def) continue;
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="dot" style="background:${def.color}"></span>
+      <span class="pname">${escapeHtml(def.name)} · bot</span>
+      <span class="pstat ready">BOT</span>`;
+    ul.appendChild(li);
+  }
   if(NET.role==='host'){ buildTrackSeg(); refreshStartBtn();
-    $('lobby-hint').textContent=`${LOBBY.players.size}/${CFG.MAX_PLAYERS} drivers connected.`; }
+    const np=LOBBY.players.size, nb=LOBBY.bots.length;
+    $('lobby-hint').textContent=`${np}/${CFG.MAX_PLAYERS} drivers`+(nb?` · ${nb} bot${nb>1?'s':''}`:'')+` · ${np+nb} cars on the grid.`; }
+  renderColorPicker();
+  renderBotPicker();
+}
+function renderBotPicker(){
+  const row=$('bot-seg'); if(!row) return;
+  const cnt=$('bot-count'); if(cnt) cnt.textContent=`(${LOBBY.bots.length}/${CFG.MAX_BOTS})`;
+  row.innerHTML='';
+  for(const def of BOT_DEFS){
+    const on=LOBBY.bots.includes(def.id);
+    const b=document.createElement('button');
+    b.className='botchip'+(on?' sel':'');
+    b.innerHTML=`<span class="dot" style="background:${def.color}"></span>${escapeHtml(def.name)}`;
+    b.onclick=()=>toggleBot(def.id);
+    row.appendChild(b);
+  }
+}
+function renderColorPicker(){
+  const row=$('swatch-row'); if(!row) return;
+  const me=LOBBY.players.get(NET.myId);
+  const mine=me?me.color:null;
+  const taken=new Set([...LOBBY.players.values()].filter(p=>p.id!==NET.myId).map(p=>p.color));
+  row.innerHTML='';
+  for(const c of CAR_COLORS){
+    const b=document.createElement('button');
+    b.className='swatch'+(c===mine?' sel':'');
+    b.style.background=c;
+    if(taken.has(c)){ b.disabled=true; b.title='taken by another driver'; }
+    else b.onclick=()=>pickColor(c);
+    row.appendChild(b);
+  }
 }
 function refreshStartBtn(){ if(NET.role!=='host') return;
   const all=[...LOBBY.players.values()]; const ok=all.length>=1 && all.every(p=>p.ready);
@@ -900,20 +1159,30 @@ function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
 /* ---- race start / finish orchestration ---- */
 function hostStartRace(){
   GAME.track=TRACKS[LOBBY.trackIdx]; GAME.segs=wallsOf(GAME.track); GAME.laps=GAME.track.laps;
-  GAME.cars.clear();
+  GAME.cars.clear(); GAME.idInfo.clear(); GAME.endDeadline=0;
+  // assemble the grid: humans first, then selected bots, each with a fresh slot
+  const grid=[]; let slot=0;
   for(const p of LOBBY.players.values())
-    GAME.cars.set(p.id, makeCar(p.id, p.slot, p.color, p.name));
+    grid.push({ id:p.id, slot:slot++, color:p.color, name:p.name, bot:false });
+  for(const bid of LOBBY.bots){ const def=BOT_BY_ID[bid]; if(!def) continue;
+    grid.push({ id:bid, slot:slot++, color:def.color, name:def.name, bot:true, kind:def.kind }); }
+  for(const g of grid){
+    const car=makeCar(g.id, g.slot, g.color, g.name, g.kind||'balanced');
+    if(g.bot) initBotState(car);
+    GAME.cars.set(g.id, car);
+    GAME.idInfo.set(g.id, { color:g.color, name:g.name });
+  }
   GAME.phase='countdown'; GAME.startAt=now()+CFG.COUNTDOWN; GAME.tick=0;
-  hostBroadcast({ t:'start', trackIdx:LOBBY.trackIdx, countdown:CFG.COUNTDOWN,
-    grid:[...LOBBY.players.values()].map(p=>({id:p.id,slot:p.slot,color:p.color,name:p.name})) });
+  hostBroadcast({ t:'start', trackIdx:LOBBY.trackIdx, countdown:CFG.COUNTDOWN, grid });
   enterRace(); runCountdown(GAME.startAt);
 }
 function beginRace(d){    // client
   GAME.track=TRACKS[d.trackIdx]; GAME.segs=wallsOf(GAME.track); GAME.laps=GAME.track.laps;
-  GAME.cars.clear();
-  for(const g of d.grid){ const car=makeCar(g.id,g.slot,g.color,g.name);
-    if(g.id===NET.myId) GAME.cars.set(g.id,car); }   // client only sims its own
-  for(const g of d.grid){ const pl=LOBBY.players.get(g.id)||{}; pl.color=g.color; pl.slot=g.slot; pl.name=g.name; LOBBY.players.set(g.id,pl); }
+  GAME.cars.clear(); GAME.idInfo.clear();
+  for(const g of d.grid){
+    GAME.idInfo.set(g.id, { color:g.color, name:g.name });    // identities for render + leaderboard
+    if(g.id===NET.myId) GAME.cars.set(g.id, makeCar(g.id,g.slot,g.color,g.name)); // client sims only its own
+  }
   GAME.phase='countdown'; GAME.startAt=now()+(d.countdown||CFG.COUNTDOWN); GAME.snaps=[];
   enterRace(); runCountdown(GAME.startAt);
 }
@@ -954,11 +1223,11 @@ function updateHud(){
   $('hud-pos').textContent=me?ordinal(me.place||'—'):'—';
   if(GAME.phase==='race'){ const t=now()-(GAME.raceT0||GAME.startAt); $('hud-time').textContent=Math.max(0,t).toFixed(1)+'s'; }
   // leaderboard
-  const board=$('hud-board'); const list=[...LOBBY.players.values()];
+  const board=$('hud-board');
   let order;
   if(NET.role==='host'){ order=[...GAME.cars.values()].sort((a,b)=>a.place-b.place).map(c=>({name:c.name,id:c.id,place:c.place,lap:c.lap,fin:c.finished})); }
   else { const s=GAME.snaps[GAME.snaps.length-1];
-    order = s ? [...s.cars.values()].sort((a,b)=>a.p-b.p).map(c=>({name:(LOBBY.players.get(c.i)||{}).name||'',id:c.i,place:c.p,lap:c.l,fin:!!c.f})) : []; }
+    order = s ? [...s.cars.values()].sort((a,b)=>a.p-b.p).map(c=>({name:(GAME.idInfo.get(c.i)||{}).name||'',id:c.i,place:c.p,lap:c.l,fin:!!c.f})) : []; }
   board.innerHTML=order.map(o=>`<div class="${o.id===NET.myId?'me':''}">${o.place}. ${escapeHtml(o.name||'')} <span style="color:var(--ink-dim)">L${o.lap}${o.fin?' ✓':''}</span></div>`).join('');
 }
 function updatePingHud(){
@@ -978,11 +1247,19 @@ function fullReset(){
   NET.cancelled=true;
   if(SIG.poller) clearInterval(SIG.poller); SIG.poller=null;
   if(announceTimer) clearInterval(announceTimer); announceTimer=null;
+  clearTimeout(joinTimer); joinTimer=null; joinFails={};
   stopRaceLoop();
   for(const p of NET.peers.values()){ try{p.pc.close();}catch{} }
-  NET.peers.clear(); NET.role=null; NET.hostId=null; NET.hostCh=null; NET.myId=randId(); NET.cancelled=false;
-  LOBBY.players.clear(); GAME.cars.clear(); GAME.snaps=[]; GAME.phase='lobby';
+  NET.peers.clear(); NET.role=null; NET.hostId=null; NET.hostCh=null; NET.offline=false;
+  NET.myIds.add(NET.myId); NET.myId=randId(); NET.myIds.add(NET.myId);  // keep old id known so we ignore our own ghost
+  NET.deadHosts.clear();
+  LOBBY.players.clear(); LOBBY.bots.length=0;
+  GAME.cars.clear(); GAME.idInfo.clear(); GAME.snaps=[]; GAME.phase='lobby'; GAME.hostId=null; GAME.endDeadline=0;
+  NET.cancelled=false;
   ready=false; SIG.topic=null; SIG.key=null; SIG.seen.clear();
+  const ll=document.getElementById('lobby-list'); if(ll) ll.innerHTML='';   // kill stale "you · host" row
+  const sw=document.getElementById('swatch-row'); if(sw) sw.innerHTML='';
+  const bs=document.getElementById('bot-seg'); if(bs) bs.innerHTML='';
 }
 resize();
 log('ready — enter a room passphrase to host or join');
