@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Slipstream — P2P Racing</title>
+
+<!-- ============================================================================
+     SLIPSTREAM — host-authoritative P2P racing (WebRTC + ntfy signaling)
+     ----------------------------------------------------------------------------
+     Single file. No build, no backend, no accounts. ntfy.sh is used ONLY for the
+     WebRTC handshake; all gameplay flows over DTLS-encrypted DataChannels.
+
+     SECTION MAP (search these banners to jump around):
+       [CONFIG]      tunables: ntfy, physics, netcode rates
+       [TRACKS]      map data — append an object here to add a circuit
+       [VEHICLES]    car stat presets (data-driven)
+       [CRYPTO]      passphrase -> topic + AES key, signaling encryption
+       [SIGNALING]   ntfy I/O and the encrypted room-message layer
+       [NET]         peer-connection management (host = star hub)
+       [HANDSHAKE]   host announce / join / offer / answer flow
+       [PROTOCOL]    DataChannel message dispatch
+       [STATE]       shared game + lobby state
+       [PHYSICS]     integration, car-car + car-wall collision (HOST ONLY)
+       [LOOP]        host sim loop / client predict+interpolate loop
+       [INPUT]       keyboard -> input frame
+       [RENDER]      all canvas drawing lives here (safe to overhaul)
+       [UI]          screens, lobby, HUD wiring
+       [INIT]        boot
+   ============================================================================ -->
+
+<style>
+  /* ---- design tokens : "pit-wall telemetry" --------------------------------
+     dark asphalt + signal-amber, with electric cyan as the cool counter-accent.
+     Mono is the *data* face (it is telemetry, so it's earned, not decoration);
+     a condensed heavy face carries the title. Tune freely.                    */
+  :root{
+    --asphalt:#15181d;     --asphalt-2:#1d2128;   --line:#2c323c;
+    --ink:#e9edf2;         --ink-dim:#8b95a3;
+    --amber:#ff7a1a;       --amber-soft:#ffb066;
+    --cyan:#27e0d8;        --good:#5ad17a;         --bad:#ff5d5d;
+    --p1:#ff7a1a; --p2:#27e0d8; --p3:#ffd23f; --p4:#ff5db0; --p5:#7c5cff; --p6:#5ad17a;
+    --rad:10px;
+    --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --disp:"Bahnschrift","DIN Condensed","Arial Narrow",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(120% 80% at 50% -10%,#222732 0%,var(--asphalt) 60%);
+    color:var(--ink);font-family:var(--mono);font-size:14px;
+    -webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  .screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:18px}
+  .screen.active{display:flex}
+  .card{
+    width:min(560px,100%);background:var(--asphalt-2);border:1px solid var(--line);
+    border-radius:var(--rad);padding:26px 24px;box-shadow:0 24px 60px rgba(0,0,0,.45);
+  }
+  .brand{font-family:var(--disp);font-weight:700;letter-spacing:.04em;
+    font-size:40px;line-height:.9;text-transform:uppercase;margin:0 0 2px}
+  .brand b{color:var(--amber)}
+  .tag{color:var(--ink-dim);font-size:12px;margin:0 0 22px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.12em;
+    color:var(--ink-dim);margin:14px 0 6px}
+  input[type=text]{width:100%;background:var(--asphalt);border:1px solid var(--line);
+    color:var(--ink);border-radius:8px;padding:11px 12px;font-family:var(--mono);font-size:14px}
+  input:focus{outline:2px solid var(--amber);outline-offset:1px}
+  .row{display:flex;gap:10px;margin-top:16px}
+  button{flex:1;cursor:pointer;border:1px solid var(--line);background:var(--asphalt);
+    color:var(--ink);border-radius:8px;padding:12px 14px;font-family:var(--mono);
+    font-size:13px;letter-spacing:.04em;transition:transform .05s,border-color .15s,background .15s}
+  button:hover{border-color:var(--amber)}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--amber);border-color:var(--amber);color:#1a1206;font-weight:700}
+  button.ghost{flex:0 0 auto}
+  .hint{color:var(--ink-dim);font-size:11px;margin-top:14px;line-height:1.5}
+
+  /* lobby */
+  .plist{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .plist li{display:flex;align-items:center;gap:10px;background:var(--asphalt);
+    border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+  .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+  .pname{flex:1}
+  .pstat{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em}
+  .pstat.ready{color:var(--good)}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .seg button{flex:0 0 auto;padding:8px 12px;font-size:12px}
+  .seg button.sel{border-color:var(--amber);color:var(--amber)}
+
+  /* race */
+  #sc-race{padding:0;display:none;flex-direction:column}
+  #sc-race.active{display:flex}
+  #stage{flex:1;position:relative;min-height:0}
+  canvas{display:block;width:100%;height:100%}
+  .hud{position:absolute;pointer-events:none;font-family:var(--mono)}
+  #hud-tl{top:12px;left:14px;font-size:12px;line-height:1.7}
+  #hud-tl b{font-family:var(--disp);font-size:30px;color:var(--amber);letter-spacing:.02em}
+  #hud-tr{top:12px;right:14px;text-align:right;font-size:12px;line-height:1.7;color:var(--ink-dim)}
+  #hud-board{position:absolute;top:54px;right:14px;text-align:right;font-size:12px;line-height:1.8}
+  #hud-board .me{color:var(--amber)}
+  #countdown{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--disp);font-size:120px;color:var(--amber);text-shadow:0 6px 30px rgba(0,0,0,.6)}
+  #banner{position:absolute;left:0;right:0;top:40%;text-align:center;font-family:var(--disp);
+    font-size:56px;color:var(--cyan);text-shadow:0 4px 24px rgba(0,0,0,.6)}
+  .pill{display:inline-block;background:rgba(0,0,0,.35);border:1px solid var(--line);
+    border-radius:999px;padding:2px 10px}
+  /* connection / log */
+  #log{position:fixed;left:12px;bottom:12px;max-width:46ch;font-size:11px;color:var(--ink-dim);
+    background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    max-height:30vh;overflow:auto;white-space:pre-wrap;display:none}
+  #log.show{display:block}
+  .net{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px}
+  .net.ok{background:var(--good)} .net.warn{background:var(--p3)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- =================== [UI] SCREENS ==================================== -->
+
+<!-- SETUP -->
+<div id="sc-setup" class="screen active">
+  <div class="card">
+    <h1 class="brand">Slip<b>stream</b></h1>
+    <p class="tag">peer-to-peer racing · no server · share a room name to play</p>
+    <label for="inp-name">Driver name</label>
+    <input id="inp-name" type="text" maxlength="14" placeholder="e.g. Maya" autocomplete="off">
+    <label for="inp-room">Room passphrase</label>
+    <input id="inp-room" type="text" placeholder="a phrase you both type" autocomplete="off">
+    <div class="row">
+      <button id="btn-host" class="primary">Host a race</button>
+      <button id="btn-join">Join a race</button>
+    </div>
+    <p class="hint">The passphrase is the only key — it derives a private signaling
+      channel and encrypts the handshake. Same phrase, same day, on each device.
+      Up to 6 cars. <a href="#" id="toggle-log" style="color:var(--cyan)">show log</a></p>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="sc-lobby" class="screen">
+  <div class="card">
+    <h1 class="brand" style="font-size:30px">Lobby <span id="lobby-room" style="color:var(--ink-dim);font-size:13px;font-family:var(--mono)"></span></h1>
+    <p class="tag" id="lobby-role"></p>
+    <div id="track-pick" style="display:none">
+      <label>Circuit</label>
+      <div class="seg" id="track-seg"></div>
+    </div>
+    <label>Drivers</label>
+    <ul class="plist" id="lobby-list"></ul>
+    <div class="row">
+      <button id="btn-ready">Ready up</button>
+      <button id="btn-start" class="primary" style="display:none" disabled>Start race</button>
+      <button id="btn-leave" class="ghost">Leave</button>
+    </div>
+    <p class="hint" id="lobby-hint"></p>
+  </div>
+</div>
+
+<!-- RACE -->
+<div id="sc-race" class="screen">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hud-tl" class="hud"><div>LAP <b><span id="hud-lap">1</span></b><span style="color:var(--ink-dim)">/<span id="hud-laps">3</span></span></div><div>POS <span id="hud-pos">—</span></div></div>
+    <div id="hud-tr" class="hud"><div><span class="net" id="net-dot"></span><span id="hud-ping">—</span> ms</div><div id="hud-time">0.0s</div></div>
+    <div id="hud-board" class="hud"></div>
+    <div id="countdown" class="hud" style="display:none"></div>
+    <div id="banner" class="hud" style="display:none"></div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<script>
+/* ===========================================================================
+   [CONFIG]
+   =========================================================================== */
+const CFG = {
+  NTFY:        'https://ntfy.sh/',
+  STUN:        { iceServers:[{ urls:'stun:stun.l.google.com:19302' }] },
+  // To support symmetric-NAT players, add a TURN entry here later.
+  MAX_PLAYERS: 6,
+  ROOM_PREFIX: 'slipstream',          // ntfy topic namespace
+  SIG_TTL:     60*60,                  // ignore signaling msgs older than this (s)
+  POLL_MS:     1500,                   // ntfy poll cadence during handshake
+  ICE_WAIT:    4500,                   // ms to wait for ICE gathering before sending SDP
+  ANNOUNCE_MS: 2500,                   // host re-announces presence this often
+  // ---- netcode rates ----
+  PHYS_HZ:     60,                     // host simulation tick
+  NET_HZ:      20,                     // host -> client snapshot rate
+  INPUT_HZ:    30,                     // client -> host input rate
+  PING_MS:     2000,                   // heartbeat interval
+  INTERP_MS:   100,                    // client renders remote cars this far in the past
+  DROP_MS:     6000,                   // declare a peer gone after this much silence
+};
+const PHYS_DT = 1/CFG.PHYS_HZ;
+
+/* ===========================================================================
+   [TRACKS]  — pure data. Append an object to add a circuit.
+   ---------------------------------------------------------------------------
+   world units are arbitrary; the renderer fits the whole world to the canvas.
+     outer / inner : closed polylines (point arrays) -> become wall segments
+     checkpoints   : ordered gates {x,y,r}; car must pass them in order;
+                     index 0 doubles as the start/finish line
+     spawns        : up to MAX_PLAYERS grid slots {x,y,angle(rad)}
+     boostPads     : {x,y,r} circles that add forward speed
+     laps          : laps to finish
+   =========================================================================== */
+const TRACKS = [
+  {
+    name:'Sunset Oval', laps:3, world:{w:1600,h:1000}, bg:'#191d24', tar:'#23272f',
+    outer:ring(800,500,720,440,40),
+    inner:ring(800,500,360,200,40),
+    checkpoints:[ {x:800,y:60,r:120},{x:1540,y:500,r:120},{x:800,y:940,r:120},{x:60,y:500,r:120} ],
+    spawns:gridSpawns(800,120,Math.PI/2,3,90,70),
+    boostPads:[ {x:800,y:790,r:46},{x:800,y:210,r:46} ],
+  },
+  {
+    name:'Coil', laps:3, world:{w:1600,h:1000}, bg:'#181b22', tar:'#222630',
+    // a peanut/figure-ish loop made of two offset rings stitched by hand-ish bounds
+    outer:ring(800,500,700,430,48),
+    inner:[].concat(ring(540,500,170,170,28), [[540+170,500]]).slice(0,28*4),
+    checkpoints:[ {x:800,y:70,r:120},{x:1500,y:500,r:120},{x:800,y:930,r:120},{x:300,y:500,r:120} ],
+    spawns:gridSpawns(800,130,Math.PI/2,3,90,70),
+    boostPads:[ {x:1300,y:760,r:46},{x:300,y:240,r:46} ],
+  },
+];
+// ---- track authoring helpers (kept beside the data they serve) ----
+function ring(cx,cy,rx,ry,n){ const p=[]; for(let i=0;i<n;i++){const a=i/n*Math.PI*2;
+  p.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]);} return p; }
+function gridSpawns(cx,cy,angle,cols,dx,dy){ const s=[]; for(let i=0;i<CFG.MAX_PLAYERS;i++){
+  const col=i%cols, rowi=Math.floor(i/cols);
+  s.push({x:cx+(col-(cols-1)/2)*dx, y:cy+rowi*dy, angle}); } return s; }
+function wallsOf(track){ // polylines -> flat list of segments {ax,ay,bx,by}
+  const segs=[]; for(const loop of [track.outer,track.inner]){
+    for(let i=0;i<loop.length;i++){ const a=loop[i], b=loop[(i+1)%loop.length];
+      segs.push({ax:a[0],ay:a[1],bx:b[0],by:b[1]}); } } return segs; }
+
+/* ===========================================================================
+   [VEHICLES]  — data-driven stat presets. Add a kind, reference it at spawn.
+   =========================================================================== */
+const VEHICLES = {
+  balanced:{ power:780, brake:900, turn:3.1, grip:0.92, max:430, mass:1.0, radius:20 },
+  heavy:   { power:680, brake:760, turn:2.5, grip:0.94, max:400, mass:1.6, radius:23 },
+  nimble:  { power:760, brake:980, turn:3.8, grip:0.90, max:440, mass:0.8, radius:18 },
+};
+const CAR_COLORS = ['--p1','--p2','--p3','--p4','--p5','--p6'].map(v=>cssVar(v));
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+/* ===========================================================================
+   [CRYPTO]  — passphrase -> {topic, key}; AES-GCM for signaling payloads.
+   (Lifted from the reference notes: PBKDF2 gate -> HKDF split, daily rotation.)
+   =========================================================================== */
+const enc = new TextEncoder(), dec = new TextDecoder();
+async function deriveAll(pass){
+  const date = new Date().toISOString().slice(0,10);            // YYYY-MM-DD
+  const salt = enc.encode(`${CFG.ROOM_PREFIX}:master:${date}`);
+  const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveBits']);
+  const masterBits = await crypto.subtle.deriveBits(
+    { name:'PBKDF2', salt, iterations:100000, hash:'SHA-256' }, base, 256);
+  const master = await crypto.subtle.importKey('raw', masterBits, 'HKDF', false, ['deriveBits','deriveKey']);
+  const topicBits = await crypto.subtle.deriveBits(
+    { name:'HKDF', hash:'SHA-256', salt:new Uint8Array(0), info:enc.encode('rendezvous-topic') }, master, 96);
+  const topic = CFG.ROOM_PREFIX + '-' + [...new Uint8Array(topicBits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const key = await crypto.subtle.deriveKey(
+    { name:'HKDF', hash:'SHA-256', salt:new Uint8Array(0), info:enc.encode('aes-gcm-256') },
+    master, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+  return { topic, key };
+}
+async function aesEnc(key,obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(JSON.stringify(obj)));
+  const out = new Uint8Array(12+ct.byteLength); out.set(iv,0); out.set(new Uint8Array(ct),12);
+  return btoa(String.fromCharCode(...out));
+}
+async function aesDec(key,b64){
+  try{
+    const raw = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+    const iv = raw.slice(0,12), ct = raw.slice(12);
+    const pt = await crypto.subtle.decrypt({name:'AES-GCM',iv}, key, ct);
+    return JSON.parse(dec.decode(pt));
+  }catch{ return null; }   // wrong key / tampered -> dropped
+}
+
+/* ===========================================================================
+   [SIGNALING]  — ntfy I/O + encrypted room-message helpers.
+   One room topic; every message addressed with {from,to}. to:'*' = broadcast.
+   =========================================================================== */
+const SIG = { topic:null, key:null, since:0, seen:new Set(), poller:null };
+async function ntfyPost(topic, body){
+  await fetch(CFG.NTFY+topic, { method:'POST', body, headers:{'Content-Type':'text/plain'} });
+}
+async function ntfyPoll(topic, sinceSec){
+  const r = await fetch(`${CFG.NTFY}${topic}/json?poll=1&since=${sinceSec}s`);
+  const txt = await r.text();
+  return txt.trim().split('\n').filter(Boolean).map(l=>{ try{return JSON.parse(l);}catch{return null;} }).filter(Boolean);
+}
+async function sigSend(msg){                      // msg: {k, from, to, ...}
+  await ntfyPost(SIG.topic, await aesEnc(SIG.key, msg));
+}
+async function sigRecv(){                          // -> array of decrypted msgs (deduped, TTL-filtered)
+  const now = Math.floor(Date.now()/1000);
+  const raw = await ntfyPoll(SIG.topic, Math.min(3600, now - SIG.since + 5));
+  const out = [];
+  for(const m of raw){
+    if(m.event!=='message' || SIG.seen.has(m.id)) continue;
+    SIG.seen.add(m.id);
+    if(now - m.time > CFG.SIG_TTL) continue;
+    const dm = await aesDec(SIG.key, m.message);
+    if(dm && dm.from !== NET.myId) out.push(dm);
+  }
+  return out;
+}
+
+/* ===========================================================================
+   [NET]  — peer-connection management. Host is the star hub.
+   peers: Map(peerId -> { pc, ch, name, lastSeen, ping })
+   =========================================================================== */
+const NET = {
+  role:null,            // 'host' | 'client'
+  myId: randId(),
+  hostId:null,          // client: id of the host it joined
+  peers:new Map(),      // host: every client. client: just {hostId}
+  hostCh:null,          // client: the single channel to host
+  cancelled:false,
+};
+function randId(){ const b=crypto.getRandomValues(new Uint8Array(5));
+  return [...b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+
+function newPC(){ return new RTCPeerConnection(CFG.STUN); }
+function waitIce(pc){
+  return new Promise(res=>{
+    if(pc.iceGatheringState==='complete') return res();
+    const t=setTimeout(res, CFG.ICE_WAIT);
+    pc.onicegatheringstatechange=()=>{ if(pc.iceGatheringState==='complete'){clearTimeout(t);res();} };
+  });
+}
+function wireChannel(ch, peerId){
+  ch.binaryType='arraybuffer';
+  ch.onopen   = ()=> onChannelOpen(ch, peerId);
+  ch.onclose  = ()=> onChannelClose(peerId);
+  ch.onmessage= e =>{ let d; try{ d=JSON.parse(e.data); }catch{ return; }
+                      if(!d||typeof d!=='object') return; onNetMessage(d, peerId); };
+}
+
+/* ===========================================================================
+   [HANDSHAKE]  — host announce / join / offer / answer over the room topic.
+   =========================================================================== */
+async function startSignaling(pass){
+  const { topic, key } = await deriveAll(pass);
+  SIG.topic=topic; SIG.key=key; SIG.since=Math.floor(Date.now()/1000);
+  SIG.seen.clear();
+  log('room topic '+topic.slice(-10));
+  SIG.poller = setInterval(pumpSignaling, CFG.POLL_MS);
+}
+async function pumpSignaling(){
+  let msgs; try{ msgs=await sigRecv(); }catch{ return; }
+  for(const m of msgs){
+    if(NET.role==='host'){
+      if(m.k==='join' && m.to===NET.myId) hostHandleJoin(m.from);
+      else if(m.k==='answer' && m.to===NET.myId) hostHandleAnswer(m.from, m.sdp);
+    }else if(NET.role==='client'){
+      if(m.k==='announce' && !NET.hostId) clientTryJoin(m.from);
+      else if(m.k==='offer' && m.to===NET.myId) clientHandleOffer(m.from, m.sdp);
+    }
+  }
+}
+// ---- host ----
+let announceTimer=null;
+function hostBegin(){
+  NET.role='host';
+  GAME.hostId=NET.myId;
+  // host is also a player:
+  LOBBY.players.set(NET.myId,{ id:NET.myId, name:ME.name, ready:true, color:CAR_COLORS[0], slot:0 });
+  announceTimer=setInterval(()=> sigSend({k:'announce', from:NET.myId, to:'*'}), CFG.ANNOUNCE_MS);
+  sigSend({k:'announce', from:NET.myId, to:'*'});
+  log('hosting — waiting for drivers');
+  broadcastLobby();
+}
+async function hostHandleJoin(clientId){
+  if(NET.peers.has(clientId)) return;                 // already connecting/connected
+  if(LOBBY.players.size>=CFG.MAX_PLAYERS){ log('room full, ignoring '+clientId.slice(0,4)); return; }
+  log('join from '+clientId.slice(0,4)+' — sending offer');
+  const pc=newPC();
+  const ch=pc.createDataChannel('race',{ordered:true});  // reliable v1; can switch to unreliable later
+  wireChannel(ch, clientId);
+  NET.peers.set(clientId,{ pc, ch, name:'…', lastSeen:Date.now(), ping:0 });
+  pc.oniceconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.iceConnectionState)) onChannelClose(clientId); };
+  const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await waitIce(pc);
+  await sigSend({k:'offer', from:NET.myId, to:clientId, sdp:pc.localDescription.sdp});
+}
+async function hostHandleAnswer(clientId, sdp){
+  const p=NET.peers.get(clientId); if(!p||p.pc.currentRemoteDescription) return;
+  await p.pc.setRemoteDescription({type:'answer', sdp});
+}
+// ---- client ----
+function clientBegin(){ NET.role='client'; log('searching for a host…'); }
+async function clientTryJoin(hostId){
+  if(NET.hostId) return;
+  NET.hostId=hostId; GAME.hostId=hostId;
+  log('found host '+hostId.slice(0,4)+' — requesting to join');
+  await sigSend({k:'join', from:NET.myId, to:hostId});
+  // if no offer arrives, allow a retry by clearing after a beat
+  setTimeout(()=>{ if(!NET.hostCh) NET.hostId=null; }, 6000);
+}
+async function clientHandleOffer(hostId, sdp){
+  if(NET.hostCh) return;
+  const pc=newPC();
+  pc.ondatachannel=e=>{ NET.peers.set(hostId,{pc, ch:e.channel, lastSeen:Date.now(), ping:0});
+    wireChannel(e.channel, hostId); };
+  pc.oniceconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.iceConnectionState)) onChannelClose(hostId); };
+  await pc.setRemoteDescription({type:'offer', sdp});
+  const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); await waitIce(pc);
+  await sigSend({k:'answer', from:NET.myId, to:hostId, sdp:pc.localDescription.sdp});
+  log('answer sent — establishing channel');
+}
+
+/* ===========================================================================
+   [PROTOCOL]  — DataChannel messages.
+   host->client : 'lobby','start','snap','done'
+   client->host : 'hello','ready','input'
+   both         : 'ping','pong'
+   =========================================================================== */
+function send(ch,obj){ if(ch && ch.readyState==='open') ch.send(JSON.stringify(obj)); }
+function hostBroadcast(obj){ for(const p of NET.peers.values()) send(p.ch,obj); }
+
+function onChannelOpen(ch, peerId){
+  log('channel open '+peerId.slice(0,4));
+  setNetDot('ok');
+  if(NET.role==='client'){
+    NET.hostCh=ch;
+    send(ch,{t:'hello', name:ME.name});
+    showScreen('lobby');
+  }else{ // host: a client connected; send current lobby snapshot
+    broadcastLobby();
+  }
+  startHeartbeat(ch, peerId);
+}
+function onChannelClose(peerId){
+  if(NET.role==='host'){
+    if(NET.peers.has(peerId)){ NET.peers.get(peerId).pc.close(); NET.peers.delete(peerId); }
+    LOBBY.players.delete(peerId); GAME.cars.delete(peerId);
+    log('driver left '+peerId.slice(0,4)); broadcastLobby();
+  }else{
+    log('lost host — returning to setup'); setNetDot('bad');
+    fullReset(); showScreen('setup');
+  }
+}
+function onNetMessage(d, peerId){
+  const p=NET.peers.get(peerId); if(p) p.lastSeen=Date.now();
+  switch(d.t){
+    case 'ping': send(p?p.ch:NET.hostCh,{t:'pong',ts:d.ts}); break;
+    case 'pong': if(p) p.ping=Date.now()-d.ts; break;
+    // ---- host side ----
+    case 'hello': if(NET.role==='host'){ assignPlayer(peerId,d.name); } break;
+    case 'ready': if(NET.role==='host'){ const pl=LOBBY.players.get(peerId); if(pl){pl.ready=d.val; broadcastLobby(); refreshStartBtn();} } break;
+    case 'input': if(NET.role==='host'){ const c=GAME.cars.get(peerId); if(c) c.input=d; } break;
+    // ---- client side ----
+    case 'lobby': if(NET.role==='client'){ applyLobby(d); } break;
+    case 'start': if(NET.role==='client'){ beginRace(d); } break;
+    case 'snap':  if(NET.role==='client'){ ingestSnap(d); } break;
+    case 'done':  if(NET.role==='client'){ raceFinished(d.results); } break;
+  }
+}
+// heartbeat / drop detection
+function startHeartbeat(ch, peerId){
+  const iv=setInterval(()=>{
+    if(ch.readyState!=='open'){ clearInterval(iv); return; }
+    send(ch,{t:'ping',ts:Date.now()});
+    const p=NET.peers.get(peerId);
+    if(p && Date.now()-p.lastSeen>CFG.DROP_MS){ clearInterval(iv); onChannelClose(peerId); }
+    updatePingHud();
+  }, CFG.PING_MS);
+}
+
+/* ===========================================================================
+   [STATE]  — lobby + game model
+   =========================================================================== */
+const ME = { name:'Driver' };
+const LOBBY = { players:new Map(), trackIdx:0 };   // host-authoritative
+const GAME = {
+  hostId:null, track:null, segs:[], laps:3,
+  cars:new Map(),          // id -> car (host: authoritative; client: own predicted only)
+  phase:'lobby',           // 'lobby'|'countdown'|'race'|'done'
+  startAt:0, raceT0:0, tick:0,
+  // client interpolation buffer:
+  snaps:[],                // [{tc, cars:Map(id->{x,y,a,vx,vy,lap,place,fin})}]
+};
+function makeCar(id, slot, color, name, kind='balanced'){
+  const sp = GAME.track.spawns[slot] || GAME.track.spawns[0];
+  const v = VEHICLES[kind];
+  return { id, name, color, kind, ...v,
+    x:sp.x, y:sp.y, angle:sp.angle, vx:0, vy:0,
+    input:{s:0,th:0,b:0,d:0,seq:0},
+    lap:1, nextCp:0, place:0, finished:false, finishT:0,
+    // client-only render smoothing fields:
+    rx:sp.x, ry:sp.y, ra:sp.angle };
+}
+function assignPlayer(peerId, name){
+  if(LOBBY.players.has(peerId)) { LOBBY.players.get(peerId).name=name; }
+  else{
+    const used=new Set([...LOBBY.players.values()].map(p=>p.slot));
+    let slot=0; while(used.has(slot)) slot++;
+    LOBBY.players.set(peerId,{ id:peerId, name, ready:false, color:CAR_COLORS[slot%6], slot });
+  }
+  broadcastLobby(); refreshStartBtn();
+}
+function broadcastLobby(){
+  const d={ t:'lobby', host:NET.myId, trackIdx:LOBBY.trackIdx,
+    players:[...LOBBY.players.values()] };
+  hostBroadcast(d); applyLobby(d);   // host renders its own lobby too
+}
+function applyLobby(d){
+  LOBBY.players.clear();
+  for(const p of d.players) LOBBY.players.set(p.id,p);
+  LOBBY.trackIdx=d.trackIdx;
+  renderLobby();
+}
+
+/* ===========================================================================
+   [PHYSICS]  — HOST ONLY. Integration + car/car + car/wall collision.
+   =========================================================================== */
+function integrate(car, dt){
+  const i=car.input;
+  // steering scales with speed so a parked car doesn't spin in place
+  const speed=Math.hypot(car.vx,car.vy);
+  car.angle += i.s * car.turn * dt * Math.min(1, speed/120 + 0.15);
+  const accel = i.th*car.power - i.b*car.brake;
+  car.vx += Math.cos(car.angle)*accel*dt;
+  car.vy += Math.sin(car.angle)*accel*dt;
+  // lateral grip: bleed sideways velocity relative to heading (gives drift feel)
+  const fwd={x:Math.cos(car.angle),y:Math.sin(car.angle)};
+  const fdot=car.vx*fwd.x+car.vy*fwd.y;
+  const fvx=fwd.x*fdot, fvy=fwd.y*fdot;            // forward component
+  const svx=car.vx-fvx, svy=car.vy-fvy;            // sideways component
+  const gripK = i.d ? car.grip*0.985 : car.grip;   // drifting keeps more side-slip
+  car.vx = fvx*car.grip + svx*gripK;
+  car.vy = fvy*car.grip + svy*gripK;
+  // clamp top speed
+  const sp=Math.hypot(car.vx,car.vy);
+  if(sp>car.max){ car.vx*=car.max/sp; car.vy*=car.max/sp; }
+  car.x += car.vx*dt; car.y += car.vy*dt;
+}
+function boostPads(car){
+  for(const b of GAME.track.boostPads||[]){
+    if((car.x-b.x)**2+(car.y-b.y)**2 < (b.r+car.radius)**2){
+      const f=1.18; car.vx*=f; car.vy*=f;
+    }
+  }
+}
+function carWall(car){
+  for(const s of GAME.segs){
+    // closest point on segment to car centre
+    const dx=s.bx-s.ax, dy=s.by-s.ay, L2=dx*dx+dy*dy||1e-6;
+    let t=((car.x-s.ax)*dx+(car.y-s.ay)*dy)/L2; t=Math.max(0,Math.min(1,t));
+    const cx=s.ax+t*dx, cy=s.ay+t*dy;
+    const ox=car.x-cx, oy=car.y-cy, d=Math.hypot(ox,oy)||1e-6;
+    if(d<car.radius){
+      const nx=ox/d, ny=oy/d, pen=car.radius-d;
+      car.x+=nx*pen; car.y+=ny*pen;                 // push out
+      const vn=car.vx*nx+car.vy*ny;                 // reflect + damp normal velocity
+      if(vn<0){ car.vx-=1.5*vn*nx; car.vy-=1.5*vn*ny; car.vx*=0.85; car.vy*=0.85; }
+    }
+  }
+}
+function carCar(){   // O(n^2) elastic, fine for <=6
+  const arr=[...GAME.cars.values()];
+  for(let a=0;a<arr.length;a++) for(let b=a+1;b<arr.length;b++){
+    const c1=arr[a], c2=arr[b];
+    const dx=c2.x-c1.x, dy=c2.y-c1.y, dist=Math.hypot(dx,dy)||1e-6;
+    const min=c1.radius+c2.radius;
+    if(dist<min){
+      const nx=dx/dist, ny=dy/dist;
+      const rel=(c1.vx-c2.vx)*nx+(c1.vy-c2.vy)*ny;
+      if(rel>0){                                    // approaching
+        const e=0.85, j=-(1+e)*rel/(1/c1.mass+1/c2.mass);
+        c1.vx+=j/c1.mass*nx; c1.vy+=j/c1.mass*ny;
+        c2.vx-=j/c2.mass*nx; c2.vy-=j/c2.mass*ny;
+      }
+      const overlap=(min-dist)/2;                   // un-stick
+      c1.x-=nx*overlap; c1.y-=ny*overlap;
+      c2.x+=nx*overlap; c2.y+=ny*overlap;
+    }
+  }
+}
+function progress(car){   // checkpoint + lap tracking
+  const cps=GAME.track.checkpoints, cp=cps[car.nextCp];
+  if((car.x-cp.x)**2+(car.y-cp.y)**2 < cp.r*cp.r){
+    car.nextCp++;
+    if(car.nextCp>=cps.length){ car.nextCp=0; car.lap++;
+      if(car.lap>GAME.laps && !car.finished){ car.finished=true; car.finishT=now()-GAME.raceT0; }
+    }
+  }
+}
+function rankCars(){
+  const arr=[...GAME.cars.values()];
+  arr.sort((a,b)=>{
+    if(a.finished||b.finished) return (a.finishT||1e12)-(b.finishT||1e12);
+    if(b.lap!==a.lap) return b.lap-a.lap;
+    if(b.nextCp!==a.nextCp) return b.nextCp-a.nextCp;
+    const cp=GAME.track.checkpoints;
+    const da=(a.x-cp[a.nextCp].x)**2+(a.y-cp[a.nextCp].y)**2;
+    const db=(b.x-cp[b.nextCp].x)**2+(b.y-cp[b.nextCp].y)**2;
+    return da-db;
+  });
+  arr.forEach((c,i)=>c.place=i+1);
+}
+
+/* ===========================================================================
+   [LOOP]  — host fixed-step sim + snapshot; client predict + interpolate.
+   =========================================================================== */
+let acc=0, last=0, snapAcc=0, inputAcc=0, raf=null;
+function now(){ return performance.now()/1000; }
+
+function startRaceLoop(){ last=now(); acc=0; snapAcc=0; inputAcc=0; raf=requestAnimationFrame(frame); }
+function stopRaceLoop(){ if(raf) cancelAnimationFrame(raf); raf=null; }
+
+function frame(){
+  raf=requestAnimationFrame(frame);
+  const t=now(), dt=Math.min(0.05, t-last); last=t;
+
+  if(NET.role==='host'){
+    if(GAME.phase==='countdown' && t>=GAME.startAt){ GAME.phase='race'; GAME.raceT0=t; hideCountdown(); }
+    if(GAME.phase==='race'){
+      const meCar=GAME.cars.get(NET.myId); if(meCar && !meCar.finished) meCar.input=readInput();
+      acc+=dt;
+      while(acc>=PHYS_DT){
+        for(const c of GAME.cars.values()){ if(c.finished){ c.input={s:0,th:0,b:0,d:0}; }
+          integrate(c, PHYS_DT); carWall(c); boostPads(c); progress(c); }
+        carCar();
+        acc-=PHYS_DT; GAME.tick++;
+      }
+      rankCars();
+      if([...GAME.cars.values()].every(c=>c.finished)) hostEndRace();
+    }
+    // broadcast snapshots at NET_HZ
+    snapAcc+=dt;
+    if(snapAcc>=1/CFG.NET_HZ){ snapAcc=0; hostSendSnap(); }
+    drawWorld(GAME.cars, /*authoritative*/true);
+  }
+  else if(NET.role==='client'){
+    // send input at INPUT_HZ
+    inputAcc+=dt;
+    if(inputAcc>=1/CFG.INPUT_HZ){ inputAcc=0; sendInput(); }
+    // predict own car locally for responsiveness
+    const me=GAME.cars.get(NET.myId);
+    if(me && GAME.phase==='race'){ me.input=readInput(); integrate(me, dt); carWall(me); }
+    const render=buildClientView(t);
+    drawWorld(render, false);
+  }
+  updateHud();
+}
+
+// ---- host snapshot ----
+function hostSendSnap(){
+  const cars=[...GAME.cars.values()].map(c=>({
+    i:c.id, x:r2(c.x), y:r2(c.y), a:r3(c.angle), vx:r2(c.vx), vy:r2(c.vy),
+    l:c.lap, n:c.nextCp, p:c.place, f:c.finished?1:0 }));
+  hostBroadcast({ t:'snap', tick:GAME.tick, t0:GAME.raceT0, server:now(), cars,
+    phase:GAME.phase, startAt:GAME.startAt });
+}
+function r2(n){ return Math.round(n*100)/100; } function r3(n){ return Math.round(n*1000)/1000; }
+
+// ---- client ingest + interpolation ----
+function ingestSnap(d){
+  if(GAME.phase==='lobby') return;
+  const m=new Map();
+  for(const c of d.cars) m.set(c.i, c);
+  GAME.snaps.push({ tc:now(), cars:m });
+  if(GAME.snaps.length>16) GAME.snaps.shift();
+  // reconcile own predicted car toward authority
+  const auth=m.get(NET.myId), me=GAME.cars.get(NET.myId);
+  if(auth&&me){
+    me.x+=(auth.x-me.x)*0.25; me.y+=(auth.y-me.y)*0.25;     // ease, don't snap
+    me.angle=auth.a; me.vx=auth.vx; me.vy=auth.vy;
+    me.lap=auth.l; me.nextCp=auth.n; me.place=auth.p; me.finished=!!auth.f;
+  }
+  if(d.phase==='done') return;
+}
+function buildClientView(t){
+  const out=new Map();
+  const me=GAME.cars.get(NET.myId);
+  if(me) out.set(NET.myId, me);                  // own predicted car drawn directly
+  // interpolate remote cars INTERP_MS in the past
+  const rt=t-CFG.INTERP_MS/1000;
+  let a=null,b=null;
+  for(let i=GAME.snaps.length-1;i>=0;i--){ if(GAME.snaps[i].tc<=rt){ a=GAME.snaps[i]; b=GAME.snaps[i+1]||a; break; } }
+  if(!a){ a=GAME.snaps[0]; b=GAME.snaps[0]; }
+  if(a){
+    const span=(b.tc-a.tc)||1e-3, f=Math.max(0,Math.min(1,(rt-a.tc)/span));
+    for(const [id,ca] of a.cars){
+      if(id===NET.myId) continue;
+      const cb=b.cars.get(id)||ca;
+      const pl=LOBBY.players.get(id);
+      out.set(id,{ id, color:pl?pl.color:'#999', name:pl?pl.name:'', radius:VEHICLES.balanced.radius,
+        x:ca.x+(cb.x-ca.x)*f, y:ca.y+(cb.y-ca.y)*f, angle:lerpAng(ca.a,cb.a,f),
+        lap:ca.l, place:ca.p, finished:!!ca.f });
+    }
+  }
+  return out;
+}
+function lerpAng(a,b,f){ let d=((b-a+Math.PI)%(2*Math.PI))-Math.PI; return a+d*f; }
+
+function sendInput(){ if(GAME.phase!=='race') return; const i=readInput(); i.t='input'; i.seq=(GAME.tick++); send(NET.hostCh,i); }
+
+/* ===========================================================================
+   [INPUT]  — keyboard -> input frame {s,th,b,d}
+   =========================================================================== */
+const keys={};
+addEventListener('keydown',e=>{ keys[e.key.toLowerCase()]=true;
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); });
+addEventListener('keyup',  e=>{ keys[e.key.toLowerCase()]=false; });
+function readInput(){
+  const up=keys['w']||keys['arrowup'], dn=keys['s']||keys['arrowdown'];
+  const lf=keys['a']||keys['arrowleft'], rt=keys['d']||keys['arrowright'];
+  return { s:(rt?1:0)-(lf?1:0), th:up?1:0, b:dn?1:0, d:(keys[' ']||keys['shift'])?1:0 };
+}
+
+/* ===========================================================================
+   [RENDER]  — everything visual. Safe to rewrite without touching netcode.
+   World is fit-to-canvas (no camera). Swap drawWorld internals freely.
+   =========================================================================== */
+const cv=document.getElementById('cv'); const ctx=cv.getContext('2d');
+let VIEW={scale:1,ox:0,oy:0};
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect();
+  cv.width=r.width*devicePixelRatio; cv.height=r.height*devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  if(GAME.track) computeView(r.width,r.height);
+}
+addEventListener('resize',resize);
+function computeView(W,H){
+  const w=GAME.track.world.w, h=GAME.track.world.h, pad=24;
+  const s=Math.min((W-pad*2)/w,(H-pad*2)/h);
+  VIEW={ scale:s, ox:(W-w*s)/2, oy:(H-h*s)/2 };
+}
+const wx=x=>VIEW.ox+x*VIEW.scale, wy=y=>VIEW.oy+y*VIEW.scale, ws=v=>v*VIEW.scale;
+
+function drawWorld(cars, authoritative){
+  const tr=GAME.track; if(!tr) return;
+  const W=cv.width/devicePixelRatio, H=cv.height/devicePixelRatio;
+  ctx.fillStyle=tr.bg; ctx.fillRect(0,0,W,H);
+  // tarmac fill between outer & inner via even-odd
+  ctx.beginPath(); poly(tr.outer); poly(tr.inner);
+  ctx.fillStyle=tr.tar; ctx.fill('evenodd');
+  // boost pads
+  for(const b of tr.boostPads||[]){ ctx.beginPath(); ctx.arc(wx(b.x),wy(b.y),ws(b.r),0,7);
+    ctx.fillStyle='rgba(39,224,216,.18)'; ctx.fill();
+    ctx.strokeStyle='rgba(39,224,216,.6)'; ctx.lineWidth=2; ctx.stroke(); }
+  // walls
+  ctx.strokeStyle='#3a414c'; ctx.lineWidth=Math.max(2,ws(6)); ctx.lineJoin='round';
+  strokePoly(tr.outer); strokePoly(tr.inner);
+  // start/finish gate
+  const sf=tr.checkpoints[0];
+  ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.setLineDash([ws(14),ws(10)]); ctx.lineWidth=ws(8);
+  ctx.beginPath(); ctx.moveTo(wx(sf.x-110),wy(sf.y)); ctx.lineTo(wx(sf.x+110),wy(sf.y)); ctx.stroke();
+  ctx.setLineDash([]);
+  // cars (sorted so leader draws on top)
+  const arr=[...cars.values()].sort((a,b)=>(b.place||0)-(a.place||0));
+  for(const c of arr) drawCar(c);
+}
+function poly(p){ ctx.moveTo(wx(p[0][0]),wy(p[0][1])); for(let i=1;i<p.length;i++) ctx.lineTo(wx(p[i][0]),wy(p[i][1])); ctx.closePath(); }
+function strokePoly(p){ ctx.beginPath(); poly(p); ctx.stroke(); }
+function drawCar(c){
+  const x=wx(c.x), y=wy(c.y), r=ws(c.radius||20), a=c.angle||0;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(a);
+  // body
+  ctx.fillStyle=c.color||'#ccc'; ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=2;
+  roundRect(-r,-r*0.62,r*2,r*1.24,r*0.4); ctx.fill(); ctx.stroke();
+  // nose marker
+  ctx.beginPath(); ctx.moveTo(r*0.9,0); ctx.lineTo(r*0.2,-r*0.5); ctx.lineTo(r*0.2,r*0.5);
+  ctx.closePath(); ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fill();
+  ctx.restore();
+  // name + finished flag
+  if(c.name){ ctx.fillStyle='rgba(233,237,242,.85)'; ctx.font='11px '+getComputedStyle(document.body).fontFamily;
+    ctx.textAlign='center'; ctx.fillText(c.name+(c.finished?' ✓':''), x, y-r-6); }
+}
+function roundRect(x,y,w,h,rr){ ctx.beginPath();
+  ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); }
+
+/* ===========================================================================
+   [UI]  — screens, lobby, HUD, button wiring
+   =========================================================================== */
+const $=id=>document.getElementById(id);
+function showScreen(name){ ['setup','lobby','race'].forEach(s=>$('sc-'+s).classList.toggle('active',s===name));
+  if(name==='race'){ requestAnimationFrame(resize); } }
+function log(m){ const el=$('log'); el.textContent+=(el.textContent?'\n':'')+m;
+  el.scrollTop=el.scrollHeight; }
+function setNetDot(s){ $('net-dot').className='net '+(s==='ok'?'ok':s==='warn'?'warn':''); }
+
+$('toggle-log').onclick=e=>{ e.preventDefault(); $('log').classList.toggle('show'); };
+
+$('btn-host').onclick=async()=>{
+  if(!validate()) return;
+  await startSignaling(roomVal()); clientNo(); hostBegin();
+  $('lobby-room').textContent='· '+roomShort();
+  $('lobby-role').textContent='You are hosting. Pick a circuit and start when everyone is ready.';
+  $('track-pick').style.display='block'; $('btn-start').style.display='block'; $('btn-ready').style.display='none';
+  buildTrackSeg(); showScreen('lobby'); refreshStartBtn();
+};
+$('btn-join').onclick=async()=>{
+  if(!validate()) return;
+  await startSignaling(roomVal()); clientBegin();
+  $('lobby-role').textContent='Connecting to host…';
+  $('lobby-room').textContent='· '+roomShort();
+  $('track-pick').style.display='none'; $('btn-start').style.display='none'; $('btn-ready').style.display='block';
+  $('lobby-hint').textContent='Waiting for the host to start the race.';
+  showScreen('lobby');
+};
+function validate(){ ME.name=($('inp-name').value||'Driver').trim().slice(0,14);
+  if(!$('inp-room').value.trim()){ $('inp-room').focus(); return false; } return true; }
+function roomVal(){ return $('inp-room').value.trim(); }
+function roomShort(){ return SIG.topic?SIG.topic.slice(-6):''; }
+function clientNo(){ /* host marker no-op for symmetry */ }
+
+let ready=false;
+$('btn-ready').onclick=()=>{ ready=!ready; $('btn-ready').textContent=ready?'Not ready':'Ready up';
+  $('btn-ready').classList.toggle('primary',ready); send(NET.hostCh,{t:'ready',val:ready}); };
+$('btn-start').onclick=()=> hostStartRace();
+$('btn-leave').onclick=()=>{ fullReset(); showScreen('setup'); };
+
+function buildTrackSeg(){ const seg=$('track-seg'); seg.innerHTML='';
+  TRACKS.forEach((tr,i)=>{ const b=document.createElement('button'); b.textContent=tr.name;
+    b.className=i===LOBBY.trackIdx?'sel':''; b.onclick=()=>{ LOBBY.trackIdx=i; buildTrackSeg(); broadcastLobby(); };
+    seg.appendChild(b); }); }
+function renderLobby(){
+  const ul=$('lobby-list'); ul.innerHTML='';
+  for(const p of LOBBY.players.values()){
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="dot" style="background:${p.color}"></span>
+      <span class="pname">${escapeHtml(p.name)}${p.id===NET.myId?' (you)':''}${p.id===GAME.hostId?' · host':''}</span>
+      <span class="pstat ${p.ready?'ready':''}">${p.ready?'ready':'…'}</span>`;
+    ul.appendChild(li);
+  }
+  if(NET.role==='host'){ buildTrackSeg(); refreshStartBtn();
+    $('lobby-hint').textContent=`${LOBBY.players.size}/${CFG.MAX_PLAYERS} drivers connected.`; }
+}
+function refreshStartBtn(){ if(NET.role!=='host') return;
+  const all=[...LOBBY.players.values()]; const ok=all.length>=1 && all.every(p=>p.ready);
+  $('btn-start').disabled=!ok; }
+function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---- race start / finish orchestration ---- */
+function hostStartRace(){
+  GAME.track=TRACKS[LOBBY.trackIdx]; GAME.segs=wallsOf(GAME.track); GAME.laps=GAME.track.laps;
+  GAME.cars.clear();
+  for(const p of LOBBY.players.values())
+    GAME.cars.set(p.id, makeCar(p.id, p.slot, p.color, p.name));
+  GAME.phase='countdown'; GAME.startAt=now()+3.2; GAME.tick=0;
+  hostBroadcast({ t:'start', trackIdx:LOBBY.trackIdx, startAt:GAME.startAt, t0:now(),
+    grid:[...LOBBY.players.values()].map(p=>({id:p.id,slot:p.slot,color:p.color,name:p.name})) });
+  enterRace(); runCountdown(GAME.startAt);
+}
+function beginRace(d){    // client
+  GAME.track=TRACKS[d.trackIdx]; GAME.segs=wallsOf(GAME.track); GAME.laps=GAME.track.laps;
+  GAME.cars.clear();
+  for(const g of d.grid){ const car=makeCar(g.id,g.slot,g.color,g.name);
+    if(g.id===NET.myId) GAME.cars.set(g.id,car); }   // client only sims its own
+  for(const g of d.grid){ const pl=LOBBY.players.get(g.id)||{}; pl.color=g.color; pl.slot=g.slot; pl.name=g.name; LOBBY.players.set(g.id,pl); }
+  GAME.phase='countdown'; GAME.startAt=d.startAt; GAME.snaps=[];
+  enterRace(); runCountdown(d.startAt);
+}
+function enterRace(){ showScreen('race'); resize(); GAME.phase=GAME.phase||'countdown';
+  if(!raf) startRaceLoop(); }
+function runCountdown(at){
+  const el=$('countdown'); el.style.display='flex';
+  const tick=()=>{ const left=at-now();
+    if(left<=0){ el.textContent='GO'; setTimeout(()=>el.style.display='none',600);
+      if(NET.role==='client') GAME.phase='race'; return; }
+    el.textContent=Math.ceil(left); requestAnimationFrame(tick); };
+  tick();
+}
+function hideCountdown(){ /* host transitions handled in loop */ const el=$('countdown');
+  el.textContent='GO'; setTimeout(()=>el.style.display='none',600); }
+function hostEndRace(){
+  if(GAME.phase==='done') return; GAME.phase='done';
+  rankCars(); const results=[...GAME.cars.values()].sort((a,b)=>a.place-b.place)
+    .map(c=>({name:c.name,place:c.place,t:c.finishT})); 
+  hostBroadcast({t:'done',results}); raceFinished(results);
+}
+function raceFinished(results){
+  GAME.phase='done';
+  const b=$('banner'); b.style.display='block';
+  const win=results[0]; b.innerHTML=`<span class="pill">${escapeHtml(win?win.name:'—')} wins</span>`;
+  setTimeout(()=>{ b.style.display='none'; showScreen('lobby'); ready=false;
+    $('btn-ready').textContent='Ready up'; $('btn-ready').classList.remove('primary');
+    if(NET.role==='host'){ for(const p of LOBBY.players.values()) p.ready=(p.id===NET.myId); broadcastLobby(); }
+  }, 4200);
+}
+
+/* ---- HUD ---- */
+function updateHud(){
+  if(GAME.phase==='lobby') return;
+  const me=GAME.cars.get(NET.myId);
+  $('hud-lap').textContent=me?Math.min(me.lap,GAME.laps):1;
+  $('hud-laps').textContent=GAME.laps;
+  $('hud-pos').textContent=me?ordinal(me.place||'—'):'—';
+  if(GAME.phase==='race'){ const t=now()-(GAME.raceT0||GAME.startAt); $('hud-time').textContent=Math.max(0,t).toFixed(1)+'s'; }
+  // leaderboard
+  const board=$('hud-board'); const list=[...LOBBY.players.values()];
+  let order;
+  if(NET.role==='host'){ order=[...GAME.cars.values()].sort((a,b)=>a.place-b.place).map(c=>({name:c.name,id:c.id,place:c.place,lap:c.lap})); }
+  else { const s=GAME.snaps[GAME.snaps.length-1];
+    order = s ? [...s.cars.values()].sort((a,b)=>a.p-b.p).map(c=>({name:(LOBBY.players.get(c.i)||{}).name||'',id:c.i,place:c.p,lap:c.l})) : []; }
+  board.innerHTML=order.map(o=>`<div class="${o.id===NET.myId?'me':''}">${o.place}. ${escapeHtml(o.name||'')} <span style="color:var(--ink-dim)">L${o.lap}</span></div>`).join('');
+}
+function updatePingHud(){
+  let ping=0;
+  if(NET.role==='client'){ const h=NET.peers.get(NET.hostId); ping=h?h.ping:0; }
+  else { const arr=[...NET.peers.values()]; ping=arr.length?Math.round(arr.reduce((s,p)=>s+p.ping,0)/arr.length):0; }
+  $('hud-ping').textContent=ping||'—';
+  setNetDot(ping<80?'ok':ping<200?'warn':'bad');
+}
+function ordinal(n){ if(typeof n!=='number') return n; const s=['th','st','nd','rd'],v=n%100;
+  return n+(s[(v-20)%10]||s[v]||s[0]); }
+
+/* ===========================================================================
+   [INIT]
+   =========================================================================== */
+function fullReset(){
+  NET.cancelled=true;
+  if(SIG.poller) clearInterval(SIG.poller); SIG.poller=null;
+  if(announceTimer) clearInterval(announceTimer); announceTimer=null;
+  stopRaceLoop();
+  for(const p of NET.peers.values()){ try{p.pc.close();}catch{} }
+  NET.peers.clear(); NET.role=null; NET.hostId=null; NET.hostCh=null; NET.myId=randId(); NET.cancelled=false;
+  LOBBY.players.clear(); GAME.cars.clear(); GAME.snaps=[]; GAME.phase='lobby';
+  ready=false; SIG.topic=null; SIG.key=null; SIG.seen.clear();
+}
+resize();
+log('ready — enter a room passphrase to host or join');
+</script>
+</body>
+</html>
