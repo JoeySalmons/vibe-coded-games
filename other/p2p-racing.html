@@ -91,9 +91,9 @@
   .seg button.sel{border-color:var(--amber);color:var(--amber)}
 
   /* race */
-  #sc-race{padding:0;display:none;flex-direction:column}
+  #sc-race{padding:0;display:none;flex-direction:column;align-items:stretch;justify-content:flex-start}
   #sc-race.active{display:flex}
-  #stage{flex:1;position:relative;min-height:0}
+  #stage{flex:1;position:relative;min-height:0;width:100%}
   canvas{display:block;width:100%;height:100%}
   .hud{position:absolute;pointer-events:none;font-family:var(--mono)}
   #hud-tl{top:12px;left:14px;font-size:12px;line-height:1.7}
@@ -114,6 +114,16 @@
   #log.show{display:block}
   .net{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px}
   .net.ok{background:var(--good)} .net.warn{background:var(--p3)}
+  /* passphrase share box (host lobby) */
+  .passbox{display:flex;gap:8px;align-items:center;background:var(--asphalt);
+    border:1px dashed var(--amber);border-radius:8px;padding:10px 12px;margin-top:6px}
+  .passbox code{flex:1;color:var(--amber-soft);font-size:15px;word-break:break-all}
+  .passbox button{flex:0 0 auto;padding:7px 12px;font-size:12px}
+  /* in-race control bar */
+  #racebar{left:14px;bottom:14px;display:flex;gap:10px;align-items:center;pointer-events:auto}
+  #racebar button{padding:8px 14px;font-size:12px}
+  #racebar .rp{color:var(--ink-dim);font-size:11px}
+  #racebar .rp b{color:var(--amber-soft)}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -145,6 +155,7 @@
   <div class="card">
     <h1 class="brand" style="font-size:30px">Lobby <span id="lobby-room" style="color:var(--ink-dim);font-size:13px;font-family:var(--mono)"></span></h1>
     <p class="tag" id="lobby-role"></p>
+    <div id="lobby-pass" style="display:none"></div>
     <div id="track-pick" style="display:none">
       <label>Circuit</label>
       <div class="seg" id="track-seg"></div>
@@ -169,6 +180,7 @@
     <div id="hud-board" class="hud"></div>
     <div id="countdown" class="hud" style="display:none"></div>
     <div id="banner" class="hud" style="display:none"></div>
+    <div id="racebar" class="hud"><button id="btn-quit">Leave race</button><span class="rp" id="race-pass"></span></div>
   </div>
 </div>
 
@@ -195,6 +207,7 @@ const CFG = {
   PING_MS:     2000,                   // heartbeat interval
   INTERP_MS:   100,                    // client renders remote cars this far in the past
   DROP_MS:     6000,                   // declare a peer gone after this much silence
+  COUNTDOWN:   3,                      // seconds of "3-2-1-GO" before the green flag
 };
 const PHYS_DT = 1/CFG.PHYS_HZ;
 
@@ -441,9 +454,11 @@ function onChannelOpen(ch, peerId){
 }
 function onChannelClose(peerId){
   if(NET.role==='host'){
+    const nm=nameOf(peerId);
     if(NET.peers.has(peerId)){ NET.peers.get(peerId).pc.close(); NET.peers.delete(peerId); }
     LOBBY.players.delete(peerId); GAME.cars.delete(peerId);
-    log('driver left '+peerId.slice(0,4)); broadcastLobby();
+    log('driver left '+peerId.slice(0,4)); if(typeof flash==='function') flash(`${nm} disconnected`);
+    broadcastLobby();
   }else{
     log('lost host — returning to setup'); setNetDot('bad');
     fullReset(); showScreen('setup');
@@ -454,6 +469,10 @@ function onNetMessage(d, peerId){
   switch(d.t){
     case 'ping': send(p?p.ch:NET.hostCh,{t:'pong',ts:d.ts}); break;
     case 'pong': if(p) p.ping=Date.now()-d.ts; break;
+    case 'bye':
+      if(NET.role==='host'){ onChannelClose(peerId); }
+      else if(d.host){ flash('Host ended the session'); setTimeout(()=>{ fullReset(); showScreen('setup'); $('lobby-pass').style.display='none'; }, 900); }
+      break;
     // ---- host side ----
     case 'hello': if(NET.role==='host'){ assignPlayer(peerId,d.name); } break;
     case 'ready': if(NET.role==='host'){ const pl=LOBBY.players.get(peerId); if(pl){pl.ready=d.val; broadcastLobby(); refreshStartBtn();} } break;
@@ -479,7 +498,7 @@ function startHeartbeat(ch, peerId){
 /* ===========================================================================
    [STATE]  — lobby + game model
    =========================================================================== */
-const ME = { name:'Driver' };
+const ME = { name:'Driver', pass:'' };
 const LOBBY = { players:new Map(), trackIdx:0 };   // host-authoritative
 const GAME = {
   hostId:null, track:null, segs:[], laps:3,
@@ -796,21 +815,40 @@ $('toggle-log').onclick=e=>{ e.preventDefault(); $('log').classList.toggle('show
 
 $('btn-host').onclick=async()=>{
   if(!validate()) return;
+  ME.pass=roomVal();
   await startSignaling(roomVal()); clientNo(); hostBegin();
   $('lobby-room').textContent='· '+roomShort();
   $('lobby-role').textContent='You are hosting. Pick a circuit and start when everyone is ready.';
+  showLobbyPass(true);
   $('track-pick').style.display='block'; $('btn-start').style.display='block'; $('btn-ready').style.display='none';
   buildTrackSeg(); showScreen('lobby'); refreshStartBtn();
 };
 $('btn-join').onclick=async()=>{
   if(!validate()) return;
+  ME.pass=roomVal();
   await startSignaling(roomVal()); clientBegin();
   $('lobby-role').textContent='Connecting to host…';
   $('lobby-room').textContent='· '+roomShort();
+  showLobbyPass(false);
   $('track-pick').style.display='none'; $('btn-start').style.display='none'; $('btn-ready').style.display='block';
   $('lobby-hint').textContent='Waiting for the host to start the race.';
   showScreen('lobby');
 };
+// passphrase reminder — prominent for the host (who shares it), quiet for joiners
+function showLobbyPass(isHost){
+  const el=$('lobby-pass'); el.style.display='block';
+  if(isHost){
+    el.innerHTML=`<label>Share this passphrase</label>
+      <div class="passbox"><code>${escapeHtml(ME.pass)}</code>
+      <button id="copy-pass" class="ghost">Copy</button></div>`;
+    $('copy-pass').onclick=()=>{ navigator.clipboard?.writeText(ME.pass);
+      $('copy-pass').textContent='Copied'; setTimeout(()=>$('copy-pass').textContent='Copy',1200); };
+  }else{
+    el.innerHTML=`<label>Room</label><div class="passbox" style="border-style:solid">
+      <code>${escapeHtml(ME.pass)}</code></div>`;
+  }
+  $('race-pass').innerHTML=`room <b>${escapeHtml(ME.pass)}</b>`;
+}
 function validate(){ ME.name=($('inp-name').value||'Driver').trim().slice(0,14);
   if(!$('inp-room').value.trim()){ $('inp-room').focus(); return false; } return true; }
 function roomVal(){ return $('inp-room').value.trim(); }
@@ -821,7 +859,22 @@ let ready=false;
 $('btn-ready').onclick=()=>{ ready=!ready; $('btn-ready').textContent=ready?'Not ready':'Ready up';
   $('btn-ready').classList.toggle('primary',ready); send(NET.hostCh,{t:'ready',val:ready}); };
 $('btn-start').onclick=()=> hostStartRace();
-$('btn-leave').onclick=()=>{ fullReset(); showScreen('setup'); };
+$('btn-leave').onclick=()=> leaveAll();
+$('btn-quit').onclick=()=> leaveAll();
+
+// announce departure so others get immediate feedback, then tear down locally
+function leaveAll(){
+  if(NET.role==='host') hostBroadcast({t:'bye', who:NET.myId, host:true});
+  else send(NET.hostCh,{t:'bye', who:NET.myId});
+  fullReset(); showScreen('setup');
+  $('lobby-pass').style.display='none';
+}
+function nameOf(id){ const p=LOBBY.players.get(id); return p?p.name:id.slice(0,4); }
+// transient on-screen notice (distinct from the race-result banner)
+let flashT=null;
+function flash(msg){ const b=$('banner'); b.style.display='block';
+  b.innerHTML=`<span class="pill">${escapeHtml(msg)}</span>`;
+  clearTimeout(flashT); flashT=setTimeout(()=>{ b.style.display='none'; }, 2600); }
 
 function buildTrackSeg(){ const seg=$('track-seg'); seg.innerHTML='';
   TRACKS.forEach((tr,i)=>{ const b=document.createElement('button'); b.textContent=tr.name;
@@ -850,8 +903,8 @@ function hostStartRace(){
   GAME.cars.clear();
   for(const p of LOBBY.players.values())
     GAME.cars.set(p.id, makeCar(p.id, p.slot, p.color, p.name));
-  GAME.phase='countdown'; GAME.startAt=now()+3.2; GAME.tick=0;
-  hostBroadcast({ t:'start', trackIdx:LOBBY.trackIdx, startAt:GAME.startAt, t0:now(),
+  GAME.phase='countdown'; GAME.startAt=now()+CFG.COUNTDOWN; GAME.tick=0;
+  hostBroadcast({ t:'start', trackIdx:LOBBY.trackIdx, countdown:CFG.COUNTDOWN,
     grid:[...LOBBY.players.values()].map(p=>({id:p.id,slot:p.slot,color:p.color,name:p.name})) });
   enterRace(); runCountdown(GAME.startAt);
 }
@@ -861,8 +914,8 @@ function beginRace(d){    // client
   for(const g of d.grid){ const car=makeCar(g.id,g.slot,g.color,g.name);
     if(g.id===NET.myId) GAME.cars.set(g.id,car); }   // client only sims its own
   for(const g of d.grid){ const pl=LOBBY.players.get(g.id)||{}; pl.color=g.color; pl.slot=g.slot; pl.name=g.name; LOBBY.players.set(g.id,pl); }
-  GAME.phase='countdown'; GAME.startAt=d.startAt; GAME.snaps=[];
-  enterRace(); runCountdown(d.startAt);
+  GAME.phase='countdown'; GAME.startAt=now()+(d.countdown||CFG.COUNTDOWN); GAME.snaps=[];
+  enterRace(); runCountdown(GAME.startAt);
 }
 function enterRace(){ showScreen('race'); resize(); GAME.phase=GAME.phase||'countdown';
   if(!raf) startRaceLoop(); }
@@ -903,10 +956,10 @@ function updateHud(){
   // leaderboard
   const board=$('hud-board'); const list=[...LOBBY.players.values()];
   let order;
-  if(NET.role==='host'){ order=[...GAME.cars.values()].sort((a,b)=>a.place-b.place).map(c=>({name:c.name,id:c.id,place:c.place,lap:c.lap})); }
+  if(NET.role==='host'){ order=[...GAME.cars.values()].sort((a,b)=>a.place-b.place).map(c=>({name:c.name,id:c.id,place:c.place,lap:c.lap,fin:c.finished})); }
   else { const s=GAME.snaps[GAME.snaps.length-1];
-    order = s ? [...s.cars.values()].sort((a,b)=>a.p-b.p).map(c=>({name:(LOBBY.players.get(c.i)||{}).name||'',id:c.i,place:c.p,lap:c.l})) : []; }
-  board.innerHTML=order.map(o=>`<div class="${o.id===NET.myId?'me':''}">${o.place}. ${escapeHtml(o.name||'')} <span style="color:var(--ink-dim)">L${o.lap}</span></div>`).join('');
+    order = s ? [...s.cars.values()].sort((a,b)=>a.p-b.p).map(c=>({name:(LOBBY.players.get(c.i)||{}).name||'',id:c.i,place:c.p,lap:c.l,fin:!!c.f})) : []; }
+  board.innerHTML=order.map(o=>`<div class="${o.id===NET.myId?'me':''}">${o.place}. ${escapeHtml(o.name||'')} <span style="color:var(--ink-dim)">L${o.lap}${o.fin?' ✓':''}</span></div>`).join('');
 }
 function updatePingHud(){
   let ping=0;
