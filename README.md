@@ -62,17 +62,21 @@ Click any link to play or use the app instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
 *   **Description:** A narrative idle game where you play as an AI. Automate content generation to progress through story phases, unlocking new upgrades and advancing the dark sci-fi plot.
 
+### Multiplayer Racing Game (v4)
+*   **Try Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/other/p2p-racing-v4.html)
+*   **Description:** A simple racing game for up to 6 players and 8 bots. Features offline and online play via WebRTC and ntfy.sh
+
 ### Todo App Demo (v3.1)
 *   **Use Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/Todo%20App%20Demo%20v3.1.html)
 *   **Description:** A personal interactive dashboard featuring a to-do list, a weekly habit tracker, and a customizable flashcards quiz to test your knowledge.
 
 ### Web-Chat App
 *   **Try Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/p2p-ntfy-autoconnect.html)
-*   **Description:** This is a single-file, serverless, ephemeral, peer-to-peer (P2P), end-to-end encrypted (E2EE) web chat application. Works on both mobile or desktop. Needs at least two devices (or browser tabs) to work!
+*   **Description:** This is a "single-file, serverless, ephemeral, peer-to-peer (P2P), end-to-end encrypted (E2EE) web chat application." Works on both mobile or desktop. Needs at least two devices (or browser tabs) to work. Uses WebRTC and ntfy.sh.
 
 ### Multiplayer Drawing App (v2)
 *   **Try Now!** -> [**Click here to try it out**](https://joeysalmons.github.io/vibe-coded-games/p2p-ntfy-drawing-app-v2.html)
-*   **Description:** A simple multiplayer drawing app. Connect with two or more devices (or browser tabs) and start drawing! Works on both mobile or desktop.
+*   **Description:** A simple multiplayer drawing app. Connect with two or more devices (or browser tabs) and start drawing! Works on both mobile or desktop. Uses WebRTC and ntfy.sh.
 
 ---
 
