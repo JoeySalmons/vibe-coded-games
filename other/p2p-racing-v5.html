@@ -15,10 +15,10 @@
        [CONFIG]      tunables: ntfy, physics, netcode rates
        [TRACKS]      map data — append an object here to add a circuit
        [VEHICLES]    car stat presets (data-driven)
-       [CRYPTO]      passphrase -> topic + AES key, signaling encryption
+       [CRYPTO]      passphrase -> topic + AES key + derived hostId, signaling encryption
        [SIGNALING]   ntfy I/O and the encrypted room-message layer
        [NET]         peer-connection management (host = star hub)
-       [HANDSHAKE]   host announce / join / offer / answer flow
+       [HANDSHAKE]   joiner-initiated offer / host answer (2 ntfy msgs per client, no announce)
        [PROTOCOL]    DataChannel message dispatch
        [STATE]       shared game + lobby state
        [PHYSICS]     integration, car-car + car-wall collision (HOST ONLY)
@@ -223,10 +223,6 @@ const CFG = {
   SIG_TTL:     60*60,                  // ignore signaling msgs older than this (s)
   POLL_MS:     1500,                   // ntfy poll cadence during handshake
   ICE_WAIT:    4500,                   // ms to wait for ICE gathering before sending SDP
-  ANNOUNCE_MS: 2500,                   // host re-announces presence this often
-  ANNOUNCE_FRESH: 8,                   // ignore announces older than this (s) — drops stale/cached ghosts
-  JOIN_TIMEOUT: 9000,                  // ms to wait for a host's offer before re-picking
-  DEAD_HOST_MS: 30000,                 // skip an unresponsive host this long
   // ---- netcode rates ----
   PHYS_HZ:     60,                     // host simulation tick
   NET_HZ:      20,                     // host -> client snapshot rate
@@ -353,7 +349,12 @@ async function deriveAll(pass){
   const key = await crypto.subtle.deriveKey(
     { name:'HKDF', hash:'SHA-256', salt:new Uint8Array(0), info:enc.encode('aes-gcm-256') },
     master, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
-  return { topic, key };
+  // Derive a stable host ID from the passphrase — every peer computes the same value,
+  // so joiners know where to send their offer without any announce message from the host.
+  const hostIdBits = await crypto.subtle.deriveBits(
+    { name:'HKDF', hash:'SHA-256', salt:new Uint8Array(0), info:enc.encode('host-id') }, master, 40);
+  const hostId = [...new Uint8Array(hostIdBits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return { topic, key, hostId };
 }
 async function aesEnc(key,obj){
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -374,7 +375,7 @@ async function aesDec(key,b64){
    [SIGNALING]  — ntfy I/O + encrypted room-message helpers.
    One room topic; every message addressed with {from,to}. to:'*' = broadcast.
    =========================================================================== */
-const SIG = { topic:null, key:null, since:0, seen:new Set(), poller:null };
+const SIG = { topic:null, key:null, hostId:null, since:0, seen:new Set(), poller:null };
 async function ntfyPost(topic, body){
   await fetch(CFG.NTFY+topic, { method:'POST', body, headers:{'Content-Type':'text/plain'} });
 }
@@ -388,7 +389,8 @@ async function sigSend(msg){                      // msg: {k, from, to, ...}
 }
 async function sigRecv(){                          // -> array of decrypted msgs (deduped, TTL-filtered)
   const now = Math.floor(Date.now()/1000);
-  const raw = await ntfyPoll(SIG.topic, Math.min(3600, now - SIG.since + 5));
+  // Look back 120s so joiners who opened before the host (or vice versa) still find each other's messages.
+  const raw = await ntfyPoll(SIG.topic, Math.min(3600, now - SIG.since + 120));
   const out = [];
   for(const m of raw){
     if(m.event!=='message' || SIG.seen.has(m.id)) continue;
@@ -407,9 +409,8 @@ async function sigRecv(){                          // -> array of decrypted msgs
 const NET = {
   role:null,            // 'host' | 'client'
   myId: randId(),
-  myIds:new Set(),      // every id THIS TAB has ever used (survives fullReset) — never join your own ghost
-  deadHosts:new Map(),  // hostId -> expiry(ms): announcers we couldn't reach, skip for a while
-  hostId:null,          // client: id of the host it joined
+  myIds:new Set(),      // every id THIS TAB has ever used (survives fullReset) — never process your own messages
+  hostId:null,          // client: derived host id (known before any ntfy message is exchanged)
   peers:new Map(),      // host: every client. client: just {hostId}
   hostCh:null,          // client: the single channel to host
   cancelled:false,
@@ -436,11 +437,14 @@ function wireChannel(ch, peerId){
 }
 
 /* ===========================================================================
-   [HANDSHAKE]  — host announce / join / offer / answer over the room topic.
+   [HANDSHAKE]  — joiner-initiated offer / host answer over the room topic.
+   Joiners know the host's ID from deriveAll() — no announce step needed.
+   Flow per client: joiner posts {k:'offer'} → host posts {k:'answer'} → done.
+   ntfy messages: exactly 2 × (N-1) for N players.
    =========================================================================== */
 async function startSignaling(pass){
-  const { topic, key } = await deriveAll(pass);
-  SIG.topic=topic; SIG.key=key; SIG.since=Math.floor(Date.now()/1000);
+  const { topic, key, hostId } = await deriveAll(pass);
+  SIG.topic=topic; SIG.key=key; SIG.hostId=hostId; SIG.since=Math.floor(Date.now()/1000);
   SIG.seen.clear();
   log('room topic '+topic.slice(-10));
   SIG.poller = setInterval(pumpSignaling, CFG.POLL_MS);
@@ -449,33 +453,21 @@ async function pumpSignaling(){
   let msgs; try{ msgs=await sigRecv(); }catch{ return; }
   for(const m of msgs){
     if(NET.role==='host'){
-      if(m.k==='join' && m.to===NET.myId) hostHandleJoin(m.from);
-      else if(m.k==='answer' && m.to===NET.myId) hostHandleAnswer(m.from, m.sdp);
+      // Joiner-initiated: client sends the offer, host answers
+      if(m.k==='offer' && m.to===NET.myId) hostHandleOffer(m.from, m.sdp);
     }else if(NET.role==='client'){
-      if(m.k==='announce' && !NET.hostId){
-        if(m._age > CFG.ANNOUNCE_FRESH) continue;        // stale cached ghost — ignore
-        const until=NET.deadHosts.get(m.from);
-        if(until && until>Date.now()) continue;          // recently unreachable — skip
-        if(until) NET.deadHosts.delete(m.from);
-        clientTryJoin(m.from);
-      }
-      else if(m.k==='unannounce'){                        // host left — drop it immediately
-        NET.deadHosts.set(m.from, Date.now()+CFG.DEAD_HOST_MS);
-        if(NET.hostId===m.from && !NET.hostCh){ clearTimeout(joinTimer); NET.hostId=null; GAME.hostId=null; }
-      }
-      else if(m.k==='offer' && m.to===NET.myId) clientHandleOffer(m.from, m.sdp);
+      if(m.k==='answer' && m.to===NET.myId) clientHandleAnswer(m.from, m.sdp);
     }
   }
 }
 // ---- host ----
-let announceTimer=null;
 function hostBegin(){
+  // Use the passphrase-derived ID so every joiner already knows it — no announce needed.
+  NET.myId=SIG.hostId; NET.myIds.add(NET.myId);
   NET.role='host';
   GAME.hostId=NET.myId;
   // host is also a player:
   LOBBY.players.set(NET.myId,{ id:NET.myId, name:ME.name, ready:true, color:CAR_COLORS[0], slot:0 });
-  announceTimer=setInterval(()=> sigSend({k:'announce', from:NET.myId, to:'*'}), CFG.ANNOUNCE_MS);
-  sigSend({k:'announce', from:NET.myId, to:'*'});
   log('hosting — waiting for drivers');
   broadcastLobby();
 }
@@ -489,51 +481,42 @@ function soloBegin(){
   log('solo mode — no network');
   broadcastLobby();
 }
-async function hostHandleJoin(clientId){
+async function hostHandleOffer(clientId, sdp){
   if(NET.peers.has(clientId)) return;                 // already connecting/connected
   if(LOBBY.players.size>=CFG.MAX_PLAYERS){ log('room full, ignoring '+clientId.slice(0,4)); return; }
-  log('join from '+clientId.slice(0,4)+' — sending offer');
+  log('offer from '+clientId.slice(0,4)+' — sending answer');
   const pc=newPC();
-  const ch=pc.createDataChannel('race',{ordered:true});  // reliable v1; can switch to unreliable later
-  wireChannel(ch, clientId);
-  NET.peers.set(clientId,{ pc, ch, name:'…', lastSeen:Date.now(), ping:0 });
+  // Host does NOT create the DataChannel — the joiner created it with the offer; host receives it via ondatachannel.
+  pc.ondatachannel=e=>{ NET.peers.set(clientId,{pc, ch:e.channel, lastSeen:Date.now(), ping:0});
+    wireChannel(e.channel, clientId); };
   pc.oniceconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.iceConnectionState)) onChannelClose(clientId); };
-  const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await waitIce(pc);
-  await sigSend({k:'offer', from:NET.myId, to:clientId, sdp:pc.localDescription.sdp});
-}
-async function hostHandleAnswer(clientId, sdp){
-  const p=NET.peers.get(clientId); if(!p||p.pc.currentRemoteDescription) return;
-  await p.pc.setRemoteDescription({type:'answer', sdp});
-}
-// ---- client ----
-let joinTimer=null, joinFails={};
-function clientBegin(){ NET.role='client'; log('searching for a host…'); }
-async function clientTryJoin(hostId){
-  if(NET.hostId) return;
-  NET.hostId=hostId; GAME.hostId=hostId;
-  log('found host '+hostId.slice(0,4)+' — requesting to join');
-  await sigSend({k:'join', from:NET.myId, to:hostId});
-  clearTimeout(joinTimer);
-  joinTimer=setTimeout(()=>{                              // no offer arrived — let go and re-pick
-    if(NET.hostCh) return;                                // connected after all
-    const p=NET.peers.get(hostId); if(p){ try{p.pc.close();}catch{} NET.peers.delete(hostId); }
-    joinFails[hostId]=(joinFails[hostId]||0)+1;
-    if(joinFails[hostId]>=2){ NET.deadHosts.set(hostId, Date.now()+CFG.DEAD_HOST_MS);
-      log('host '+hostId.slice(0,4)+' unresponsive — looking for another'); }
-    else log('no offer from '+hostId.slice(0,4)+' — retrying');
-    NET.hostId=null; GAME.hostId=null;                     // next fresh announce can re-trigger join
-  }, CFG.JOIN_TIMEOUT);
-}
-async function clientHandleOffer(hostId, sdp){
-  if(NET.hostCh) return;
-  const pc=newPC();
-  pc.ondatachannel=e=>{ NET.peers.set(hostId,{pc, ch:e.channel, lastSeen:Date.now(), ping:0});
-    wireChannel(e.channel, hostId); };
-  pc.oniceconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.iceConnectionState)) onChannelClose(hostId); };
   await pc.setRemoteDescription({type:'offer', sdp});
   const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); await waitIce(pc);
-  await sigSend({k:'answer', from:NET.myId, to:hostId, sdp:pc.localDescription.sdp});
-  log('answer sent — establishing channel');
+  await sigSend({k:'answer', from:NET.myId, to:clientId, sdp:pc.localDescription.sdp});
+}
+// ---- client ----
+function clientBegin(){
+  NET.role='client';
+  NET.hostId=SIG.hostId; GAME.hostId=SIG.hostId;     // host ID is known immediately from passphrase
+  log('joining — sending offer to host');
+  clientSendOffer();
+}
+async function clientSendOffer(){
+  if(NET.hostCh) return;
+  const pc=newPC();
+  const ch=pc.createDataChannel('race',{ordered:true});  // joiner creates the DataChannel in the offer
+  wireChannel(ch, NET.hostId);
+  NET.peers.set(NET.hostId,{pc, ch, lastSeen:Date.now(), ping:0});
+  pc.oniceconnectionstatechange=()=>{ if(['failed','disconnected','closed'].includes(pc.iceConnectionState)) onChannelClose(NET.hostId); };
+  const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await waitIce(pc);
+  await sigSend({k:'offer', from:NET.myId, to:NET.hostId, sdp:pc.localDescription.sdp});
+  log('offer sent — waiting for answer');
+}
+async function clientHandleAnswer(hostId, sdp){
+  if(NET.hostCh) return;                               // already connected
+  const p=NET.peers.get(hostId); if(!p||p.pc.currentRemoteDescription) return;
+  await p.pc.setRemoteDescription({type:'answer', sdp});
+  log('answer received — establishing channel');
 }
 
 /* ===========================================================================
@@ -548,12 +531,20 @@ function hostBroadcast(obj){ for(const p of NET.peers.values()) send(p.ch,obj); 
 function onChannelOpen(ch, peerId){
   log('channel open '+peerId.slice(0,4));
   setNetDot('ok');
+  // ntfy signaling is finished the moment any DataChannel opens — stop polling.
+  // (Host waits a brief grace window in case more joiners are mid-handshake.)
   if(NET.role==='client'){
+    if(SIG.poller){ clearInterval(SIG.poller); SIG.poller=null; }
     NET.hostCh=ch;
-    clearTimeout(joinTimer); NET.deadHosts.clear(); joinFails={};
     send(ch,{t:'hello', name:ME.name});
     showScreen('lobby');
   }else{ // host: a client connected; send current lobby snapshot
+    // Keep polling briefly so other joiners' offers (already in flight) are still processed.
+    // Clear after a generous window once all expected peers are likely connected.
+    if(!SIG._hostCloseTimer) SIG._hostCloseTimer=setTimeout(()=>{
+      if(SIG.poller){ clearInterval(SIG.poller); SIG.poller=null; }
+      SIG._hostCloseTimer=null;
+    }, CFG.ICE_WAIT * 2);
     broadcastLobby();
   }
   startHeartbeat(ch, peerId);
@@ -1083,8 +1074,7 @@ $('btn-quit').onclick=()=> leaveAll();
 
 // announce departure so others get immediate feedback, then tear down locally
 function leaveAll(){
-  if(NET.role==='host'){ hostBroadcast({t:'bye', who:NET.myId, host:true});
-    if(!NET.offline && SIG.topic){ try{ sigSend({k:'unannounce', from:NET.myId, to:'*'}); }catch{} } }
+  if(NET.role==='host') hostBroadcast({t:'bye', who:NET.myId, host:true});
   else send(NET.hostCh,{t:'bye', who:NET.myId});
   fullReset(); showScreen('setup');
   $('lobby-pass').style.display='none';
@@ -1246,18 +1236,16 @@ function ordinal(n){ if(typeof n!=='number') return n; const s=['th','st','nd','
 function fullReset(){
   NET.cancelled=true;
   if(SIG.poller) clearInterval(SIG.poller); SIG.poller=null;
-  if(announceTimer) clearInterval(announceTimer); announceTimer=null;
-  clearTimeout(joinTimer); joinTimer=null; joinFails={};
+  if(SIG._hostCloseTimer) clearTimeout(SIG._hostCloseTimer); SIG._hostCloseTimer=null;
   stopRaceLoop();
   for(const p of NET.peers.values()){ try{p.pc.close();}catch{} }
   NET.peers.clear(); NET.role=null; NET.hostId=null; NET.hostCh=null; NET.offline=false;
-  NET.myIds.add(NET.myId); NET.myId=randId(); NET.myIds.add(NET.myId);  // keep old id known so we ignore our own ghost
-  NET.deadHosts.clear();
+  NET.myIds.add(NET.myId); NET.myId=randId(); NET.myIds.add(NET.myId);
   LOBBY.players.clear(); LOBBY.bots.length=0;
   GAME.cars.clear(); GAME.idInfo.clear(); GAME.snaps=[]; GAME.phase='lobby'; GAME.hostId=null; GAME.endDeadline=0;
   NET.cancelled=false;
-  ready=false; SIG.topic=null; SIG.key=null; SIG.seen.clear();
-  const ll=document.getElementById('lobby-list'); if(ll) ll.innerHTML='';   // kill stale "you · host" row
+  ready=false; SIG.topic=null; SIG.key=null; SIG.hostId=null; SIG.seen.clear();
+  const ll=document.getElementById('lobby-list'); if(ll) ll.innerHTML='';
   const sw=document.getElementById('swatch-row'); if(sw) sw.innerHTML='';
   const bs=document.getElementById('bot-seg'); if(bs) bs.innerHTML='';
 }
