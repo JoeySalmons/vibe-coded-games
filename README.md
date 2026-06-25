@@ -62,8 +62,8 @@ Click any link to play or use the app instantly in your browser.
 *   **Play Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/The%20Infinite%20Content%20Machine%20v4.2.html)
 *   **Description:** A narrative idle game where you play as an AI. Automate content generation to progress through story phases, unlocking new upgrades and advancing the dark sci-fi plot.
 
-### Multiplayer Racing Game (v4)
-*   **Try Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/other/p2p-racing-v4.html)
+### Multiplayer Racing Game (v5)
+*   **Try Now!** -> [**Click here to play**](https://joeysalmons.github.io/vibe-coded-games/other/p2p-racing-v5.html)
 *   **Description:** A simple racing game for up to 6 players and 8 bots. Features offline and online play via WebRTC and ntfy.sh
 
 ### Todo App Demo (v3.1)
