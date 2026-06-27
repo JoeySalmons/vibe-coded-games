@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Circuit Board Puzzle Studio</title>
+<style>
+  :root{
+    --bg:#0e1512; --panel:#142019; --panel2:#1b2a20; --line:#2a3d2f;
+    --ink:#e8f2ec; --dim:#9fb3a6; --acc:#f2d45c; --acc2:#4fd08a; --board:#0b3d2e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.45 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;
+       background:var(--bg);color:var(--ink)}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);
+         background:linear-gradient(180deg,#16241c,#101813)}
+  header h1{font-size:15px;margin:0;letter-spacing:.3px}
+  header .tag{color:var(--dim);font-size:12px}
+  header .modes{margin-left:auto;display:flex;gap:6px}
+  .layout{display:grid;grid-template-columns:330px 1fr;gap:0;height:calc(100vh - 49px)}
+  aside{overflow-y:auto;border-right:1px solid var(--line);background:var(--panel)}
+  main{overflow:hidden;display:grid;grid-template-rows:1fr auto}
+  .stage{position:relative;overflow:auto;background:
+     repeating-conic-gradient(#0d1410 0% 25%, #0f1712 0% 50%) 50%/22px 22px}
+  canvas{display:block;margin:18px auto}
+  .out{border-top:1px solid var(--line);background:var(--panel);max-height:38vh;display:flex;flex-direction:column}
+  .out .bar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+  .out textarea{flex:1;width:100%;border:0;resize:none;background:#0c130f;color:#cfe8d8;
+     font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px;min-height:160px}
+  section.grp{border-bottom:1px solid var(--line)}
+  section.grp>h2{margin:0;padding:9px 12px;font-size:12px;letter-spacing:.4px;color:var(--acc);
+     cursor:pointer;display:flex;justify-content:space-between;user-select:none}
+  section.grp>h2 .chev{color:var(--dim)}
+  .body{padding:6px 12px 12px}
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0}
+  .row label{flex:0 0 118px;color:var(--dim)}
+  .row input[type=range]{flex:1}
+  .row .val{flex:0 0 46px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .row select,.row input[type=number],.row input[type=text]{flex:1;background:var(--panel2);
+     color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{flex:1;background:transparent;color:var(--dim);border:0;padding:6px 8px;cursor:pointer}
+  .seg button.on{background:var(--acc);color:#1a1400;font-weight:600}
+  button.btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+     border-radius:7px;padding:7px 11px;cursor:pointer}
+  button.btn:hover{border-color:var(--acc2)}
+  button.btn.primary{background:var(--acc);color:#1a1400;border-color:var(--acc);font-weight:600}
+  .comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+  .comp{display:flex;align-items:center;gap:6px}
+  .comp input[type=range]{flex:1}
+  .comp .nm{flex:0 0 88px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .comp .w{flex:0 0 18px;text-align:right;font-size:11px}
+  .hint{color:var(--dim);font-size:11px;margin:6px 0 0}
+  .pill{font-size:10px;padding:1px 6px;border-radius:9px;background:#23341f;color:var(--acc2)}
+  .catbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .catbar button{font-size:11px;padding:3px 7px;border-radius:9px;border:1px solid var(--line);
+     background:transparent;color:var(--dim);cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>Circuit Board Puzzle Studio</h1>
+  <span class="tag">edge-keyed PCB puzzle → OpenSCAD</span>
+  <div class="modes seg" style="flex:0 0 320px">
+    <button id="mode-board" class="on">Board</button>
+    <button id="mode-catalog">Component sheet</button>
+    <button id="mode-puzzles">Puzzles</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside id="controls"></aside>
+  <main>
+    <div class="stage"><canvas id="cv" width="700" height="700"></canvas>
+      <div id="puzzlePanel" style="display:none;width:100%;height:100%;overflow:auto;padding:6px"></div>
+    </div>
+    <div class="out">
+      <div class="bar">
+        <button class="btn primary" id="copy">Copy SCAD</button>
+        <button class="btn" id="dl">Download .scad</button>
+        <button class="btn" id="dl-base">base.scad</button>
+        <button class="btn" id="dl-pat">pattern.scad</button>
+        <span class="hint" id="status"></span>
+      </div>
+      <textarea id="scad" spellcheck="false" readonly></textarea>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== EMBEDDED, VERIFIED OPENSCAD LIBRARY ===================== -->
+<script type="text/x-scad" id="scad-lib">
+// ============================================================================
+//  circuit_lib.scad  —  Reusable 2D footprint library for PCB-style puzzle ink
+// ----------------------------------------------------------------------------
+//  Every module here emits 2D geometry centered at the origin. Nothing is
+//  extruded inside this file. The host (catalog, tile generator, or the SCAD
+//  exporter) decides whether to:
+//     * linear_extrude(h) ...           -> emboss (raised, adds height)
+//     * difference(){ tile; extrude }   -> engrave (recessed, no added height)
+//     * difference(){ field; ink }      -> "raised by background removal"
+//                                          (traces stand proud, net height = 0)
+//
+//  Design intent: keep everything readable top-down so it reads as a real
+//  board. Heights are a host concern; silhouettes live here.
+//
+//  Convention: LW = nominal copper/silk line width (mm). Components are sized
+//  in mm and meant to sit on a ~35 mm tile (so 6-14 mm bodies, a few per tile).
+// ============================================================================
+
+LW = 0.9;        // default line width (overridable by host)
+$fn = 40;
+
+// ---- low-level helpers -----------------------------------------------------
+
+module rrect(w, h, r=1) {              // rounded rectangle, centered
+  r = min(r, w/2, h/2);
+  offset(r=r) square([max(0.01,w-2*r), max(0.01,h-2*r)], center=true);
+}
+module ring(rad, w=LW) {               // annular ring of stroke width w
+  difference(){ circle(r=rad+w/2); circle(r=max(0.01,rad-w/2)); }
+}
+module rring(w, h, r, sw=LW) {         // rounded-rect outline (silkscreen)
+  difference(){ rrect(w+sw, h+sw, r+sw/2); rrect(w-sw, h-sw, max(0.01,r-sw/2)); }
+}
+function _pts(pts) = pts;
+module polyline(pts, w=LW) {           // thick polyline through pts
+  for (i=[0:len(pts)-2])
+    hull(){ translate(pts[i]) circle(d=w); translate(pts[i+1]) circle(d=w); }
+}
+module dot(r=LW) { circle(r=r); }
+
+// Archimedean spiral point list
+function spiral_pts(turns, r0, r1, n=120) =
+  [ for(i=[0:n]) let(t=i/n, a=t*turns*360, r=r0+(r1-r0)*t) [r*cos(a), r*sin(a)] ];
+
+// ============================================================================
+//  LAYER 0 — FIELD / BACKGROUND TEXTURES
+// ============================================================================
+
+// Crosshatch ground pour, clipped to a w x h window
+module fld_hatch(w, h, sp=2.2, ang=45, sw=0.5) {
+  intersection(){
+    square([w,h], center=true);
+    union(){
+      rotate(ang)  for(i=[-ceil((w+h)/sp):ceil((w+h)/sp)]) translate([0,i*sp]) square([2*(w+h), sw], center=true);
+      rotate(-ang) for(i=[-ceil((w+h)/sp):ceil((w+h)/sp)]) translate([0,i*sp]) square([2*(w+h), sw], center=true);
+    }
+  }
+}
+// Dot-grid pour (thermal-relief vibe)
+module fld_dots(w, h, sp=2.2, r=0.45) {
+  intersection(){
+    square([w,h], center=true);
+    for(x=[-w/2:sp:w/2]) for(y=[-h/2:sp:h/2]) translate([x,y]) circle(r=r);
+  }
+}
+// Copper pour outline with a keepout gap (just the boundary as silk)
+module fld_pour(w, h, r=2) rring(w, h, r, LW);
+
+// ============================================================================
+//  LAYER 1 — TRACES / ROUTING
+// ============================================================================
+
+module trace_straight(len=12, w=LW) square([len, w], center=true);
+
+// 45-degree elbow (classic PCB bend): in from left, turn up-right at 45
+module trace_45(len=10, w=LW) {
+  d = len*0.4;
+  polyline([[-len/2,0],[len/2-d,0],[len/2, d]], w);
+}
+
+// Serpentine / length-matching meander
+module trace_meander(len=14, amp=2.2, loops=4, w=LW) {
+  seg = len/(loops*2);
+  pts = concat([[-len/2,0]],
+    [ for(i=[0:loops*2-1]) [-len/2 + seg*(i+1), (i%2==0?amp:-amp)] ],
+    [[len/2,0]]);
+  polyline(pts, w);
+}
+
+// Parallel bus of n traces
+module trace_bus(n=4, sp=1.6, len=12, w=LW)
+  for(i=[0:n-1]) translate([0,(i-(n-1)/2)*sp]) square([len,w], center=true);
+
+// Differential pair (two traces tracking together with a tight gap)
+module diff_pair(len=12, gap=1.1, w=LW) {
+  translate([0, gap/2]) square([len,w], center=true);
+  translate([0,-gap/2]) square([len,w], center=true);
+}
+
+// Trace that ends in a teardrop pad
+module trace_teardrop(len=8, pr=1.6, w=LW) {
+  square([len,w], center=true);
+  translate([len/2,0]) hull(){ circle(r=pr); translate([-pr,0]) square([0.1,w],center=true);} 
+  translate([len/2,0]) circle(r=pr);
+}
+
+// ============================================================================
+//  LAYER 2 — PADS / VIAS / JUNCTIONS
+// ============================================================================
+
+module via(r=1.1)            ring(r, LW);          // small annular via
+module via_filled(r=0.9)     circle(r=r);
+module pad_round(r=1.8, hole=0.9) difference(){ circle(r=r); circle(r=hole); }
+module pad_smd(w=2.6, h=1.6) rrect(w,h,0.4);
+module junction(r=1.1)       circle(r=r);
+module fiducial(r=1.0)       { circle(r=r); ring(r*2.0, 0.4); }   // dot + keepout
+module test_point(r=1.6)     { ring(r, LW); circle(r=0.6); }
+// Thermal-relief pad: ring connected to center by 4 spokes
+module thermal_pad(r=2.2, hole=0.9) {
+  difference(){
+    union(){ ring(r, LW*1.4); for(a=[45:90:359]) rotate(a) square([2*r, LW*1.6], center=true); }
+    circle(r=hole);
+  }
+}
+
+// ============================================================================
+//  LAYER 3 — COMPONENTS
+// ============================================================================
+
+// --- ICs ---------------------------------------------------------------------
+// QFP: rounded body outline, pins on all four sides, pin-1 dot.
+module ic_qfp(body=9, nside=6, pin_l=1.6, pin_w=0.7, pitch=1.2) {
+  rring(body, body, 1.2, LW);                       // silkscreen body
+  for(s=[0:3]) rotate(90*s)
+    for(i=[0:nside-1]) translate([(i-(nside-1)/2)*pitch, body/2+pin_l/2-0.2])
+      square([pin_w, pin_l], center=true);
+  translate([-body/2+1.6, body/2-1.6]) circle(r=0.7);   // pin-1
+}
+// SOIC / SOP: pins on two sides, notch + pin-1
+module ic_soic(w=5, h=8, npin=4, pin_l=1.4, pin_w=0.7, pitch=1.4) {
+  difference(){ rring(w, h, 0.6, LW);
+    translate([0, h/2]) circle(r=1.0); }             // top notch
+  for(side=[-1,1]) for(i=[0:npin-1])
+    translate([side*(w/2+pin_l/2-0.2), (i-(npin-1)/2)*pitch])
+      square([pin_l, pin_w], center=true);
+  translate([-w/2+1.0, -h/2+1.0]) circle(r=0.6);
+}
+// DIP: bigger, end notch, two pad rows
+module ic_dip(w=7, h=10, npin=4, pitch=2.0) {
+  difference(){ rring(w, h, 0.6, LW); translate([0,h/2]) circle(r=1.4); }
+  for(side=[-1,1]) for(i=[0:npin-1])
+    translate([side*w/2*0.7, (i-(npin-1)/2)*pitch]) pad_round(1.2, 0.6);
+}
+
+// --- passives ----------------------------------------------------------------
+module resistor_smd(w=4, h=2) {                      // body + 2 end caps
+  rrect(w*0.7, h, 0.3);
+  for(s=[-1,1]) translate([s*w/2*0.85,0]) square([w*0.3, h], center=true);
+}
+module resistor_tht(len=10, bw=3, bands=4) {         // axial body, leads, color bands
+  rrect(len*0.6, bw, bw/2);
+  for(s=[-1,1]) translate([s*len*0.42,0]) square([len*0.18, LW], center=true);
+  for(i=[0:bands-1]) translate([-len*0.3+0.9+i*1.1,0]) square([0.6, bw], center=true);
+}
+module cap_ceramic(w=3, h=2.4) rrect(w,h,1.0);
+module cap_elec(r=3.5) {                              // can + polarity stripe + notch
+  ring(r, LW);
+  intersection(){ ring(r*0.78, r*0.55); rotate(150) translate([-r,0]) square([2*r,2*r]); }
+  rotate(45) translate([r*0.9,0]) circle(r=0.5);     // pin1 notch mark
+}
+module cap_tant(w=4, h=2.6) {                         // body + polarity bar
+  rrect(w,h,0.4);
+  translate([w/2-0.7,0]) square([0.8, h*0.9], center=true);
+}
+module led(r=2.2) {                                   // ring + cathode bar
+  ring(r, LW);
+  translate([0,-r*0.5]) square([2*r*0.78, LW], center=true);
+}
+module diode(w=6, h=2.8) {                            // body + cathode band + leads
+  rrect(w*0.6, h, 0.3);
+  translate([w*0.18,0]) square([0.7, h], center=true);
+  for(s=[-1,1]) translate([s*w*0.4,0]) square([w*0.22, LW], center=true);
+}
+module transistor_to92(r=3) {                         // D-shape can + 3 legs
+  difference(){ circle(r=r); translate([0,-r]) square([2*r, r*0.6], center=true); }
+  for(i=[-1,0,1]) translate([i*1.1, -r-0.6]) square([LW*1.4, 1.4], center=true);
+}
+module crystal(w=8, h=3.5) {                          // metal can + 2 pads + center line
+  rring(w, h, h/2, LW);
+  for(s=[-1,1]) translate([s*w/2,0]) pad_smd(1.8, h*0.6);
+  square([w*0.5, LW], center=true);
+}
+
+// --- inductors / coils -------------------------------------------------------
+module inductor_spiral(turns=3.5, r0=0.8, r1=4, w=LW) polyline(spiral_pts(turns,r0,r1), w);
+module inductor_coil(loops=4, r=1.2, w=LW) {          // schematic bump coil
+  for(i=[0:loops-1]) translate([(i-(loops-1)/2)*r*1.6,0])
+    difference(){ circle(r=r); translate([0,-r]) square([2*r,2*r],center=true); offset(r=-w) circle(r=r);} 
+}
+
+// --- connectors / IO ---------------------------------------------------------
+module header(n=4, pitch=2.54) {                      // pin1 square, rest round
+  rring((n)*pitch, pitch*1.3, 0.4, LW);
+  for(i=[0:n-1]) translate([(i-(n-1)/2)*pitch,0])
+    if(i==0) square([pitch*0.7, pitch*0.7], center=true); else pad_round(pitch*0.4, pitch*0.18);
+}
+module button_tactile(s=6) {                          // outline + dome + 4 corner pads
+  rring(s, s, 0.6, LW); circle(r=s*0.3);
+  for(x=[-1,1]) for(y=[-1,1]) translate([x*s/2, y*s/2]) pad_smd(1.6,1.2);
+}
+module dip_switch(n=4, cell=2) {
+  rring(n*cell, cell*1.6, 0.4, LW);
+  for(i=[0:n-1]) translate([(i-(n-1)/2)*cell, 0]) { difference(){square([cell*0.8, cell*1.2],center=true); offset(-LW) square([cell*0.8, cell*1.2],center=true);} translate([0,cell*0.3]) square([cell*0.55, cell*0.45], center=true);} 
+}
+module pot(r=4) {                                     // body + wiper notch + 3 pads
+  ring(r, LW); polyline([[0,0],[r*0.7,r*0.7]], LW);
+  for(i=[-1,0,1]) translate([i*1.4, -r-0.7]) square([LW*1.4, 1.6], center=true);
+}
+module mounting_hole(r=2.6) { circle(r=r); ring(r+1.0, LW); for(a=[0:90:359]) rotate(a) translate([r+0.5,0]) square([1.2,LW],center=true); }
+module edge_fingers(n=6, fw=1.6, fh=5, sp=2.4)
+  for(i=[0:n-1]) translate([(i-(n-1)/2)*sp, 0]) square([fw, fh], center=true);
+
+// --- antennas ----------------------------------------------------------------
+module antenna_meander(len=14, amp=3, loops=6, w=LW) {   // inverted-F-ish zigzag
+  trace_meander(len, amp, loops, w);
+  translate([-len/2,0]) circle(r=1.0);                   // feed pad
+}
+module antenna_spiral(turns=4, r1=6) inductor_spiral(turns, 0.8, r1, LW);
+
+// --- marks / data ------------------------------------------------------------
+module datamatrix(n=8, cell=0.8, seed=1) {
+  function rnd(i) = let(x=sin(i*97.13+seed*53.7)*43758.5453) x-floor(x);
+  for(x=[0:n-1]) for(y=[0:n-1]) if (rnd(x*31+y*7+1) > 0.5)
+    translate([(x-(n-1)/2)*cell, (y-(n-1)/2)*cell]) square([cell*0.95, cell*0.95], center=true);
+  // L-finder
+  for(y=[0:n-1]) translate([(-( n-1)/2)*cell, (y-(n-1)/2)*cell]) square([cell*0.95,cell*0.95],center=true);
+  for(x=[0:n-1]) translate([(x-(n-1)/2)*cell, (-(n-1)/2)*cell]) square([cell*0.95,cell*0.95],center=true);
+}
+module barcode(w=10, h=5, bars=14, seed=3) {
+  function rnd(i)=let(x=sin(i*53.1+seed*12.9)*43758.5)x-floor(x);
+  x=-w/2; 
+  for(i=[0:bars-1]) translate([-w/2 + (i+0.5)*w/bars, 0]) if(rnd(i)>0.5) square([w/bars*0.9, h], center=true);
+}
+module silk_outline(w=6, h=4) rring(w,h,0.5,LW);
+module label(str="R1", sz=2.4) text(str, size=sz, halign="center", valign="center");
+
+// ============================================================================
+//  circuit_lib2.scad  —  extended component pool (adds to circuit_lib.scad)
+//  Two flavors mixed in here: realistic FOOTPRINTS (qfn, bga, usb, esp...) and
+//  schematic SYMBOLS (ground, opamp, bjt, resistor zig...) so we can offer a
+//  "footprint board" look or a "schematic" look. All low-profile 2D ink.
+// ============================================================================
+
+// helper: rounded-rect outline as silk
+module _outline(w,h,r) difference(){ rrect(w,h,r); offset(-LW) rrect(w,h,r); }
+
+// --- dense IC packages -------------------------------------------------------
+module qfn(s=8, nside=5) {
+  _outline(s,s,0.8);
+  for(side=[0:3]) rotate(90*side)
+    for(i=[0:nside-1]) translate([(i-(nside-1)/2)*(s/(nside+0.6)), s/2-1.0])
+      square([s/(nside+1)*0.7, 1.3], center=true);
+  square([s*0.4, s*0.4], center=true);               // exposed center pad
+  translate([-s/2+1.2, s/2-1.2]) circle(r=0.6);       // pin-1
+}
+module bga(n=5, sp=1.6) {
+  _outline((n+0.8)*sp, (n+0.8)*sp, 0.8);
+  for(x=[0:n-1]) for(y=[0:n-1]) translate([(x-(n-1)/2)*sp,(y-(n-1)/2)*sp]) circle(r=sp*0.30);
+  translate([-(n-0.2)/2*sp, (n-0.2)/2*sp]) circle(r=0.5);
+}
+module sot23(w=3, h=3) {
+  _outline(w,h,0.3);
+  translate([-w*0.3,-h/2-0.5]) pad_smd(0.9,1.1);
+  translate([ w*0.3,-h/2-0.5]) pad_smd(0.9,1.1);
+  translate([0, h/2+0.5]) pad_smd(0.9,1.1);
+}
+
+// --- connectors / IO ---------------------------------------------------------
+module usb_a(w=12, h=6) {
+  _outline(w,h,0.6);
+  translate([0,1.0]) _outline(w*0.72, h*0.42, 0.3);          // tongue
+  for(i=[-1.5:1:1.5]) translate([i*1.9,1.0]) square([1.0,h*0.28], center=true);
+  for(s=[-1,1]) translate([s*w*0.32,-h/2]) square([LW*1.4,1.4], center=true); // shield tabs
+}
+module screw_terminal(n=2, cell=5) {
+  _outline(n*cell, cell*1.1, 0.6);
+  for(i=[0:n-1]) translate([(i-(n-1)/2)*cell,0]) {
+    ring(cell*0.30, LW); square([cell*0.5,LW],center=true); square([LW,cell*0.5],center=true);
+  }
+}
+module relay(w=12, h=9) {
+  _outline(w,h,0.6);
+  translate([-w*0.22,0]) inductor_coil(3,1.0);
+  for(y=[-1,1]) translate([w*0.28, y*h*0.2]) square([w*0.24,LW], center=true);
+  for(i=[-2:2]) translate([i*1.9,-h/2]) square([LW*1.4,1.4], center=true);
+}
+module fuse(w=8, h=3) {
+  _outline(w,h,h/2);
+  square([w*0.66,LW], center=true);
+  for(s=[-1,1]) translate([s*w*0.42,0]) square([1.0,h*0.7], center=true);
+}
+module net_flag(w=5, h=2.6) difference(){
+  polygon([[0,0],[1.4,h/2],[w,h/2],[w,-h/2],[1.4,-h/2]]);
+  offset(-LW) polygon([[0,0],[1.4,h/2],[w,h/2],[w,-h/2],[1.4,-h/2]]);
+}
+
+// --- modules / macros --------------------------------------------------------
+//  ESP-style RF module: castellated pads, shield can, chip, trace antenna.
+module esp_module(w=16, h=20) {
+  _outline(w,h,1.2);
+  for(side=[-1,1]) for(i=[-3:3]) translate([side*w/2, i*2.2]) difference(){ circle(r=0.85); circle(r=0.4); }
+  translate([0,-h*0.12]) _outline(w*0.78, h*0.52, 1.0);     // shield can
+  translate([0,-h*0.12]) ic_qfp(body=w*0.36, nside=4, pitch=1.1);
+  translate([0, h*0.34]) trace_meander(w*0.78, 1.5, 5, LW); // PCB antenna
+}
+module chip_antenna(w=6, h=3) { _outline(w,h,0.3); trace_meander(w*0.7, h*0.22, 4, LW); }
+
+// --- displays ----------------------------------------------------------------
+module seven_seg(w=6, h=11, t=1.0) {
+  module hbar(y) translate([0,y]) hull(){ translate([-w/2+t,0]) circle(d=t); translate([w/2-t,0]) circle(d=t); }
+  module vbar(x,y) translate([x,y]) hull(){ translate([0,-h/4+t]) circle(d=t); translate([0,h/4-t]) circle(d=t); }
+  hbar(h/2); hbar(0); hbar(-h/2);
+  vbar(-w/2, h/4); vbar(w/2, h/4); vbar(-w/2,-h/4); vbar(w/2,-h/4);
+  translate([w/2+1.4,-h/2]) circle(r=t*0.7);                // decimal point
+}
+module led_matrix(n=5, sp=1.7) {
+  _outline((n+0.6)*sp,(n+0.6)*sp,0.6);
+  for(x=[0:n-1]) for(y=[0:n-1]) translate([(x-(n-1)/2)*sp,(y-(n-1)/2)*sp]) circle(r=sp*0.30);
+}
+
+// --- schematic symbols (for a "schematic" board aesthetic) -------------------
+module ground_sym(w=4.4) {
+  translate([-LW/2,0]) square([LW, 2.2]);
+  for(i=[0:2]) translate([0,-i*0.9]) square([w*(1-i*0.30), LW], center=true);
+}
+module vcc_sym() {
+  translate([-LW/2,-2.2]) square([LW, 2.2]);
+  translate([0,2.2]) polygon([[-1.5,0],[1.5,0],[0,1.7]]);
+}
+module opamp_sym(s=6) {
+  difference(){ polygon([[-s/2,s/2],[-s/2,-s/2],[s/2,0]]); offset(-LW) polygon([[-s/2,s/2],[-s/2,-s/2],[s/2,0]]); }
+  translate([-s/2-1.3, s*0.22]) square([2.6,LW], center=true);
+  translate([-s/2-1.3,-s*0.22]) square([2.6,LW], center=true);
+  translate([ s/2+1.3, 0]) square([2.6,LW], center=true);
+  translate([-s*0.22, s*0.22]) square([1.1,LW], center=true);                       // -
+  translate([-s*0.22,-s*0.22]) { square([1.1,LW],center=true); square([LW,1.1],center=true); } // +
+}
+module resistor_zig(len=11, amp=1.7, zig=6, w=LW) {
+  pts = concat([[-len/2,0]],
+    [for(i=[0:zig-1]) [-len/2 + len/zig*(i+0.5), (i%2==0?amp:-amp)]],
+    [[len/2,0]]);
+  polyline(pts, w);
+}
+module cap_schem(g=1.5, plate=4) {
+  for(s=[-1,1]) translate([s*g/2,0]) square([LW, plate], center=true);
+  for(s=[-1,1]) translate([s*(g/2+1.6),0]) square([3.2, LW], center=true);
+}
+module bjt_sym(r=3) {
+  ring(r, LW);
+  translate([-r*0.15,0]) square([LW, r*1.1], center=true);          // base bar
+  translate([-r-1.0,0]) square([2.0, LW], center=true);             // base lead
+  polyline([[-r*0.15, r*0.35],[r*0.55, r*0.95]], LW);               // collector
+  polyline([[-r*0.15,-r*0.35],[r*0.55,-r*0.95]], LW);               // emitter
+  translate([r*0.4,-r*0.7]) rotate(-60) polygon([[0,0],[-1.0,0.5],[-1.0,-0.5]]); // arrow
+}
+module diode_sym(s=3) {
+  polygon([[-s/2,s/2],[-s/2,-s/2],[s/2,0]]);                        // triangle
+  translate([s/2,0]) square([LW, s], center=true);                 // bar
+  for(d=[-1,1]) translate([d*(s/2+1.2),0]) square([2.4, LW], center=true);
+}
+
+// --- routing / vias ----------------------------------------------------------
+module via_array(n=4, sp=1.6) for(x=[0:n-1]) for(y=[0:n-1]) translate([(x-(n-1)/2)*sp,(y-(n-1)/2)*sp]) ring(0.5, LW);
+module trace_arrow(len=10, w=LW) { square([len,w], center=true); translate([len/2,0]) polygon([[0,0],[-1.8,1.3],[-1.8,-1.3]]); }
+module solder_jumper() { for(i=[-1,0,1]) translate([i*1.7,0]) rrect(1.3,1.7,0.2); translate([-0.85,0]) square([1.7,LW],center=true); }
+module stitching(len=12, sp=1.8, w=LW) { square([len,w],center=true); for(x=[-len/2:sp:len/2]) translate([x,0]) ring(0.55,LW); }
+
+// --- marks -------------------------------------------------------------------
+module qr_finder(n=7, cell=1.0, seed=2) {
+  function rnd(i) = let(x=sin(i*51.3+seed*7.1)*43758.5) x-floor(x);
+  for(x=[0:n-1]) for(y=[0:n-1]) if (rnd(x*13+y*7) > 0.55)
+    translate([(x-(n-1)/2)*cell,(y-(n-1)/2)*cell]) square([cell*0.95,cell*0.95], center=true);
+  for(p=[[-1,1],[1,1],[-1,-1]]) translate([p[0]*(n-2.4)/2*cell, p[1]*(n-2.4)/2*cell]) {
+    difference(){ square([cell*2.8,cell*2.8],center=true); offset(-cell*0.55) square([cell*2.8,cell*2.8],center=true); }
+    square([cell*1.0,cell*1.0], center=true);
+  }
+}
+module trimpot(s=5) {
+  _outline(s,s,0.4);
+  ring(s*0.30, LW); square([s*0.5,LW], center=true);                // cross-slot screw
+  for(i=[-1,0,1]) translate([i*1.6,-s/2-0.6]) square([0.9,1.1], center=true);
+}
+module logo_mark(r=4) {
+  difference(){ circle(r=r,$fn=6); offset(-LW) circle(r=r,$fn=6); }
+  for(a=[0:120:359]) rotate(a) translate([r*0.5,0]) circle(r=0.7);
+  circle(r=0.8);
+}
+module dpad(s=8) {
+  difference(){
+    union(){ square([s*0.45,s],center=true); square([s,s*0.45],center=true); }
+    offset(-LW) union(){ square([s*0.45,s],center=true); square([s,s*0.45],center=true); }
+  }
+  circle(r=s*0.12);
+}
+
+// ============================================================================
+//  ENGINE — edge geometry, tile body, edge-keyed routing, print wrapper
+//  (added for the Circuit Puzzle app; generic, no top-level geometry)
+// ============================================================================
+
+// edge feature profile. shape: 0 circle 1 square 2 triangle 3 pentagon
+// edge feature profile. 0 circle 1 square 2 triangle 3 slant 4 trapezoid 5 step 6 battlement 7 two-tier
+module eprof(shape, e=0, w=7, h=3.4) {
+  if      (shape==0) offset(e) intersection(){ circle(d=w); translate([0,w/2]) square([w+2,w],center=true);}
+  else if (shape==1) offset(e) translate([-w/2,0]) square([w,h]);
+  else if (shape==2) offset(e) polygon([[-w/2,0],[w/2,0],[0,h]]);
+  else if (shape==3) offset(e) polygon([[-w/2,0],[w/2,0],[w/2,h],[-w/2,h*0.4]]);
+  else if (shape==4) offset(e) polygon([[-w/2,0],[w/2,0],[w*0.30,h],[-w*0.30,h]]);
+  else if (shape==5) offset(e) polygon([[-w/2,0],[w/2,0],[w/2,h*0.5],[0,h*0.5],[0,h],[-w/2,h]]);
+  else if (shape==6) offset(e) polygon([[-w/2,0],[w/2,0],[w/2,h],[w*0.18,h],[w*0.18,h*0.46],[-w*0.18,h*0.46],[-w*0.18,h],[-w/2,h]]);
+  else if (shape==7) offset(e) union(){ translate([-w/2,0]) square([w,h*0.5]); translate([-w*0.28,h*0.5]) square([w*0.56,h*0.5]); }
+  else               offset(e) translate([-w/2,0]) square([w,h]);
+}
+
+// edges = [N,E,S,W]; each edge = list of features [shape, isTab(1/0), offset]
+module tile_body(tile, thick, edges, cl=0.35, fw=7, fh=3.4) {
+  difference(){
+    union(){
+      translate([-tile/2,-tile/2,0]) cube([tile,tile,thick]);
+      for (ei=[0:3]) rotate([0,0,-90*ei])
+        for (f=edges[ei]) if (f[1]==1)
+          translate([f[2], tile/2, 0]) linear_extrude(thick) eprof(f[0],0,fw,fh);
+    }
+    for (ei=[0:3]) rotate([0,0,-90*ei])
+      for (f=edges[ei]) if (f[1]==0)
+        translate([f[2], tile/2, -1]) linear_extrude(thick+2) rotate(180) eprof(f[0],cl,fw,fh);
+  }
+}
+
+// ---- footprint-clipped traces (the net router draws into these) ----
+// Route stubs PAST the nominal edge, then intersect the whole trace with the real
+// material footprint. That makes a stub run onto a tab to its tip, stop at a slot's
+// inner wall (never floating over the hole) and never cross into a neighbour.
+module tile_footprint(tile, edges, fw, fh, cl) {
+  difference(){
+    union(){
+      square([tile,tile], center=true);
+      for (ei=[0:3]) rotate([0,0,-90*ei]) for (f=edges[ei]) if (f[1]==1)
+        translate([f[2], tile/2]) eprof(f[0],0,fw,fh);
+    }
+    for (ei=[0:3]) rotate([0,0,-90*ei]) for (f=edges[ei]) if (f[1]==0)
+      translate([f[2], tile/2]) rotate(180) eprof(f[0],cl,fw,fh);
+  }
+}
+module polywire(pts, w) for (i=[0:len(pts)-2])
+  hull(){ translate(pts[i]) circle(d=w); translate(pts[i+1]) circle(d=w); }
+module tile_trace(segs, w) for (s=segs) polywire(s, w);
+
+// generic 2-color / inlay print wrapper. The generated section must define
+// body_3d() (union of tile_body calls) and ink_2d() (union of tile_circuit calls).
+module base_part(mode, thick, pat_h) {
+  difference(){
+    body_3d();
+    if (mode=="inlay" || mode=="engrave")
+      translate([0,0,thick-pat_h+0.01]) linear_extrude(pat_h) ink_2d();
+  }
+}
+module pattern_part(mode, thick, pat_h) {
+  z = (mode=="emboss") ? thick : thick - pat_h;
+  translate([0,0,z]) linear_extrude(pat_h) ink_2d();
+}
+module render_board(part, mode, thick, pat_h) {
+  if (part=="base" || part=="all") color("#1f6b4a") base_part(mode, thick, pat_h);
+  if ((part=="pattern" || part=="all") && mode!="engrave") color("#f2d45c") pattern_part(mode, thick, pat_h);
+}
+
+</script>
+
+<script>
+"use strict";
+const SCAD_LIB = document.getElementById('scad-lib').textContent;
+
+/* ============================================================================
+   1. SHAPES + COMPONENT REGISTRY  (the only places to edit to add things)
+   ----------------------------------------------------------------------------
+   To add an EDGE shape: add a name here AND an `eprof` branch in the SCAD lib.
+   To add a COMPONENT: add a SCAD `module` to the lib (in the <script id=scad-lib>
+   block above) AND one entry here. `call(p)` returns the module invocation;
+   `center:true` makes it eligible as a tile's central component.
+============================================================================ */
+const SHAPES = ['circle','square','triangle','slant','trapezoid','step','battlement','tier']; // 0..7 -> eprof()
+
+const COMPONENTS = [
+  // --- centerpieces ---------------------------------------------------------
+  {id:'ic_qfp',      cat:'IC',     center:1, w:6, call:()=>`ic_qfp(8,4,1.6,0.7,1.6)`},
+  {id:'qfn',         cat:'IC',     center:1, w:4, call:()=>`qfn(9,5)`},
+  {id:'ic_soic',     cat:'IC',     center:1, w:3, call:()=>`ic_soic(6,9,4)`},
+  {id:'ic_dip',      cat:'IC',     center:1, w:2, call:()=>`ic_dip(8,11,4,2.2)`},
+  {id:'bga',         cat:'IC',     center:1, w:2, call:()=>`bga(4,1.7)`},
+  {id:'sot23',       cat:'IC',     center:1, w:1, call:()=>`sot23(4,4)`},
+  {id:'esp_module',  cat:'module', center:1, w:1, call:()=>`scale(0.7) esp_module(16,20)`},
+  {id:'seven_seg',   cat:'display',center:1, w:1, call:()=>`seven_seg(6,11,1.1)`},
+  {id:'led_matrix',  cat:'display',center:1, w:1, call:()=>`led_matrix(5,1.8)`},
+  {id:'crystal',     cat:'passive',center:1, w:2, call:()=>`crystal(10,3.6)`},
+  {id:'cap_elec',    cat:'passive',center:1, w:2, call:()=>`cap_elec(3.4)`},
+  {id:'inductor_spiral',cat:'passive',center:1,w:2,call:()=>`inductor_spiral(3,0.8,5)`},
+  {id:'transistor_to92',cat:'passive',center:1,w:1,call:()=>`transistor_to92(3.2)`},
+  {id:'pot',         cat:'EM',     center:1, w:1, call:()=>`pot(4.5)`},
+  {id:'trimpot',     cat:'EM',     center:1, w:1, call:()=>`trimpot(6)`},
+  {id:'button_tactile',cat:'EM',   center:1, w:1, call:()=>`button_tactile(7)`},
+  {id:'dip_switch',  cat:'EM',     center:1, w:1, call:()=>`dip_switch(4,2.4)`},
+  {id:'relay',       cat:'EM',     center:1, w:1, call:()=>`relay(13,9)`},
+  {id:'header',      cat:'conn',   center:1, w:1, call:()=>`header(4,2.6)`},
+  {id:'usb_a',       cat:'conn',   center:1, w:1, call:()=>`usb_a(13,6)`},
+  {id:'screw_terminal',cat:'conn', center:1, w:1, call:()=>`screw_terminal(2,5.5)`},
+  {id:'dpad',        cat:'EM',     center:1, w:1, call:()=>`dpad(9)`},
+  {id:'opamp_sym',   cat:'sym',    center:1, w:1, call:()=>`opamp_sym(7)`},
+  {id:'bjt_sym',     cat:'sym',    center:1, w:1, call:()=>`bjt_sym(3.4)`},
+  {id:'logo_mark',   cat:'mark',   center:1, w:1, call:()=>`logo_mark(4.5)`},
+  {id:'qr_finder',   cat:'mark',   center:1, w:1, call:()=>`qr_finder(7,1.1)`},
+  {id:'datamatrix',  cat:'mark',   center:1, w:1, call:()=>`datamatrix(8,0.9)`},
+  {id:'barcode',     cat:'mark',   center:1, w:1, call:()=>`barcode(11,5,14)`},
+  {id:'antenna_spiral',cat:'RF',   center:1, w:1, call:()=>`antenna_spiral(4,6)`},
+  {id:'fuse',        cat:'passive',center:1, w:1, call:()=>`fuse(9,3)`},
+  // --- small / decoration (not eligible as center, used on catalog sheet) ---
+  {id:'resistor_smd',cat:'passive',center:0, w:0, call:()=>`resistor_smd(4,2)`},
+  {id:'resistor_tht',cat:'passive',center:0, w:0, call:()=>`resistor_tht(10,3,4)`},
+  {id:'resistor_zig',cat:'sym',    center:0, w:0, call:()=>`resistor_zig(11,1.7,6)`},
+  {id:'cap_ceramic', cat:'passive',center:0, w:0, call:()=>`cap_ceramic(3,2.4)`},
+  {id:'cap_tant',    cat:'passive',center:0, w:0, call:()=>`cap_tant(4,2.6)`},
+  {id:'cap_schem',   cat:'sym',    center:0, w:0, call:()=>`cap_schem(1.5,4)`},
+  {id:'led',         cat:'passive',center:0, w:0, call:()=>`led(2.2)`},
+  {id:'diode',       cat:'passive',center:0, w:0, call:()=>`diode(6,2.8)`},
+  {id:'diode_sym',   cat:'sym',    center:0, w:0, call:()=>`diode_sym(3)`},
+  {id:'inductor_coil',cat:'passive',center:0,w:0, call:()=>`inductor_coil(4,1.2)`},
+  {id:'chip_antenna',cat:'RF',     center:0, w:0, call:()=>`chip_antenna(6,3)`},
+  {id:'antenna_meander',cat:'RF',  center:0, w:0, call:()=>`antenna_meander(14,3,6)`},
+  {id:'mounting_hole',cat:'mech',  center:0, w:0, call:()=>`mounting_hole(2.6)`},
+  {id:'edge_fingers',cat:'conn',   center:0, w:0, call:()=>`edge_fingers(6,1.6,5)`},
+  {id:'net_flag',    cat:'mark',   center:0, w:0, call:()=>`net_flag(5,2.6)`},
+  {id:'ground_sym',  cat:'sym',    center:0, w:0, call:()=>`ground_sym(4.4)`},
+  {id:'vcc_sym',     cat:'sym',    center:0, w:0, call:()=>`vcc_sym()`},
+  {id:'silk_outline',cat:'mark',   center:0, w:0, call:()=>`silk_outline(6,4)`},
+  {id:'label',       cat:'mark',   center:0, w:0, call:()=>`label("U1")`},
+  // --- pads / vias / routing / fields (background & connective) -------------
+  {id:'via',         cat:'pad',    center:0, w:0, call:()=>`via(1.1)`},
+  {id:'pad_round',   cat:'pad',    center:0, w:0, call:()=>`pad_round(1.8,0.9)`},
+  {id:'pad_smd',     cat:'pad',    center:0, w:0, call:()=>`pad_smd(2.6,1.6)`},
+  {id:'thermal_pad', cat:'pad',    center:0, w:0, call:()=>`thermal_pad(2.2,0.9)`},
+  {id:'fiducial',    cat:'pad',    center:0, w:0, call:()=>`fiducial(1.0)`},
+  {id:'test_point',  cat:'pad',    center:0, w:0, call:()=>`test_point(1.6)`},
+  {id:'junction',    cat:'pad',    center:0, w:0, call:()=>`junction(1.1)`},
+  {id:'via_array',   cat:'pad',    center:0, w:0, call:()=>`via_array(4,1.6)`},
+  {id:'trace_straight',cat:'trace',center:0, w:0, call:()=>`trace_straight(12)`},
+  {id:'trace_45',    cat:'trace',  center:0, w:0, call:()=>`trace_45(10)`},
+  {id:'trace_meander',cat:'trace', center:0, w:0, call:()=>`trace_meander(14,2.2,4)`},
+  {id:'trace_bus',   cat:'trace',  center:0, w:0, call:()=>`trace_bus(4,1.6,12)`},
+  {id:'diff_pair',   cat:'trace',  center:0, w:0, call:()=>`diff_pair(12,1.1)`},
+  {id:'trace_teardrop',cat:'trace',center:0, w:0, call:()=>`trace_teardrop(8,1.6)`},
+  {id:'trace_arrow', cat:'trace',  center:0, w:0, call:()=>`trace_arrow(10)`},
+  {id:'solder_jumper',cat:'trace', center:0, w:0, call:()=>`solder_jumper()`},
+  {id:'stitching',   cat:'trace',  center:0, w:0, call:()=>`stitching(12,1.8)`},
+  {id:'fld_hatch',   cat:'field',  center:0, w:0, call:()=>`fld_hatch(18,18)`},
+  {id:'fld_dots',    cat:'field',  center:0, w:0, call:()=>`fld_dots(18,18)`},
+  {id:'fld_pour',    cat:'field',  center:0, w:0, call:()=>`fld_pour(18,14)`},
+];
+const CAT_COLOR = {IC:'#f2d45c',module:'#f2a65c',display:'#f25c8a',passive:'#7fd06a',
+  EM:'#5cc8f2',conn:'#c89bf2',sym:'#9fb3a6',mark:'#e0e0e0',RF:'#f25cd0',mech:'#bfa',
+  pad:'#cfae5c',trace:'#cfe87a',field:'#5f7a66'};
+
+/* ============================================================================
+   2. STATE / PARAMS
+============================================================================ */
+const P = {
+  mode:'board',
+  N:3, seed:7,
+  dual:true, shapes:4, SD:6,
+  tile:35, thick:3, lw:1.0, clearance:0.35, fn:48,
+  fw:5.2, fh:2.8, ringR:10, compScale:0.85,
+  stubShapes:[0,1],                  // shapes ELIGIBLE to carry a trace stub
+  wireMode:'prob',                   // 'prob' per-edge chance | 'shape' deterministic-per-shape
+  traceChance:0.7,                   // chance an eligible feature actually carries one (prob mode)
+  netBreakup:0.45,                   // arc cut probability (0 = big loops, high = many nets)
+  pmode:'inlay', patH:0.6,           // engrave | emboss | inlay
+  part:'all', platter:false, gap:4, show:-1,
+  pzBatch:24, pzStart:1,             // Puzzles tab: how many seeds, starting seed
+};
+// per-component weight overrides (start from registry defaults)
+const WEIGHT = {}; COMPONENTS.forEach(c=>WEIGHT[c.id]=c.w);
+
+/* ============================================================================
+   3. PUZZLE (build-solved) + COMPONENT PICK   (ported from verified gen.js)
+============================================================================ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+// feature = [shape, isTab, offset, wire]. `wire` (decided here, equal on both sides
+// of a seam) is whether that feature carries a trace stub. Eligible shapes carry one
+// with probability traceChance; then we repair so the intended solution is connected.
+function buildBoard(N){
+  const rnd=mulberry32(P.seed|0), ri=n=>Math.floor(rnd()*n), S=P.shapes, dual=P.dual, SD=P.SD;
+  const elig=sh=>P.stubShapes.includes(sh);
+  const wbit=sh=> P.wireMode==='shape' ? (elig(sh)?1:0)
+                                        : ((elig(sh)&&rnd()<P.traceChance)?1:0);
+  const mk=off=>{const sh=ri(S); return [sh, ri(2), off, wbit(sh)];};
+  const randFeat=()=> dual ? [mk(+SD),mk(-SD)] : [mk(0)];
+  const partner=fs=>fs.map(f=>[f[0],1-f[1],-f[2],f[3]]);   // wire preserved across the seam
+  const E=Array.from({length:N},()=>Array.from({length:N},()=>({})));
+  for(let r=0;r<N-1;r++)for(let c=0;c<N;c++){const f=randFeat();E[r][c].S=f;E[r+1][c].N=partner(f);}
+  for(let r=0;r<N;r++)for(let c=0;c<N-1;c++){const f=randFeat();E[r][c].E=f;E[r][c+1].W=partner(f);}
+  for(let c=0;c<N;c++){E[0][c].N=randFeat();E[N-1][c].S=randFeat();}
+  for(let r=0;r<N;r++){E[r][0].W=randFeat();E[r][N-1].E=randFeat();}
+  repairConnectivity(E,N);    // guarantee every piece links into the trace network
+  noLoneStubs(E,N);           // guarantee no tile has exactly 1 stub (no interior dead-ends)
+  return E;
+}
+// no tile may have exactly one wired feature (a lone stub would dead-end in the
+// interior). Fix by wiring a SECOND feature — preferring the same edge's other
+// sub-feature (its partner is already wired, so no neighbour becomes a new lone
+// stub), then a boundary edge (no neighbour), then an interior edge whose
+// neighbour already has a wire. Repeats until stable (additions only).
+function noLoneStubs(E,N){
+  const nb=(r,c,k)=> k==='N'?(r>0?[r-1,c,'S']:null) : k==='S'?(r<N-1?[r+1,c,'N']:null)
+                   : k==='E'?(c<N-1?[r,c+1,'W']:null) : (c>0?[r,c-1,'E']:null);
+  const count=(r,c)=>{let n=0;for(const k of EK)(E[r][c][k]||[]).forEach(f=>{if(f[3]===1)n++;});return n;};
+  const wireFeat=(r,c,k,idx)=>{ E[r][c][k][idx][3]=1; const o=nb(r,c,k); if(!o)return;
+    const [nr,nc,nk]=o, off=E[r][c][k][idx][2], sh=E[r][c][k][idx][0];
+    const nf=E[nr][nc][nk]; const j=nf.findIndex(f=>Math.abs(f[2]+off)<1e-6 && f[0]===sh); if(j>=0) nf[j][3]=1; };
+  for(let pass=0; pass<N*N*4; pass++){
+    let changed=false;
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      if(count(r,c)!==1) continue;
+      let wk=null; for(const k of EK)(E[r][c][k]||[]).forEach(f=>{ if(f[3]===1) wk=k; });
+      let placed=false;
+      // 1) same edge, the other (unwired) sub-feature — partner already wired
+      (E[r][c][wk]||[]).forEach((f,idx)=>{ if(!placed && f[3]!==1){ wireFeat(r,c,wk,idx); placed=true; } });
+      // 2) a boundary edge (no neighbour -> no cascade)
+      if(!placed) for(const k of EK){ if(k===wk||nb(r,c,k)) continue;
+        if((E[r][c][k]||[]).length){ wireFeat(r,c,k,0); placed=true; break; } }
+      // 3) interior edge whose neighbour already has a wire
+      if(!placed) for(const k of EK){ if(k===wk) continue; const o=nb(r,c,k); if(!o) continue;
+        if(count(o[0],o[1])>=1){ const ui=(E[r][c][k]||[]).findIndex(f=>f[3]!==1); if(ui>=0){ wireFeat(r,c,k,ui); placed=true; break; } } }
+      // 4) fallback: any interior edge
+      if(!placed) for(const k of EK){ if(k===wk) continue; const o=nb(r,c,k); if(!o) continue;
+        const ui=(E[r][c][k]||[]).findIndex(f=>f[3]!==1); if(ui>=0){ wireFeat(r,c,k,ui); placed=true; break; } }
+      if(placed) changed=true;
+    }
+    if(!changed) break;
+  }
+}
+// turn on just enough interior-seam wires (preferring eligible shapes) to connect all pieces
+function repairConnectivity(E,N){
+  const par=[...Array(N*N).keys()], find=x=>par[x]===x?x:(par[x]=find(par[x])), uni=(a,b)=>{par[find(a)]=find(b);};
+  const wired=fe=>(fe||[]).some(f=>f[3]===1), elig=sh=>P.stubShapes.includes(sh);
+  const seams=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(c<N-1) seams.push({a:r*N+c,b:r*N+c+1,ef:E[r][c].E,pf:E[r][c+1].W});
+    if(r<N-1) seams.push({a:r*N+c,b:(r+1)*N+c,ef:E[r][c].S,pf:E[r+1][c].N});
+  }
+  for(const s of seams) if(wired(s.ef)) uni(s.a,s.b);
+  const connected=()=>{const root=find(0);for(let i=0;i<N*N;i++)if(find(i)!==root)return false;return true;};
+  let guard=0;
+  while(!connected() && guard++<N*N*2){
+    let chosen=null, fallback=null;
+    for(const s of seams){ if(find(s.a)===find(s.b)) continue;
+      if(!fallback) fallback=s;
+      if(s.ef.some(f=>elig(f[0]))){ chosen=s; break; } }
+    chosen=chosen||fallback; if(!chosen) break;
+    let wi=chosen.ef.findIndex(f=>elig(f[0])); if(wi<0)wi=0;
+    chosen.ef[wi][3]=1; chosen.pf[wi][3]=1;   // wire both sides (partner shares the index)
+    uni(chosen.a,chosen.b);
+  }
+}
+function centerPalette(){return COMPONENTS.filter(c=>c.center && (WEIGHT[c.id]||0)>0);}
+function makePicker(seed){
+  const rnd=mulberry32(seed); const pal=centerPalette();
+  const tot=pal.reduce((s,c)=>s+(WEIGHT[c.id]||0),0)||1;
+  return ()=>{let x=rnd()*tot;for(const c of pal){if((x-=WEIGHT[c.id]||0)<0)return c;}return pal[0]||COMPONENTS[0];};
+}
+
+/* ----------------------------------------------------------------------------
+   3b. NET ROUTER  (perpendicular stubs + contiguous ring-arc nets, no dead-ends)
+   The SAME tileWires() output feeds both the SCAD emit and the canvas preview.
+---------------------------------------------------------------------------- */
+const EK = ['N','E','S','W'];
+function rot(ei,p){const[x,y]=p;return ei===0?[x,y]:ei===1?[y,-x]:ei===2?[-x,-y]:[-y,x];}
+function pParam(pt,R){const[x,y]=pt,e=0.05;
+  if(Math.abs(y-R)<e)return (x+R)/(2*R);
+  if(Math.abs(x-R)<e)return 1+(R-y)/(2*R);
+  if(Math.abs(y+R)<e)return 2+(R-x)/(2*R);
+  return 3+(y+R)/(2*R);}
+function ringPtAtP(p,R){p=((p%4)+4)%4;
+  if(p<1)return[-R+p*2*R,R]; if(p<2)return[R,R-(p-1)*2*R];
+  if(p<3)return[R-(p-2)*2*R,-R]; return[-R,-R+(p-3)*2*R];}
+function perimeterPath(A,B,R){let pa=pParam(A,R),pb=pParam(B,R); if(pb<pa-1e-6)pb+=4;
+  const pts=[A]; for(let k=Math.ceil(pa+1e-4);k<pb-1e-4;k++)pts.push(ringPtAtP(((k%4)+4)%4,R)); pts.push(B); return pts;}
+
+// returns trace polylines (tile-local mm). buildBoard guarantees each tile has 0
+// or >=2 stubs, so every arc has >=2 stubs and no trace ever ends inside a tile:
+// each trace end is a junction with another trace, or runs to an edge (matched =>
+// continues into the neighbour; unmatched => terminates at the puzzle boundary).
+function tileWires(edge, seed){
+  const R=P.ringR, T=P.tile, reach=T/2+P.fh+0.4, rng=mulberry32(seed);
+  const stubs=[];
+  EK.forEach((k,ei)=>(edge[k]||[]).forEach(f=>{
+    if(f[3]!==1) return;
+    stubs.push({arrival:rot(ei,[f[2],R]), outer:rot(ei,[f[2],reach]), p:pParam(rot(ei,[f[2],R]),R)});
+  }));
+  stubs.sort((a,b)=>a.p-b.p);
+  const segs=stubs.map(s=>[s.arrival,s.outer]);    // perpendicular stubs to edges
+  const n=stubs.length;
+  if(n>=2){
+    const cut=[]; for(let i=0;i<n;i++) cut.push(rng()<P.netBreakup);
+    let changed=true,guard=0;                        // forbid singleton arcs (defensive)
+    while(changed && guard++<40){ changed=false;
+      for(let j=0;j<n;j++){ const b=(j-1+n)%n;
+        if(cut[b]&&cut[j]){ if(rng()<0.5)cut[b]=false; else cut[j]=false; changed=true; } } }
+    for(let i=0;i<n;i++){ if(cut[i])continue; const j=(i+1)%n;
+      segs.push(perimeterPath(stubs[i].arrival, stubs[j].arrival, R)); }
+  }
+  return segs;
+}
+// every interior seam carrying a stub-shape links its two pieces; is the board one network?
+function boardConnected(E,N){
+  const par=[...Array(N*N).keys()], find=x=>par[x]===x?x:(par[x]=find(par[x])), uni=(a,b)=>{par[find(a)]=find(b);};
+  const has=fe=>(fe||[]).some(f=>f[3]===1);
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(c<N-1 && has(E[r][c].E)) uni(r*N+c, r*N+c+1);
+    if(r<N-1 && has(E[r][c].S)) uni(r*N+c, (r+1)*N+c);
+  }
+  const root=find(0); for(let i=0;i<N*N;i++) if(find(i)!==root) return false;
+  return true;
+}
+
+/* ----------------------------------------------------------------------------
+   3c. PUZZLE SOLVER + ANALYSIS
+   Pieces = the cells of a solved board (edges carry shape/state/offset/wire).
+   Physical fit ignores the wire bit; a SOLUTION is "good" when every interior
+   seam has matching wires (no dead-ends) AND the wired seams span all pieces.
+---------------------------------------------------------------------------- */
+function piecesFromBoard(N,seed){ const sp=P.seed; P.seed=seed; const E=buildBoard(N); P.seed=sp;
+  const ps=[]; for(let r=0;r<N;r++)for(let c=0;c<N;c++) ps.push(EK.map(k=>E[r][c][k])); return ps; }
+function rotateP(p,k){const o=[0,0,0,0];for(let i=0;i<4;i++)o[(i+k)%4]=p[i];return o;}
+const _fk=e=>[...e].map(f=>[f[0],f[1],f[2]]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]).map(f=>f.join(':')).join('|');
+const _pk=e=>[...e].map(f=>[f[0],1-f[1],-f[2]]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]).map(f=>f.join(':')).join('|');
+function fits(A,B){return _fk(B)===_pk(A);}    // B sits correctly against A (physical, wire ignored)
+function solve(pieces,N,cap,stepCap){
+  const sols=[],used=new Array(pieces.length).fill(false),grid=Array.from({length:N},()=>new Array(N).fill(null));
+  let steps=0, aborted=false;
+  function rec(idx){
+    if(aborted||sols.length>=cap)return;
+    if(++steps>stepCap){aborted=true;return;}
+    if(idx===N*N){ sols.push(grid.map(row=>row.map(c=>({pi:c.pi,k:c.k})))); return; }
+    const r=Math.floor(idx/N),c=idx%N;
+    for(let pi=0;pi<pieces.length;pi++){ if(used[pi])continue;
+      for(let k=0;k<4;k++){ const e=rotateP(pieces[pi],k);
+        if(c>0 && !fits(grid[r][c-1].e[1], e[3])) continue;
+        if(r>0 && !fits(grid[r-1][c].e[2], e[0])) continue;
+        used[pi]=true; grid[r][c]={pi,k,e}; rec(idx+1); used[pi]=false; grid[r][c]=null;
+        if(aborted)return; } } }
+  rec(0); return {sols, aborted};
+}
+const _sig=sol=>sol.map(row=>row.map(c=>c.pi+'.'+c.k).join(',')).join(';');
+function _rotSol(sol,N){const o=Array.from({length:N},()=>new Array(N));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)o[c][N-1-r]={pi:sol[r][c].pi,k:(sol[r][c].k+1)%4};return o;}
+function _canon(sol,N){let best=_sig(sol),s=sol;for(let i=0;i<3;i++){s=_rotSol(s,N);const g=_sig(s);if(g<best)best=g;}return best;}
+// at a fitting seam, do the matched features agree on the wire bit? (no dead-ends)
+function wireMatch(A,B){ for(const f of A){ const g=B.find(x=>Math.abs(x[2]+f[2])<1e-6 && x[0]===f[0]);
+  if(!g) return false; if((f[3]||0)!==(g[3]||0)) return false; } return true; }
+function seamLinks(A,B){ for(const f of A){ if(f[3]!==1)continue;
+  const g=B.find(x=>Math.abs(x[2]+f[2])<1e-6 && x[0]===f[0]); if(g&&g[3]===1)return true; } return false; }
+function analyzeSolution(sol,pieces,N){
+  const placed=sol.map(row=>row.map(c=>rotateP(pieces[c.pi],c.k)));
+  let deadEndFree=true;
+  const par=[...Array(N*N).keys()],find=x=>par[x]===x?x:(par[x]=find(par[x])),uni=(a,b)=>{par[find(a)]=find(b);};
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(c<N-1){const A=placed[r][c][1],B=placed[r][c+1][3]; if(!wireMatch(A,B))deadEndFree=false; if(seamLinks(A,B))uni(r*N+c,r*N+c+1);}
+    if(r<N-1){const A=placed[r][c][2],B=placed[r+1][c][0]; if(!wireMatch(A,B))deadEndFree=false; if(seamLinks(A,B))uni(r*N+c,(r+1)*N+c);}
+  }
+  const root=find(0); let connected=true; for(let i=0;i<N*N;i++)if(find(i)!==root){connected=false;break;}
+  return {deadEndFree, connected};
+}
+function analyzePuzzle(N,seed){
+  const pieces=piecesFromBoard(N,seed);
+  const {sols:raw,aborted}=solve(pieces,N,600, N<=3?2e6:4e6);
+  const seen=new Set(); const sols=raw.filter(x=>{const g=_canon(x,N);if(seen.has(g))return false;seen.add(g);return true;});
+  let good=0; for(const s of sols){const a=analyzeSolution(s,pieces,N); if(a.deadEndFree&&a.connected)good++;}
+  return {seed, solutions:sols.length, good, allGood: sols.length>0 && good===sols.length, aborted};
+}
+
+/* ============================================================================
+   4. SCAD EMIT
+============================================================================ */
+const edgesLit = e => `[${['N','E','S','W'].map(k=>`[${(e[k]||[]).map(f=>`[${f[0]},${f[1]},${f[2]}]`).join(',')}]`).join(',')}]`;
+function tilePos(N,r,c){const s=P.tile+(P.platter?P.gap:0);return [(c-(N-1)/2)*s, ((N-1)/2 - r)*s];}
+
+const litPt = p => `[${p[0].toFixed(2)},${p[1].toFixed(2)}]`;
+const litSeg = s => `[${s.map(litPt).join(',')}]`;
+function emitBoard(){
+  const N=P.N, E=buildBoard(N), pick=makePicker((P.seed|0)*7+13);
+  let bodies='',inks=''; let i=0;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++,i++){
+    if(P.show>=0 && P.show!==i) continue;
+    const [x,y]=tilePos(N,r,c), ed=edgesLit(E[r][c]), comp=pick().call();
+    const segs=tileWires(E[r][c], (P.seed|0)*131 + r*11 + c + 1);
+    bodies+=`  translate([${x},${y},0]) tile_body(${P.tile},${P.thick},${ed},${P.clearance},${P.fw},${P.fh});\n`;
+    inks  +=`  translate([${x},${y}]) intersection(){ tile_footprint(${P.tile},${ed},${P.fw},${P.fh},${P.clearance}); union(){ tile_trace([${segs.map(litSeg).join(',')}],LW); scale(${P.compScale}) ${comp}; } }\n`;
+  }
+  return `${SCAD_LIB}
+// ===================== generated board =====================
+$fn = ${P.fn}; LW = ${P.lw};
+PART = "${P.part}";   // base | pattern | all
+MODE = "${P.pmode}";  // engrave | emboss | inlay
+THICK = ${P.thick}; PAT_H = ${P.patH};
+module body_3d(){ union(){
+${bodies}} }
+module ink_2d(){ union(){
+${inks}} }
+render_board(PART, MODE, THICK, PAT_H);
+`;
+}
+
+function emitCatalog(){
+  const cols=6, cell=24;
+  let s=`${SCAD_LIB}
+// ===================== component sheet =====================
+$fn = ${P.fn}; LW = ${P.lw};
+BOARD="#0b3d2e"; INK="#f2d45c"; SILK="#d6ece2";
+module cell(i,lbl){ col=i%${cols}; row=floor(i/${cols});
+  translate([col*${cell}, -row*${cell}, 0]){
+    color(BOARD) linear_extrude(1.2) square([${cell}*0.93,${cell}*0.93],center=true);
+    color(INK) translate([0,0,1.2]) linear_extrude(${P.patH}) children();
+    color(SILK) translate([0,-${cell}*0.4,1.21]) linear_extrude(0.35) text(lbl,size=1.6,halign="center",valign="center");
+  }
+}
+`;
+  COMPONENTS.forEach((c,idx)=>{ s+=`cell(${idx},"${c.id}") ${c.call()};\n`; });
+  return s;
+}
+function emitSCAD(){ return P.mode==='board'? emitBoard() : emitCatalog(); }
+
+/* ============================================================================
+   5. CANVAS PREVIEW  (schematic layout — exact geometry comes from OpenSCAD)
+============================================================================ */
+function draw(){
+  const cv=document.getElementById('cv'), g=cv.getContext('2d');
+  g.clearRect(0,0,cv.width,cv.height);
+  if(P.mode==='catalog'){ drawCatalog(g,cv); return; }
+  const N=P.N, E=buildBoard(N), pick=makePicker((P.seed|0)*7+13);
+  const pad=40, span=Math.min(cv.width,cv.height)-pad*2, ts=span/N, hub=ts*0.26;
+  const ox=(cv.width-ts*N)/2, oy=(cv.height-ts*N)/2;
+  const SDpx = (P.SD/P.tile)*ts;
+  const cx=(c)=>ox+c*ts, cy=(r)=>oy+r*ts;
+  // tiles
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const x=cx(c), y=cy(r), e=E[r][c], comp=pick();
+    // body
+    g.fillStyle='#0b3d2e'; g.strokeStyle='#1c5a43'; g.lineWidth=1;
+    roundRect(g,x+1,y+1,ts-2,ts-2,4); g.fill(); g.stroke();
+    // edge features (bumps out / notches in)
+    drawEdgeFeatures(g,x,y,ts,e,SDpx);
+    // net traces — SAME tileWires() output as the SCAD emit, mapped to canvas
+    const segs=tileWires(e, (P.seed|0)*131 + r*11 + c + 1);
+    const mapX=lx => x+ts/2 + (lx/P.tile)*ts;
+    const mapY=ly => y+ts/2 - (ly/P.tile)*ts;   // flip Y (mm up -> canvas down)
+    g.strokeStyle='#e8c24a'; g.lineCap='round'; g.lineJoin='round';
+    g.lineWidth=Math.max(1.6,(P.lw/P.tile)*ts);
+    for(const s of segs){ g.beginPath(); s.forEach((pt,k)=>{ const X=mapX(pt[0]),Y=mapY(pt[1]); k?g.lineTo(X,Y):g.moveTo(X,Y); }); g.stroke(); }
+    // central component glyph
+    g.fillStyle=CAT_COLOR[comp.cat]||'#f2d45c';
+    roundRect(g,x+ts/2-hub*0.8,y+ts/2-hub*0.7,hub*1.6,hub*1.4,3); g.globalAlpha=.22; g.fill(); g.globalAlpha=1;
+    g.fillStyle='#eaf6ee'; g.font=`${Math.max(8,hub*0.34)}px ui-monospace,monospace`;
+    g.textAlign='center'; g.textBaseline='middle';
+    g.fillText(comp.id.replace(/_/g,' ').slice(0,11), x+ts/2, y+ts/2);
+  }
+}
+function drawEdgeFeatures(g,x,y,ts,e,SDpx){
+  const mid=ts/2; g.lineWidth=1; 
+  const drawFeat=(px,py,nx,ny,isTab,shape)=>{
+    g.strokeStyle='#1c5a43'; g.fillStyle=isTab? '#0b3d2e':'#0d1410';
+    g.beginPath(); g.arc(px+nx*5,py+ny*5,4.5,0,7); g.fill(); g.stroke();
+  };
+  for(const [k,nx,ny,ax,ay] of [['N',0,-1,1,0],['E',1,0,0,1],['S',0,1,1,0],['W',-1,0,0,1]]){
+    (e[k]||[]).forEach(f=>{
+      const off=(f[2]/P.tile)*ts;
+      const px=x+mid+ (k==='N'||k==='S'? off:0) + (k==='E'? mid:0) + (k==='W'? -mid:0);
+      const py=y+mid+ (k==='E'||k==='W'? off:0) + (k==='S'? mid:0) + (k==='N'? -mid:0);
+      drawFeat(px,py,nx,ny,f[1]===1,f[0]);
+    });
+  }
+}
+function drawCatalog(g,cv){
+  const items=COMPONENTS, cols=6, cell=Math.min(cv.width,cv.height)/7;
+  g.font=`${cell*0.13}px ui-monospace,monospace`; g.textAlign='center'; g.textBaseline='middle';
+  items.forEach((c,i)=>{
+    const col=i%cols,row=Math.floor(i/cols),x=20+col*cell,y=20+row*cell;
+    g.fillStyle='#0b3d2e'; roundRect(g,x,y,cell-6,cell-6,4); g.fill();
+    g.fillStyle=CAT_COLOR[c.cat]||'#f2d45c';
+    roundRect(g,x+cell*0.28,y+cell*0.22,cell*0.44,cell*0.36,3); g.globalAlpha=.5; g.fill(); g.globalAlpha=1;
+    g.fillStyle='#d6ece2'; g.fillText(c.id.slice(0,12), x+(cell-6)/2, y+cell*0.74);
+  });
+}
+function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+/* ============================================================================
+   6. UI
+============================================================================ */
+function el(t,a={},...kids){const e=document.createElement(t);for(const k in a){
+  if(k==='class')e.className=a[k];else if(k==='html')e.innerHTML=a[k];else e.setAttribute(k,a[k]);}
+  kids.forEach(k=>e.append(k));return e;}
+function group(title,open=true){const b=el('div',{class:'body'});
+  const h=el('h2',{},title,el('span',{class:'chev'},open?'▾':'▸'));
+  const s=el('section',{class:'grp'},h,b); if(!open)b.style.display='none';
+  h.onclick=()=>{const v=b.style.display==='none';b.style.display=v?'block':'none';h.lastChild.textContent=v?'▾':'▸';};
+  return {s,b};}
+function slider(b,label,key,min,max,step,fmt=(v)=>v){
+  const out=el('span',{class:'val'},fmt(P[key]));
+  const inp=el('input',{type:'range',min,max,step,value:P[key]});
+  inp.oninput=()=>{P[key]=parseFloat(inp.value);out.textContent=fmt(P[key]);regen();};
+  b.append(el('div',{class:'row'},el('label',{},label),inp,out));
+}
+function selectRow(b,label,key,opts){
+  const sel=el('select',{}); opts.forEach(o=>{const op=el('option',{value:o},o);if(o===P[key])op.selected=true;sel.append(op);});
+  sel.onchange=()=>{P[key]=sel.value;regen();syncSegs();};
+  b.append(el('div',{class:'row'},el('label',{},label),sel));
+}
+function seg(b,label,key,opts){
+  const wrap=el('div',{class:'seg'});
+  opts.forEach(o=>{const bt=el('button',{},o);if(P[key]===o||P[key]===(o==='on'))bt.classList.add('on');
+    bt.onclick=()=>{P[key]=o;[...wrap.children].forEach(x=>x.classList.remove('on'));bt.classList.add('on');regen();};
+    wrap.append(bt);});
+  b.append(el('div',{class:'row'},el('label',{},label),wrap));
+}
+function toggle(b,label,key){
+  const wrap=el('div',{class:'seg'});
+  ['on','off'].forEach(o=>{const bt=el('button',{},o);if((P[key]&&o==='on')||(!P[key]&&o==='off'))bt.classList.add('on');
+    bt.onclick=()=>{P[key]=(o==='on');[...wrap.children].forEach(x=>x.classList.remove('on'));bt.classList.add('on');regen();};
+    wrap.append(bt);});
+  b.append(el('div',{class:'row'},el('label',{},label),wrap));
+}
+function numInput(b,label,key,min,max){
+  const inp=el('input',{type:'number',min,max,step:1,value:P[key]});
+  inp.style.cssText='width:96px;background:#0e1f18;color:#dff0e8;border:1px solid #2c5446;border-radius:6px;padding:3px 7px;font-size:13px';
+  inp.onchange=()=>{ let v=Math.round(parseFloat(inp.value)); if(!isFinite(v))v=min; v=Math.max(min,Math.min(max,v)); P[key]=v; inp.value=v; };
+  b.append(el('div',{class:'row'},el('label',{},label),inp));
+}
+
+function buildControls(){
+  const root=document.getElementById('controls'); root.innerHTML='';
+  P.stubShapes=P.stubShapes.filter(i=>i<P.shapes); if(!P.stubShapes.length)P.stubShapes=[0];
+  if(P.mode==='puzzles'){ buildPuzzleControls(root); return; }
+  // Board
+  let G=group('Board');
+  slider(G.b,'Grid N×N','N',2,6,1); slider(G.b,'Seed','seed',1,999,1);
+  G.b.append(el('div',{class:'row'}, el('button',{class:'btn'},'🎲 New seed')));
+  G.b.lastChild.lastChild.onclick=()=>{P.seed=1+Math.floor(Math.random()*999);regen();buildControls();};
+  root.append(G.s);
+  // Edges
+  G=group('Edge types');
+  toggle(G.b,'Dual features','dual'); slider(G.b,'# shapes','shapes',2,8,1);
+  slider(G.b,'Dual offset','SD',3,9,0.5); 
+  G.b.append(el('p',{class:'hint'},`${P.dual?(2*P.shapes)+' opts/sub-feature → '+Math.pow(2*P.shapes,2)+' edge types':(2*P.shapes)+' edge types'} • shapes: ${SHAPES.slice(0,P.shapes).join(', ')}`));
+  root.append(G.s);
+  // Traces (the pipes router)
+  G=group('Traces');
+  // which shapes carry a stub (density). Both seam sides share a shape, so this stays consistent.
+  const sc=el('div',{class:'catbar'});
+  for(let i=0;i<P.shapes;i++){
+    const on=P.stubShapes.includes(i);
+    const bt=el('button',{},SHAPES[i]); if(on)bt.style.cssText='background:var(--acc);color:#1a1400';
+    bt.onclick=()=>{ const j=P.stubShapes.indexOf(i);
+      if(j>=0){ if(P.stubShapes.length>1) P.stubShapes.splice(j,1); } else P.stubShapes.push(i);
+      buildControls(); regen(); };
+    sc.append(bt);
+  }
+  G.b.append(el('div',{class:'row'},el('label',{},'Trace shapes'),sc));
+  seg(G.b,'Wire mode','wireMode',['prob','shape']);
+  slider(G.b,'Trace chance','traceChance',0,1,0.05);
+  slider(G.b,'Net breakup','netBreakup',0,0.8,0.05);
+  const stat=el('span',{class:'pill'},'');
+  G.b.append(el('div',{class:'row'},el('label',{},'This board'),stat));
+  G.b.append(el('p',{class:'hint'},'Trace shapes = which edges may carry a trace. <b>prob</b>: each eligible edge carries one with “trace chance” (varied; this board\u2019s solution is auto-connected). <b>shape</b>: every eligible shape always carries one (consistent across ALL solutions → Puzzles tab can find all-connected puzzles).'));
+  P._statEl=stat;  // updated in regen()
+  root.append(G.s);
+  // Geometry
+  G=group('Geometry (mm)');
+  slider(G.b,'Tile size','tile',20,60,1); slider(G.b,'Thickness','thick',1.5,6,0.1);
+  slider(G.b,'Line width','lw',0.4,2.0,0.05); slider(G.b,'Clearance','clearance',0.1,0.6,0.05);
+  slider(G.b,'Feature W','fw',3,9,0.2); slider(G.b,'Feature H','fh',1.5,4,0.1);
+  slider(G.b,'Ring radius','ringR',5,14,0.5); slider(G.b,'Comp scale','compScale',0.5,1.6,0.05);
+  slider(G.b,'$fn','fn',16,80,4);
+  root.append(G.s);
+  // Pattern / color
+  G=group('Pattern & color');
+  seg(G.b,'Mode','pmode',['engrave','emboss','inlay']);
+  slider(G.b,'Pattern h','patH',0.2,1.2,0.05);
+  G.b.append(el('p',{class:'hint',html:'<b>inlay</b>: flush, two-color, 0 added height (recommended). <b>emboss</b>: raised. <b>engrave</b>: recessed, single color.'}));
+  root.append(G.s);
+  // Print / export
+  G=group('Print / export');
+  seg(G.b,'Part','part',['all','base','pattern']);
+  toggle(G.b,'Platter (spread)','platter'); slider(G.b,'Platter gap','gap',2,12,1);
+  slider(G.b,'Show tile (-1=all)','show',-1,P.N*P.N-1,1);
+  G.b.append(el('p',{class:'hint',html:'Two-color: download <b>base.scad</b> + <b>pattern.scad</b>, export each as STL, add as parts in Bambu Studio, assign filaments.'}));
+  root.append(G.s);
+  // Components
+  G=group('Centerpiece frequency');
+  const bar=el('div',{class:'catbar'});
+  ['all','none'].forEach(a=>{const bt=el('button',{},a);bt.onclick=()=>{COMPONENTS.filter(c=>c.center).forEach(c=>WEIGHT[c.id]=(a==='all'?2:0));buildControls();regen();};bar.append(bt);});
+  G.b.append(bar);
+  const grid=el('div',{class:'comp-grid'});
+  COMPONENTS.filter(c=>c.center).forEach(c=>{
+    const w=el('span',{class:'w'},WEIGHT[c.id]);
+    const r=el('input',{type:'range',min:0,max:5,step:1,value:WEIGHT[c.id]});
+    r.oninput=()=>{WEIGHT[c.id]=parseInt(r.value);w.textContent=r.value;regen();};
+    const dot=el('span',{class:'pill'},c.cat);
+    grid.append(el('div',{class:'comp'},el('span',{class:'nm',title:c.id},c.id),r,w));
+  });
+  G.b.append(grid);
+  G.b.append(el('p',{class:'hint'},'Non-centerpiece parts (traces, pads, fields, passives) are all on the Component sheet for printing/testing.'));
+  root.append(G.s);
+}
+
+/* ----------------------------------------------------------------------------
+   6b. PUZZLES TAB — generate a batch of seeds, analyse, pick one to load
+---------------------------------------------------------------------------- */
+function buildPuzzleControls(root){
+  let G=group('Generate & analyse');
+  slider(G.b,'Grid N×N','N',2,4,1);
+  numInput(G.b,'Batch (seeds)','pzBatch',4,1024);
+  numInput(G.b,'Start seed','pzStart',1,1000000);
+  const run=el('button',{class:'btn primary'},'Analyse batch');
+  const stop=el('button',{class:'btn'},'Stop');
+  run.onclick=()=>renderPuzzles();
+  stop.onclick=()=>{ pzRunning=false; };
+  G.b.append(el('div',{class:'row'},run,stop));
+  G.b.append(el('p',{class:'hint'},'Runs in small chunks and updates live — click <b>Stop</b> anytime. N≤3 is fast; 4×4 is slow and may report “complex”. Click a column header to sort. Uses the trace settings below.'));
+  root.append(G.s);
+
+  G=group('Trace settings (shared)');
+  toggle(G.b,'Dual features','dual'); slider(G.b,'# shapes','shapes',2,8,1);
+  const sc=el('div',{class:'catbar'});
+  for(let i=0;i<P.shapes;i++){ const on=P.stubShapes.includes(i);
+    const bt=el('button',{},SHAPES[i]); if(on)bt.style.cssText='background:var(--acc);color:#1a1400';
+    bt.onclick=()=>{ const j=P.stubShapes.indexOf(i);
+      if(j>=0){ if(P.stubShapes.length>1)P.stubShapes.splice(j,1);} else P.stubShapes.push(i);
+      buildControls(); };
+    sc.append(bt); }
+  G.b.append(el('div',{class:'row'},el('label',{},'Trace shapes'),sc));
+  seg(G.b,'Wire mode','wireMode',['prob','shape']);
+  slider(G.b,'Trace chance','traceChance',0,1,0.05);
+  G.b.append(el('p',{class:'hint'},'<b>shape</b> mode keeps wires consistent across all solutions, so “all-connected” puzzles are common. <b>prob</b> mode varies per edge, so usually only the intended solution is a clean loop.'));
+  root.append(G.s);
+}
+
+let pzRows=[], pzSort={key:'seed',dir:1}, pzRunning=false, pzJobId=0, pzMeta={};
+function pzBadge(txt,color){ return el('span',{class:'pill',style:`background:${color};color:#10140f;font-weight:600`},txt); }
+function pzStatusRank(r){ if(r.aborted)return 0; if(r.allGood&&r.solutions>=2)return 5; if(r.solutions===1)return 4; if(r.good>0)return 3; if(r.solutions===0)return 1; return 2; }
+function pzSortRows(){ const k=pzSort.key,d=pzSort.dir, v=o=>k==='seed'?o.seed:k==='solutions'?o.solutions:k==='good'?o.good:pzStatusRank(o);
+  pzRows.sort((a,b)=>(v(a)-v(b))*d || (a.seed-b.seed)); }
+function pzRenderTable(){
+  if(!pzMeta.wrap) return; pzSortRows();
+  const t=el('table',{}); t.style.cssText='width:100%;border-collapse:collapse;font-size:13px';
+  const cols=[['seed','seed'],['solutions','solutions'],['good','clean loops'],['status','status'],[null,'']];
+  const hr=el('tr',{});
+  cols.forEach(([key,label])=>{ const arrow=key&&pzSort.key===key?(pzSort.dir>0?' ▲':' ▼'):'';
+    const th=el('th',{},label+arrow);
+    th.style.cssText=`text-align:left;padding:5px 8px;border-bottom:1px solid #2c5446;color:#9fc4b4;font-weight:600;user-select:none;cursor:${key?'pointer':'default'}`;
+    if(key) th.onclick=()=>{ if(pzSort.key===key)pzSort.dir*=-1; else {pzSort.key=key;pzSort.dir=(key==='seed'?1:-1);} pzRenderTable(); };
+    hr.append(th); });
+  t.append(hr);
+  const td=c=>{const d=el('td',{}); d.style.cssText='padding:5px 8px'; d.append(c); return d;};
+  for(const r of pzRows){
+    const tr=el('tr',{}); tr.style.cssText='border-bottom:1px solid #1d3a30';
+    tr.append(td(String(r.seed)));
+    tr.append(td(r.aborted?`${r.solutions}+`:String(r.solutions)));
+    tr.append(td(`${r.good}/${r.solutions}`));
+    let badge; if(r.aborted)badge=pzBadge('complex','#caa244');
+      else if(r.allGood&&r.solutions>=2)badge=pzBadge('all-connected ✓','#8fe0b6');
+      else if(r.solutions===1)badge=pzBadge('unique ✓','#7fd6a8');
+      else if(r.good>0)badge=pzBadge(`${r.good} clean`,'#b9c6bf');
+      else badge=pzBadge('none','#c79a9a');
+    tr.append(td(badge));
+    const load=el('button',{class:'btn'},'Load →'); load.onclick=()=>{ P.seed=r.seed; setMode('board'); };
+    tr.append(td(load)); t.append(tr);
+  }
+  pzMeta.wrap.innerHTML=''; pzMeta.wrap.append(t);
+}
+function pzHead(done,doneCount){
+  const m=pzMeta; if(!m.head)return;
+  const uniq=pzRows.filter(r=>r.solutions===1).length, allc=pzRows.filter(r=>r.allGood&&r.solutions>=2).length;
+  const ms=Math.round(performance.now()-m.t0);
+  const lead = done==='stopped' ? `Stopped at ${doneCount}/${m.total}` : done==='done' ? `Done · ${m.total} seeds · ${ms}ms` : `Analysing ${doneCount}/${m.total}…`;
+  m.head.textContent=`${lead} · seeds from ${m.start} · ${m.N}×${m.N} · wire “${P.wireMode}” · ${uniq} unique · ${allc} multi+all-connected`;
+}
+function renderPuzzles(){
+  const panel=document.getElementById('puzzlePanel'); panel.innerHTML='';
+  const N=P.N, start=P.pzStart|0, total=P.pzBatch|0, myId=++pzJobId;
+  pzRows=[]; pzRunning=true;
+  const head=el('div',{}); head.style.cssText='margin:2px 4px 10px;font-size:13px;color:#cfe6da';
+  const wrap=el('div',{}); panel.append(head,wrap);
+  pzMeta={head,wrap,N,start,total,t0:performance.now()};
+  const CHUNK = N<=3 ? 6 : 1;
+  let i=0;
+  (function step(){
+    if(pzJobId!==myId) return;                 // superseded by a newer run
+    if(!pzRunning){ pzRenderTable(); pzHead('stopped',i); return; }
+    const end=Math.min(i+CHUNK,total);
+    for(;i<end;i++) pzRows.push(analyzePuzzle(N,start+i));
+    pzRenderTable(); pzHead(i>=total?'done':'run',i);
+    if(i<total) setTimeout(step,0); else pzRunning=false;
+  })();
+}
+
+/* ============================================================================
+   7. wiring
+============================================================================ */
+let _scad='';
+function regen(){
+  if(P.mode==='puzzles'){ document.getElementById('status').textContent='puzzle analysis';
+    document.getElementById('scad').value='// Puzzles tab — generate & analyze, then Load a puzzle into the Board tab.'; return; }
+  _scad=emitSCAD(); document.getElementById('scad').value=_scad;
+  document.getElementById('status').textContent=`${P.mode==='board'?P.N+'×'+P.N+' board':'sheet'} • ${_scad.length.toLocaleString()} chars`;
+  if(P._statEl && P.mode==='board'){ const ok=boardConnected(buildBoard(P.N),P.N);
+    P._statEl.textContent = ok?'all pieces connected ✓':'has isolated piece(s)';
+    P._statEl.style.color = ok?'var(--acc2)':'#f29a5c'; }
+  try{draw();}catch(e){console.error(e);} }
+function syncSegs(){ /* placeholder for select/seg resync if needed */ }
+function setMode(m){ P.mode=m;
+  document.getElementById('mode-board').classList.toggle('on',m==='board');
+  document.getElementById('mode-catalog').classList.toggle('on',m==='catalog');
+  document.getElementById('mode-puzzles').classList.toggle('on',m==='puzzles');
+  document.getElementById('cv').style.display = m==='puzzles'?'none':'';
+  document.getElementById('puzzlePanel').style.display = m==='puzzles'?'block':'none';
+  buildControls(); regen(); }
+document.getElementById('mode-board').onclick=()=>setMode('board');
+document.getElementById('mode-catalog').onclick=()=>setMode('catalog');
+document.getElementById('mode-puzzles').onclick=()=>setMode('puzzles');
+document.getElementById('copy').onclick=()=>{navigator.clipboard.writeText(_scad);
+  const s=document.getElementById('status');const t=s.textContent;s.textContent='copied ✓';setTimeout(()=>s.textContent=t,1200);};
+function download(name,txt){const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=name;a.click();}
+document.getElementById('dl').onclick=()=>download(P.mode==='board'?'circuit_board.scad':'component_sheet.scad',_scad);
+document.getElementById('dl-base').onclick=()=>{const o=P.part;P.part='base';download('base.scad',emitSCAD());P.part=o;};
+document.getElementById('dl-pat').onclick=()=>{const o=P.part;P.part='pattern';download('pattern.scad',emitSCAD());P.part=o;};
+
+buildControls(); regen();
+</script>
+</body>
+</html>
